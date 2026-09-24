@@ -1735,8 +1735,9 @@ function Options({ etat, onEtat }) {
             </button>
             <div className="options-note">
               Un dossier que tes appareils voient tous : clé USB, dossier OneDrive, Dropbox ou
-              Syncthing. Chaque modification y est rangée ligne à ligne — rien n’est écrasé,
-              les deux côtés fusionnent.
+              Syncthing. L’app y crée « Tuiles et Toiles » (même rangement que sur Google
+              Drive, avec un LISEZMOI dans chaque dossier). Chaque modification y est rangée
+              ligne à ligne — rien n’est écrasé, les deux côtés fusionnent.
             </div>
           </>
         ) : (
@@ -1759,6 +1760,9 @@ function Options({ etat, onEtat }) {
                 : 'Jamais synchronisé.'}
               {syn.conflits ? ' ' + syn.conflits + ' conflit(s) à trancher.' : ''}
             </div>
+            {syn.avertissement && (
+              <div className="options-note" style={{ color: 'var(--revoir)' }}>{syn.avertissement}</div>
+            )}
           </>
         )}
         {synMsg && synMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {synMsg.ok}</div>}

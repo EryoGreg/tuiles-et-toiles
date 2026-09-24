@@ -28,6 +28,7 @@ const service = src('synchro/service');
 const { rejoindre } = src('synchro/rejoindre');
 const { creerHorloge, formater } = src('synchro/hlc');
 const { creerTransportDossier } = src('synchro/transport-dossier');
+const lisezmoi = src('lisezmoi');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-e2c-'));
 const PACK = path.join(TMP, 'pack.db');
@@ -269,6 +270,33 @@ async function boutEnBout() {
     await service.synchroniser();
     assert.equal(etat.conflits().length, 0);
     assert.equal(db.oeuvre(packIds[1].id).titre, titre);
+  });
+
+  await test('LISEZMOI dans chaque dossier, rangement « Tuiles et Toiles » comme sur Drive', async () => {
+    const r = path.join(partage, 'Tuiles et Toiles');
+    for (const d of ['', 'journaux', 'appareils', 'images', path.join('journaux', etat.appareil().id)]) {
+      assert.ok(fs.existsSync(path.join(r, d, lisezmoi.NOM)), 'LISEZMOI manquant dans ' + (d || 'racine'));
+    }
+    // Le LISEZMOI de journaux/ n'est pas pris pour un appareil ni un segment.
+    const t = creerTransportDossier(r);
+    assert.ok((await t.listerAppareils()).every((a) => /^[0-9a-f]{8}$/.test(a)));
+    // Le menage des images ne l'efface pas.
+    const images = path.join(PC, 'images-locales');
+    lisezmoi.deposer(images, 'images_locales');
+    edition.nettoyerOrphelines();
+    assert.ok(fs.existsSync(path.join(images, lisezmoi.NOM)));
+    // Texte mis a jour s'il a change, sinon laisse tel quel.
+    fs.writeFileSync(path.join(r, lisezmoi.NOM), 'ancien texte');
+    lisezmoi.deposer(r, 'racine');
+    assert.equal(fs.readFileSync(path.join(r, lisezmoi.NOM), 'utf8'), lisezmoi.texte('racine'));
+  });
+
+  await test('dossier Google Drive pour ordinateur : avertissement', async () => {
+    const miroir = path.join(TMP, 'G', 'Mon Drive');
+    fs.mkdirSync(miroir, { recursive: true });
+    const e = service.definirDossier(miroir);
+    assert.match(e.avertissement, /Google Drive/);
+    assert.equal(service.definirDossier(partage).avertissement, null);
   });
 
   await test('dossier absent (cle debranchee) : message, rien ne casse', async () => {

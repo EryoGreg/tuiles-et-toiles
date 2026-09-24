@@ -19,6 +19,7 @@ const os = require('os');
 const AdmZip = require('adm-zip');
 
 const db = require('./db');
+const lisezmoi = require('./lisezmoi');
 const jeu = require('./jeu');
 
 let cfg = null;
@@ -43,7 +44,7 @@ function comptesLocaux() {
 function listerImages() {
   if (!fs.existsSync(cfg.imagesLocales)) return [];
   return fs.readdirSync(cfg.imagesLocales)
-    .filter((f) => fs.statSync(path.join(cfg.imagesLocales, f)).isFile());
+    .filter((f) => f !== lisezmoi.NOM && fs.statSync(path.join(cfg.imagesLocales, f)).isFile());
 }
 
 /**
@@ -73,6 +74,7 @@ function exporter(cheminZip) {
     images: images.length,
     ...comptesLocaux()
   };
+  zip.addFile(lisezmoi.NOM, Buffer.from(lisezmoi.texte('sauvegarde'), 'utf8'));
   zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
 
   fs.mkdirSync(path.dirname(cheminZip), { recursive: true });

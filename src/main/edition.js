@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const jeu = require('./jeu');
 const etat = require('./synchro/etat');
+const lisezmoi = require('./lisezmoi');
 
 const CHAMPS = etat.CHAMPS_LOCALE;
 
@@ -46,7 +47,8 @@ function nettoyerOrphelines() {
   if (!dossierImages || !fs.existsSync(dossierImages)) return;
   const utilises = imagesReferencees();
   for (const f of fs.readdirSync(dossierImages)) {
-    if (!utilises.has(f)) { try { fs.rmSync(path.join(dossierImages, f)); } catch { /* verrou */ } }
+    if (f === lisezmoi.NOM || utilises.has(f)) continue;
+    try { fs.rmSync(path.join(dossierImages, f)); } catch { /* verrou */ }
   }
 }
 

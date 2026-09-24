@@ -22,6 +22,7 @@ const journal = require('./journal');
 const sauvegarde = require('./sauvegarde');
 const drive = require('./drive');
 const maj = require('./maj');
+const lisezmoi = require('./lisezmoi');
 const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
@@ -164,6 +165,12 @@ app.whenReady().then(() => {
   journal.armerErreurs(app);
   journal.ligne('demarrage', { dev: DEV, version: app.getVersion(), pack: lireVersionPack(PACK_LIVRE) });
   preparerDonnees();
+  // Un LISEZMOI dans chaque dossier cree par l'app. Pas en dev : data/ est le depot.
+  if (!DEV) {
+    lisezmoi.deposer(DOSSIER_USER, 'donnees');
+    lisezmoi.deposer(DOSSIER_IMAGES_LOCALES, 'images_locales');
+    lisezmoi.deposer(path.join(DOSSIER_USER, 'logs'), 'logs');
+  }
 
   protocol.handle('tuile', (requete) => {
     const brut = decodeURIComponent(new URL(requete.url).hostname

@@ -3,8 +3,10 @@
  * Synchro de l'appareil courant avec un dossier partage (E2c).
  *
  * L'utilisateur choisit un dossier (cle USB, OneDrive, Syncthing…) dans
- * Options ; l'app y range tout sous « Tuiles et Toiles - synchro/ ». Chaque
- * appareil qui pointe vers ce meme dossier se synchronise avec les autres.
+ * Options ; l'app y range tout sous « Tuiles et Toiles/ » — meme nom et meme
+ * arborescence que le dossier Google Drive (journaux/, appareils/, images/ a
+ * cote de utilisateur.zip et historique/). Chaque appareil qui pointe vers ce
+ * meme dossier se synchronise avec les autres. Un LISEZMOI dans chaque dossier.
  *
  * Une synchro : fiche d'appareil (prefixe a la premiere fois) -> envoi des
  * images puis des ops -> reception des ops puis des images manquantes ->
@@ -24,8 +26,32 @@ const echange = require('./echange');
 const appareilFichier = require('./appareil');
 const { rejoindre } = require('./rejoindre');
 const { creerTransportDossier } = require('./transport-dossier');
+const lisezmoi = require('../lisezmoi');
 
-const SOUS_DOSSIER = 'Tuiles et Toiles - synchro';
+const SOUS_DOSSIER = 'Tuiles et Toiles';   // sans « & » : nom de dossier Drive / Windows
+
+// Dossier local tenu par Google Drive pour ordinateur (« G:\Mon Drive\… ») :
+// les fichiers qu'y depose le client Drive ne sont PAS visibles de l'app via
+// l'API Drive (scope drive.file = fichiers crees par l'app). Un telephone
+// synchronise par l'API ne les verrait jamais -> on previent.
+const RE_MIROIR_DRIVE = /(^|[\\/])(Mon Drive|My Drive|Google Drive|Drive partagés|Shared drives)([\\/]|$)/i;
+
+function avertissement(dossier) {
+  return dossier && RE_MIROIR_DRIVE.test(dossier)
+    ? 'Ce dossier semble être ton Google Drive sur l’ordinateur. Ça marche entre ordinateurs, '
+      + 'mais un téléphone connecté à Google Drive ne verra pas ces fichiers : pour Drive, préfère '
+      + 'la connexion Google Drive (synchro Drive, à venir).'
+    : null;
+}
+
+/** Arborescence + LISEZMOI de chaque dossier. */
+function preparerRacine(r, idAppareil) {
+  lisezmoi.deposer(r, 'racine');
+  lisezmoi.deposer(path.join(r, 'journaux'), 'journaux');
+  lisezmoi.deposer(path.join(r, 'journaux', idAppareil), 'journal_appareil');
+  lisezmoi.deposer(path.join(r, 'appareils'), 'appareils');
+  lisezmoi.deposer(path.join(r, 'images'), 'images');
+}
 
 let cfg = null;
 let enCours = false;
@@ -52,6 +78,7 @@ function etatSynchro() {
     appareil: { id: a.id, nom: a.nom, prefixe: a.prefixe_ref },
     derniere: lireDerniere(),
     conflits: etat.conflits().length,
+    avertissement: avertissement(a.dossier_synchro),
     enCours
   };
 }
@@ -60,6 +87,7 @@ function definirDossier(dossier) {
   if (!dossier || !fs.existsSync(dossier)) return { erreur: 'Dossier introuvable.' };
   try {
     fs.mkdirSync(racine(dossier), { recursive: true });
+    preparerRacine(racine(dossier), etat.appareil().id);
     const essai = path.join(racine(dossier), '.essai-' + process.pid);
     fs.writeFileSync(essai, '');
     fs.rmSync(essai);
@@ -105,6 +133,7 @@ async function synchroniser() {
   enCours = true;
   try {
     fs.mkdirSync(cfg.imagesLocales, { recursive: true });
+    preparerRacine(racine(a.dossier_synchro), a.id);
     const t = creerTransportDossier(racine(a.dossier_synchro));
     const ctx = etat.contexte();
 

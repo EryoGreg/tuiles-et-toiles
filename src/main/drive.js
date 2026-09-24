@@ -37,31 +37,8 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const b64url = (buf) => buf.toString('base64')
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-const LISEZMOI = [
-  'Dossier « Tuiles et Toiles »',
-  '=============================',
-  '',
-  'Ce dossier est créé et géré par l\'application Tuiles et Toiles',
-  '(entraînement mémoriel en histoire de l\'art) quand tu actives la',
-  'sauvegarde sur Google Drive.',
-  '',
-  'utilisateur.zip',
-  '  Ta sauvegarde personnelle : les tuiles que tu as créées, tes',
-  '  corrections, les œuvres que tu as archivées et tes marques',
-  '  (livre / étoile / à revoir). PAS le contenu du pack — seulement',
-  '  ce que TU as ajouté. L\'application le remplace à chaque',
-  '  « Sauvegarder sur Drive » et le relit à « Restaurer depuis Drive »',
-  '  (utile pour retrouver tes données sur un autre poste).',
-  '',
-  'historique/',
-  '  Copies automatiques de la version précédente d\'utilisateur.zip,',
-  '  faites juste avant chaque remplacement. Filet de sécurité : si une',
-  '  synchro écrase quelque chose par erreur, la version d\'avant est là.',
-  '',
-  'Tu peux supprimer ce dossier : l\'application continue de fonctionner',
-  '(elle recréera le dossier à la prochaine sauvegarde). Ne renomme pas',
-  'utilisateur.zip, l\'application ne le retrouverait plus.'
-].join('\n');
+// Textes des LISEZMOI : communs au dossier Drive et au dossier partage local.
+const lisezmoi = require('./lisezmoi');
 
 let cfg = null;      // { jeton: <chemin fichier> }
 let client = null;   // OAuth2Client memo (jeton courant)
@@ -295,19 +272,20 @@ async function trouverFichier(oauth, dossierId) {
 
 async function copierVersHistorique(oauth, dossierId, distant) {
   const histoId = await idDossierNomme(oauth, NOM_HISTO, dossierId);
+  try { await majLisezmoi(oauth, histoId, 'historique'); } catch { /* non critique */ }
   const stamp = String(distant.modifiedTime || new Date().toISOString()).replace(/[:.]/g, '-').slice(0, 19);
   await appelJson(oauth, 'POST', API + '/files/' + distant.id + '/copy', {
     name: 'utilisateur-' + stamp + '.zip', parents: [histoId]
   });
 }
 
-async function majLisezmoi(oauth, dossierId) {
+async function majLisezmoi(oauth, dossierId, cle = 'racine') {
   const token = await jetonAcces(oauth);
   const q = `name='LISEZMOI.txt' and '${dossierId}' in parents and trashed=false`;
   const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams({
     q, fields: 'files(id)', spaces: 'drive'
   }));
-  const donnees = Buffer.from(LISEZMOI, 'utf8');
+  const donnees = Buffer.from(lisezmoi.texte(cle), 'utf8');
   const id = r.files && r.files[0] && r.files[0].id;
 
   if (id) {

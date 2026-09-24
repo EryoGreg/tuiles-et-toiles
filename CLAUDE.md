@@ -70,12 +70,18 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     `appareils/<id>.json`, préfixe libre + renumérotation à la première entrée, course :
     l'id le plus grand cède), `synchro/service.js` (images → ops → ops reçues → images
     manquantes → `reconstruireVue`). Dossier choisi rangé dans `appareil.json`
-    (`dossier_synchro`), tout sous `<dossier>/Tuiles et Toiles - synchro/`. Options →
+    (`dossier_synchro`), tout sous `<dossier>/Tuiles et Toiles/` — **même nom et même
+    arborescence que le dossier Drive** (`utilisateur.zip`, `historique/`, `journaux/`,
+    `appareils/`, `images/`) : É2d écrira dans le dossier Drive existant. Piège : un dossier
+    tenu par Google Drive pour ordinateur (« Mon Drive ») marche entre PC, mais ses fichiers
+    sont invisibles de l'API (`drive.file` = fichiers créés par l'app) → avertissement
+    dans Options ; sur Drive, tous les appareils passeront par l'API (É2d). Options →
     « Synchro entre appareils » : manuel (bouton), rechargement si des données arrivent.
     `service.resoudre()` tranche **et** reconstruit la vue (à utiliser par l'écran Conflits).
     `TT_TRANSPORT=dossier` rejoue toute la suite É2b sur disque.
   - É2d transport Drive : segments immuables
-    `journaux/<id>/<hlc>.ndjson`, images nommées par sha256, `appareils/<id>.json`.
+    `journaux/<id>/<hlc>.ndjson`, `appareils/<id>.json`, `images/` (noms UUID, déjà
+    uniques), dans le dossier Drive **existant** « Tuiles et Toiles » (celui d'É1).
     Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).
   - É2e snapshots (1 000 ops ou 7 jours), segments purgés par **accusé de lecture** de
     tous les appareils actifs (inactif après 90 j), rebase, UI conflits.
@@ -148,6 +154,12 @@ hors-ligne (règle 1).
 4. **Rien de mutable dans pack.db.** Tags, archivage, corrections de champ,
    tuiles locales → `utilisateur.db`. Ces tables pointent vers les œuvres par
    leur `id` (stable à vie), **jamais** par leur `ref` (numéro d'affichage).
+5. **Un `LISEZMOI.txt` dans tout dossier que l'app crée**, local ou cloud (Drive
+   compris), et à la racine de tout zip exporté : à quoi sert le dossier, ce qu'il
+   contient, ce qu'il ne faut pas toucher. Textes centralisés dans
+   `src/main/lisezmoi.js` (`deposer(dossier, cle)` : écrit si absent ou différent). Tout
+   code qui balaie un dossier (ménage d'images, listes de fichiers) doit ignorer
+   `LISEZMOI.txt`.
 
 ## Identité des œuvres
 
