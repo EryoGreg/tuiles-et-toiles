@@ -1435,6 +1435,9 @@ function Options({ etat, onEtat }) {
   };
 
   useEffect(() => { window.api.drive.etat().then(setDrv); }, []);
+  // Session Google expiree en cours d'envoi : le navigateur s'ouvre pour
+  // reconnecter, puis l'operation reprend toute seule.
+  useEffect(() => window.api.drive.onReconnexion(() => setDrvAction('reconnexion')), []);
   const drvFlash = (m) => { setDrvMsg(m); setTimeout(() => setDrvMsg(null), 8000); };
 
   const drvConnecter = async () => {
@@ -1450,16 +1453,18 @@ function Options({ etat, onEtat }) {
     setDrvOccupe(true); setDrvMsg(null); setDrvAction('envoi');
     const r = await window.api.drive.pousser({ forcer: !!forcer });
     setDrvOccupe(false); setDrvAction(null);
+    // Une reconnexion auto a pu changer (ou perdre) le compte connecte.
+    setDrv(await window.api.drive.etat());
     if (r.conflit) { setDrvConflit(r); return; }
     if (r.erreur) { drvFlash({ erreur: r.erreur }); return; }
-    setDrv(await window.api.drive.etat());
-    drvFlash({ ok: 'Sauvegardé sur Drive.' });
+    drvFlash({ ok: r.reconnecte ? 'Reconnecté à Google, sauvegardé sur Drive.' : 'Sauvegardé sur Drive.' });
   };
   const drvTirer = async (forcer) => {
     setDrvOccupe(true); setDrvMsg(null); setDrvAction('recuperation');
     const r = await window.api.drive.tirer({ forcer: !!forcer });
-    if (r.aJour) { setDrvOccupe(false); setDrvAction(null); drvFlash({ ok: 'Déjà à jour avec Drive.' }); return; }
-    if (r.erreur) { setDrvOccupe(false); setDrvAction(null); drvFlash({ erreur: r.erreur }); return; }
+    const fin = async () => { setDrvOccupe(false); setDrvAction(null); setDrv(await window.api.drive.etat()); };
+    if (r.aJour) { await fin(); drvFlash({ ok: 'Déjà à jour avec Drive.' }); return; }
+    if (r.erreur) { await fin(); drvFlash({ erreur: r.erreur }); return; }
     window.location.reload();
   };
 
@@ -1630,7 +1635,9 @@ function Options({ etat, onEtat }) {
           <div className="drive-encours">
             <span className="drive-pastille" />
             {drvAction === 'envoi' ? 'Envoi des données vers Google Drive…'
-              : drvAction === 'recuperation' ? 'Récupération des données depuis Google Drive…'              : 'Connexion à Google Drive — autorise l’accès dans le navigateur…'}
+              : drvAction === 'recuperation' ? 'Récupération des données depuis Google Drive…'
+              : drvAction === 'reconnexion' ? 'Session Google expirée — autorise de nouveau l’accès dans le navigateur…'
+              : 'Connexion à Google Drive — autorise l’accès dans le navigateur…'}
           </div>
         )}
         {drvMsg && drvMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {drvMsg.ok}</div>}

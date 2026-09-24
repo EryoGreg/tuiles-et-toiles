@@ -188,6 +188,10 @@ async function connecter() {
   if (!tokens.refresh_token) {
     return { erreur: 'Google n’a pas renvoyé de refresh token. Révoque l’accès dans ton compte Google puis réessaie.' };
   }
+  // Consentement granulaire : la case Drive peut rester decochee.
+  if (tokens.scope && !tokens.scope.split(' ').includes(SCOPE)) {
+    return { erreur: 'Accès à Google Drive non accordé — reconnecte-toi et coche la case Google Drive sur l’écran de Google.' };
+  }
 
   oauth.setCredentials(tokens);
   let email = null;
@@ -221,10 +225,35 @@ function clientCourant() {
 
 // --- appels Drive ----------------------------------------------------------
 
+// Jeton refuse par Google : refresh token expire (7 jours tant que l'ecran de
+// consentement est en « Test »), revoque par l'utilisateur, ou scope Drive non
+// coche au consentement. Seule issue : refaire le flux OAuth.
+function erreurJetonMort(detail) {
+  const e = new Error('Session Google expirée (' + detail + ').');
+  e.jetonMort = true;
+  return e;
+}
+
 async function jetonAcces(oauth) {
-  const r = await oauth.getAccessToken();
-  if (!r || !r.token) throw new Error('Jeton d’accès indisponible — reconnecte Google Drive.');
+  let r;
+  try { r = await oauth.getAccessToken(); }
+  catch (e) {
+    const code = e && e.response && e.response.data && e.response.data.error;
+    if (code === 'invalid_grant' || /invalid_grant/.test(String(e && e.message))) {
+      throw erreurJetonMort('invalid_grant');
+    }
+    throw e;
+  }
+  if (!r || !r.token) throw erreurJetonMort('jeton vide');
   return r.token;
+}
+
+// 401 : jeton refuse. 403 insufficientPermissions : scope Drive non accorde.
+function verifierAcces(status, txt) {
+  if (status === 401) throw erreurJetonMort('401');
+  if (status === 403 && /insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT/.test(txt)) {
+    throw erreurJetonMort('autorisation Drive manquante');
+  }
 }
 
 async function appelJson(oauth, methode, url, corps) {
@@ -236,7 +265,10 @@ async function appelJson(oauth, methode, url, corps) {
   }
   const res = await net.fetch(url, opts);
   const txt = await res.text();
-  if (!res.ok) throw new Error('Drive ' + res.status + ' : ' + txt.slice(0, 300));
+  if (!res.ok) {
+    verifierAcces(res.status, txt);
+    throw new Error('Drive ' + res.status + ' : ' + txt.slice(0, 300));
+  }
   return txt ? JSON.parse(txt) : {};
 }
 
@@ -304,7 +336,7 @@ async function televerser(oauth, dossierId, cheminZip, existant) {
       UPLOAD + '/files/' + existant.id + '?uploadType=media&fields=id,headRevisionId,modifiedTime',
       { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/zip' }, body: donnees }
     );
-    if (!res.ok) throw new Error('Envoi ' + res.status + ' : ' + (await res.text()).slice(0, 300));
+    if (!res.ok) await echecEnvoi(res);
     return res.json();
   }
 
@@ -320,72 +352,108 @@ async function televerser(oauth, dossierId, cheminZip, existant) {
     UPLOAD + '/files?uploadType=multipart&fields=id,headRevisionId,modifiedTime',
     { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps }
   );
-  if (!res.ok) throw new Error('Envoi ' + res.status + ' : ' + (await res.text()).slice(0, 300));
+  if (!res.ok) await echecEnvoi(res);
   return res.json();
+}
+
+async function echecEnvoi(res) {
+  const txt = await res.text();
+  verifierAcces(res.status, txt);
+  throw new Error('Envoi ' + res.status + ' : ' + txt.slice(0, 300));
 }
 
 async function telecharger(oauth, fichierId, cible) {
   const token = await jetonAcces(oauth);
   const res = await net.fetch(API + '/files/' + fichierId + '?alt=media',
     { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) throw new Error('Téléchargement ' + res.status);
+  if (!res.ok) {
+    const txt = await res.text();
+    verifierAcces(res.status, txt);
+    throw new Error('Téléchargement ' + res.status);
+  }
   fs.writeFileSync(cible, Buffer.from(await res.arrayBuffer()));
 }
 
 // --- push / pull -------------------------------------------------------
 
-async function pousser({ forcer = false } = {}) {
+// Execute op(oauth). Si Google refuse le jeton, on l'oublie, on relance le
+// flux OAuth (navigateur) et on retente une seule fois. surReconnexion()
+// previent l'interface que le navigateur va s'ouvrir.
+async function avecReconnexion(op, surReconnexion) {
   const oauth = clientCourant();
   if (!oauth) return { erreur: 'Google Drive non connecté.' };
-  try {
-    const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
-    const distant = await trouverFichier(oauth, dossierId);
-    const revConnue = db.etatSync('drive_rev');
-    const distantABouge = distant && distant.headRevisionId !== revConnue;
-
-    if (distantABouge && !forcer) {
-      return { conflit: true, sens: 'pousser', distantModifie: distant.modifiedTime };
-    }
-    if (distantABouge) await copierVersHistorique(oauth, dossierId, distant);
-
-    const tmp = path.join(os.tmpdir(), 'tuiles-drive-push-' + Date.now() + '.zip');
-    sauvegarde.exporter(tmp);
-    const maj = await televerser(oauth, dossierId, tmp, distant);
-    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
-    try { await majLisezmoi(oauth, dossierId); } catch { /* non critique */ }
-
-    db.definirEtatSync('drive_rev', maj.headRevisionId || '');
-    db.definirEtatSync('drive_synchro_le', new Date().toISOString());
-    return { ok: true, synchroLe: db.etatSync('drive_synchro_le') };
-  } catch (e) {
-    return { erreur: e.message || String(e) };
+  try { return await op(oauth); }
+  catch (e) {
+    if (!e.jetonMort) return { erreur: e.message || String(e) };
   }
+
+  deconnecter();
+  if (surReconnexion) surReconnexion();
+  const r = await connecter();
+  if (r.erreur) return { erreur: 'Session Google expirée — reconnexion échouée : ' + r.erreur };
+
+  const neuf = clientCourant();
+  if (!neuf) return { erreur: 'Google Drive non connecté.' };
+  try { return { ...(await op(neuf)), reconnecte: true }; }
+  catch (e) { return { erreur: e.message || String(e), reconnecte: true }; }
 }
 
-async function tirer({ forcer = false } = {}) {
-  const oauth = clientCourant();
-  if (!oauth) return { erreur: 'Google Drive non connecté.' };
-  try {
-    const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
-    const distant = await trouverFichier(oauth, dossierId);
-    if (!distant) return { erreur: 'Aucune sauvegarde sur Drive pour l’instant.' };
+function pousser({ forcer = false } = {}, surReconnexion) {
+  return avecReconnexion((oauth) => opPousser(oauth, forcer), surReconnexion);
+}
 
-    if (!forcer && distant.headRevisionId === db.etatSync('drive_rev')) {
-      return { aJour: true };
-    }
+function tirer({ forcer = false } = {}, surReconnexion) {
+  return avecReconnexion((oauth) => opTirer(oauth, forcer), surReconnexion);
+}
 
-    const tmp = path.join(os.tmpdir(), 'tuiles-drive-pull-' + Date.now() + '.zip');
-    await telecharger(oauth, distant.id, tmp);
-    const r = sauvegarde.importer(tmp);
-    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
-    if (r.erreur) return r;
+async function opPousser(oauth, forcer) {
+  const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
+  const distant = await trouverFichier(oauth, dossierId);
+  const revConnue = db.etatSync('drive_rev');
+  const distantABouge = distant && distant.headRevisionId !== revConnue;
 
-    db.definirEtatSync('drive_rev', distant.headRevisionId || '');
-    db.definirEtatSync('drive_synchro_le', new Date().toISOString());
-    return { ok: true, manifest: r.manifest };
-  } catch (e) {
-    return { erreur: e.message || String(e) };
+  if (distantABouge && !forcer) {
+    return { conflit: true, sens: 'pousser', distantModifie: distant.modifiedTime };
   }
+  if (distantABouge) await copierVersHistorique(oauth, dossierId, distant);
+
+  const tmp = path.join(os.tmpdir(), 'tuiles-drive-push-' + Date.now() + '.zip');
+  let maj;
+  try {
+    sauvegarde.exporter(tmp);
+    maj = await televerser(oauth, dossierId, tmp, distant);
+  } finally {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
+  }
+  try { await majLisezmoi(oauth, dossierId); } catch { /* non critique */ }
+
+  db.definirEtatSync('drive_rev', maj.headRevisionId || '');
+  db.definirEtatSync('drive_synchro_le', new Date().toISOString());
+  return { ok: true, synchroLe: db.etatSync('drive_synchro_le') };
+}
+
+async function opTirer(oauth, forcer) {
+  const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
+  const distant = await trouverFichier(oauth, dossierId);
+  if (!distant) return { erreur: 'Aucune sauvegarde sur Drive pour l’instant.' };
+
+  if (!forcer && distant.headRevisionId === db.etatSync('drive_rev')) {
+    return { aJour: true };
+  }
+
+  const tmp = path.join(os.tmpdir(), 'tuiles-drive-pull-' + Date.now() + '.zip');
+  let r;
+  try {
+    await telecharger(oauth, distant.id, tmp);
+    r = sauvegarde.importer(tmp);
+  } finally {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
+  }
+  if (r.erreur) return r;
+
+  db.definirEtatSync('drive_rev', distant.headRevisionId || '');
+  db.definirEtatSync('drive_synchro_le', new Date().toISOString());
+  return { ok: true, manifest: r.manifest };
 }
 
 module.exports = { configurer, etat, connecter, deconnecter, pousser, tirer };

@@ -60,7 +60,14 @@ contextBridge.exposeInMainWorld('api', {
     connecter: () => ipcRenderer.invoke('drive:connecter'),
     deconnecter: () => ipcRenderer.invoke('drive:deconnecter'),
     pousser: (opts) => ipcRenderer.invoke('drive:pousser', opts),
-    tirer: (opts) => ipcRenderer.invoke('drive:tirer', opts)
+    tirer: (opts) => ipcRenderer.invoke('drive:tirer', opts),
+    // Session Google expiree pendant un envoi / une restauration : le
+    // processus principal relance la connexion dans le navigateur.
+    onReconnexion: (fn) => {
+      const ecouteur = () => fn();
+      ipcRenderer.on('drive:reconnexion', ecouteur);
+      return () => ipcRenderer.removeListener('drive:reconnexion', ecouteur);
+    }
   },
 
   raccourcis: {

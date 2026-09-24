@@ -330,14 +330,20 @@ ipcMain.handle('drive:connecter', async () => {
   return { ...drive.etat(), ...r };
 });
 ipcMain.handle('drive:deconnecter', () => { drive.deconnecter(); journal.ligne('drive deconnecter'); return drive.etat(); });
-ipcMain.handle('drive:pousser', async (_e, opts) => {
-  const r = await drive.pousser(opts || {});
-  journal.ligne('drive pousser', { ok: !!r.ok, conflit: !!r.conflit, erreur: r.erreur || null });
+// Jeton refuse par Google en cours d'operation : drive.js relance le flux
+// OAuth ; on previent le rendu pour qu'il affiche « autorise dans le navigateur ».
+const surReconnexionDrive = (e) => () => {
+  journal.ligne('drive reconnexion auto');
+  if (!e.sender.isDestroyed()) e.sender.send('drive:reconnexion');
+};
+ipcMain.handle('drive:pousser', async (e, opts) => {
+  const r = await drive.pousser(opts || {}, surReconnexionDrive(e));
+  journal.ligne('drive pousser', { ok: !!r.ok, conflit: !!r.conflit, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
   return r;
 });
-ipcMain.handle('drive:tirer', async (_e, opts) => {
-  const r = await drive.tirer(opts || {});
-  journal.ligne('drive tirer', { ok: !!r.ok, aJour: !!r.aJour, erreur: r.erreur || null });
+ipcMain.handle('drive:tirer', async (e, opts) => {
+  const r = await drive.tirer(opts || {}, surReconnexionDrive(e));
+  journal.ligne('drive tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
   return r;
 });
 
