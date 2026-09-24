@@ -79,9 +79,20 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     « Synchro entre appareils » : manuel (bouton), rechargement si des données arrivent.
     `service.resoudre()` tranche **et** reconstruit la vue (à utiliser par l'écran Conflits).
     `TT_TRANSPORT=dossier` rejoue toute la suite É2b sur disque.
-  - É2d transport Drive : segments immuables
-    `journaux/<id>/<hlc>.ndjson`, `appareils/<id>.json`, `images/` (noms UUID, déjà
-    uniques), dans le dossier Drive **existant** « Tuiles et Toiles » (celui d'É1).
+  - É2d ✅ synchro par Google Drive : `synchro/transport-drive.js` sur une interface
+    minimale (`lister`, `creerDossier`, `creerFichier`, `majFichier`, `lire`) —
+    `drive.api(oauth)` en REST, `tests/faux-drive.js` en mémoire. Même arborescence
+    (`synchro/format.js`), dans le dossier Drive **existant** « Tuiles et Toiles »
+    (`utilisateur.zip` et `historique/` d'É1 intacts). Drive tolère les homonymes : on
+    **lit l'union** des dossiers de même nom et on **écrit dans le plus ancien**
+    (`orderBy=createdTime`, aussi pour É1). Cœur commun dossier/Drive dans `service.js`
+    (`synchroniserDrive`, reconnexion OAuth auto via `drive.avecReconnexion`). Stats de vues
+    synchronisées : entité `stat`, champ = appareil, un seul écrivain par champ, émises
+    avant chaque envoi (`moteur.emettreStats`). Options → Google Drive : « Synchroniser »
+    (fusion) à côté de Sauvegarder / Restaurer (bloc). ~14 appels API pour une synchro à
+    vide. `TT_TRANSPORT=drive` rejoue toute la suite É2b sur le faux Drive.
+    **Pas encore testé contre le vrai Drive** (pas de compte dans les tests) : premier
+    essai réel à faire depuis l'app.
     Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).
   - É2e snapshots (1 000 ops ou 7 jours), segments purgés par **accusé de lecture** de
     tous les appareils actifs (inactif après 90 j), rebase, UI conflits.

@@ -74,7 +74,8 @@ contextBridge.exposeInMainWorld('api', {
     etat: () => ipcRenderer.invoke('synchro:etat'),
     choisirDossier: () => ipcRenderer.invoke('synchro:choisirDossier'),
     oublier: () => ipcRenderer.invoke('synchro:oublier'),
-    synchroniser: () => ipcRenderer.invoke('synchro:synchroniser')
+    synchroniser: () => ipcRenderer.invoke('synchro:synchroniser'),
+    drive: () => ipcRenderer.invoke('synchro:drive')
   },
 
   maj: {

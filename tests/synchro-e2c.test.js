@@ -210,7 +210,7 @@ async function boutEnBout() {
     db.basculerTag(packIds[0].id, 'etoile');
     edition.modifier(packIds[1].id, { ...edition.tuile(packIds[1].id), titre: 'Titre PC' });
     assert.ok(!service.etat().dossier);
-    assert.ok(!service.definirDossier(partage).erreur);
+    assert.ok(!(await service.definirDossier(partage)).erreur);
     const r = await service.synchroniser();
     assert.ok(!r.erreur, r.erreur);
     assert.equal(r.prefixe, 'L');
@@ -222,7 +222,7 @@ async function boutEnBout() {
   await test('telephone (avec une tuile creee avant) : prend M, recoit tout, image copiee', async () => {
     const images = ouvrirAppareil(TEL);
     edition.creer({ titre: 'Sculpture salle 12', artiste: 'Inconnu', image: poserImage(images) });
-    service.definirDossier(partage);
+    await service.definirDossier(partage);
     const r = await service.synchroniser();
     assert.ok(!r.erreur, r.erreur);
     assert.equal(r.prefixe, 'M');
@@ -294,9 +294,9 @@ async function boutEnBout() {
   await test('dossier Google Drive pour ordinateur : avertissement', async () => {
     const miroir = path.join(TMP, 'G', 'Mon Drive');
     fs.mkdirSync(miroir, { recursive: true });
-    const e = service.definirDossier(miroir);
+    const e = await service.definirDossier(miroir);
     assert.match(e.avertissement, /Google Drive/);
-    assert.equal(service.definirDossier(partage).avertissement, null);
+    assert.equal((await service.definirDossier(partage)).avertissement, null);
   });
 
   await test('dossier absent (cle debranchee) : message, rien ne casse', async () => {

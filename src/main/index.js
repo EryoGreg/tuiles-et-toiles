@@ -370,17 +370,24 @@ ipcMain.handle('synchro:choisirDossier', async () => {
     properties: ['openDirectory', 'createDirectory']
   });
   if (r.canceled || !r.filePaths[0]) return { annule: true };
-  const out = synchro.definirDossier(r.filePaths[0]);
+  const out = await synchro.definirDossier(r.filePaths[0]);
   journal.ligne('synchro dossier', { dossier: r.filePaths[0], erreur: out.erreur || null });
   return out;
 });
 ipcMain.handle('synchro:oublier', () => { journal.ligne('synchro oublier dossier'); return synchro.oublierDossier(); });
+const journaliserSynchro = (quoi, r) => journal.ligne(quoi, r.erreur ? { erreur: r.erreur } : {
+    poussees: r.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
+    images: [r.imagesEnvoyees, r.imagesRecues], prefixe: r.prefixe, renumerotees: r.renumerotees.length,
+    reconnecte: !!r.reconnecte
+  });
 ipcMain.handle('synchro:synchroniser', async () => {
   const r = await synchro.synchroniser();
-  journal.ligne('synchro', r.erreur ? { erreur: r.erreur } : {
-    poussees: r.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
-    images: [r.imagesEnvoyees, r.imagesRecues], prefixe: r.prefixe, renumerotees: r.renumerotees.length
-  });
+  journaliserSynchro('synchro dossier', r);
+  return r;
+});
+ipcMain.handle('synchro:drive', async (e) => {
+  const r = await synchro.synchroniserDrive(surReconnexionDrive(e));
+  journaliserSynchro('synchro drive', r);
   return r;
 });
 

@@ -252,8 +252,10 @@ async function appelJson(oauth, methode, url, corps) {
 async function idDossierNomme(oauth, nom, parent) {
   const q = `name='${nom.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder'`
     + ` and '${parent}' in parents and trashed=false`;
+  // Plus ancien d'abord : meme choix que la synchro (transport-drive) si deux
+  // dossiers homonymes existent.
   const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams({
-    q, fields: 'files(id)', spaces: 'drive'
+    q, fields: 'files(id)', spaces: 'drive', orderBy: 'createdTime'
   }));
   if (r.files && r.files.length) return r.files[0].id;
   const cree = await appelJson(oauth, 'POST', API + '/files', {
@@ -352,6 +354,81 @@ async function telecharger(oauth, fichierId, cible) {
   fs.writeFileSync(cible, Buffer.from(await res.arrayBuffer()));
 }
 
+// --- api minimale pour la synchro ligne a ligne (synchro/transport-drive) ---
+
+const MIME_DOSSIER = 'application/vnd.google-apps.folder';
+const echapper = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+async function envoiMultipart(oauth, meta, octets, mime) {
+  const token = await jetonAcces(oauth);
+  const limite = '----tt' + crypto.randomBytes(8).toString('hex');
+  const corps = Buffer.concat([
+    Buffer.from('--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) + '\r\n'),
+    Buffer.from('--' + limite + '\r\nContent-Type: ' + mime + '\r\n\r\n'),
+    octets,
+    Buffer.from('\r\n--' + limite + '--\r\n')
+  ]);
+  const res = await net.fetch(UPLOAD + '/files?uploadType=multipart&fields=id',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps });
+  if (!res.ok) await echecEnvoi(res);
+  return (await res.json()).id;
+}
+
+/**
+ * Interface attendue par synchro/transport-drive.js, sur le client OAuth
+ * donne. Une erreur de jeton remonte (jetonMort) jusqu'a avecReconnexion.
+ */
+function api(oauth) {
+  return {
+    memoCle: 'drive',   // ids Drive uniques : memo valable d'une synchro a l'autre
+    async lister(parent, { nom, dossier } = {}) {
+      let q = `'${echapper(parent)}' in parents and trashed=false`;
+      if (nom != null) q += ` and name='${echapper(nom)}'`;
+      if (dossier === true) q += ` and mimeType='${MIME_DOSSIER}'`;
+      if (dossier === false) q += ` and mimeType!='${MIME_DOSSIER}'`;
+      const out = [];
+      let pageToken;
+      do {
+        const params = {
+          q, spaces: 'drive', pageSize: '1000', orderBy: 'createdTime',
+          fields: 'nextPageToken,files(id,name,mimeType,createdTime)'
+        };
+        if (pageToken) params.pageToken = pageToken;
+        const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams(params));
+        for (const f of r.files || []) {
+          out.push({ id: f.id, name: f.name, dossier: f.mimeType === MIME_DOSSIER, createdTime: f.createdTime });
+        }
+        pageToken = r.nextPageToken;
+      } while (pageToken);
+      return out;
+    },
+    async creerDossier(nom, parent) {
+      return (await appelJson(oauth, 'POST', API + '/files?fields=id',
+        { name: nom, mimeType: MIME_DOSSIER, parents: [parent] })).id;
+    },
+    creerFichier(nom, parent, octets, mime) {
+      return envoiMultipart(oauth, { name: nom, parents: [parent] }, octets, mime);
+    },
+    async majFichier(id, octets, mime) {
+      const token = await jetonAcces(oauth);
+      const res = await net.fetch(UPLOAD + '/files/' + encodeURIComponent(id) + '?uploadType=media&fields=id',
+        { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': mime }, body: octets });
+      if (!res.ok) await echecEnvoi(res);
+    },
+    async lire(id) {
+      const token = await jetonAcces(oauth);
+      const res = await net.fetch(API + '/files/' + encodeURIComponent(id) + '?alt=media',
+        { headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok) {
+        const txt = await res.text();
+        verifierAcces(res.status, txt);
+        throw new Error('Lecture Drive ' + res.status + ' : ' + txt.slice(0, 200));
+      }
+      return Buffer.from(await res.arrayBuffer());
+    }
+  };
+}
+
 // --- push / pull -------------------------------------------------------
 
 // Execute op(oauth). Si Google refuse le jeton, on l'oublie, on relance le
@@ -434,4 +511,4 @@ async function opTirer(oauth, forcer) {
   return { ok: true, manifest: r.manifest };
 }
 
-module.exports = { configurer, etat, connecter, deconnecter, pousser, tirer };
+module.exports = { configurer, etat, connecter, deconnecter, pousser, tirer, api, avecReconnexion };

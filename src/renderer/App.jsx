@@ -1401,19 +1401,20 @@ function Options({ etat, onEtat }) {
   const [sauvOccupe, setSauvOccupe] = useState(false);
   const [drv, setDrv] = useState(null);                  // etat Google Drive
   const [drvOccupe, setDrvOccupe] = useState(false);
-  const [drvMsg, setDrvMsg] = useState(null);
-  const [drvConflit, setDrvConflit] = useState(null);    // { sens: 'pousser'|'tirer', distantModifie? }
-  const [drvAction, setDrvAction] = useState(null);      // 'connexion' | 'envoi' | 'recuperation'
-  const [syn, setSyn] = useState(null);                  // etat synchro par dossier
-  const [synOccupe, setSynOccupe] = useState(false);
-  // Message de la derniere synchro, survit au rechargement qui suit une fusion.
-  const [synMsg, setSynMsg] = useState(() => {
+  // Bilan de la derniere synchro, qui survit au rechargement suivant une fusion.
+  const [msgRecharge] = useState(() => {
     try {
       const m = sessionStorage.getItem('synchro-msg');
       if (m) { sessionStorage.removeItem('synchro-msg'); return JSON.parse(m); }
     } catch { /* stockage indisponible */ }
     return null;
   });
+  const [drvMsg, setDrvMsg] = useState(msgRecharge && msgRecharge.ou === 'drive' ? msgRecharge.msg : null);
+  const [drvConflit, setDrvConflit] = useState(null);    // { sens: 'pousser'|'tirer', distantModifie? }
+  const [drvAction, setDrvAction] = useState(null);      // 'connexion' | 'envoi' | 'recuperation' | 'fusion'
+  const [syn, setSyn] = useState(null);                  // etat synchro (dossier + Drive)
+  const [synOccupe, setSynOccupe] = useState(false);
+  const [synMsg, setSynMsg] = useState(msgRecharge && msgRecharge.ou === 'dossier' ? msgRecharge.msg : null);
 
   const totalMarques = etat.tags.livre + etat.tags.etoile + etat.tags.bad_smiley;
 
@@ -1489,12 +1490,12 @@ function Options({ etat, onEtat }) {
   };
   const synOublier = async () => { setSyn(await window.api.synchro.oublier()); setSynMsg(null); };
 
-  const synLancer = async () => {
-    setSynOccupe(true); setSynMsg(null);
-    const r = await window.api.synchro.synchroniser();
-    setSynOccupe(false);
-    if (r.erreur) { setSynMsg({ erreur: r.erreur }); return; }
+  // Bilan d'une synchro (dossier ou Drive). Si des donnees sont arrivees, la
+  // page se recharge ; le message passe le rechargement via sessionStorage.
+  const annoncerSynchro = async (r, ou, setMsg) => {
+    if (r.erreur) { setMsg({ erreur: r.erreur }); return; }
     const morceaux = [];
+    if (r.reconnecte) morceaux.push('Reconnecté à Google.');
     if (r.renumerotees.length) {
       morceaux.push('Cet appareil numérote désormais ses tuiles « ' + r.prefixe + ' » : '
         + r.renumerotees.map((x) => x.avant + ' → ' + x.apres).join(', ') + '.');
@@ -1504,12 +1505,27 @@ function Options({ etat, onEtat }) {
     if (r.conflits) morceaux.push(r.conflits + ' conflit(s) à trancher — la valeur la plus récente est affichée en attendant.');
     const msg = { ok: morceaux.join(' ') };
     if (r.appliquees || r.renumerotees.length || r.imagesRecues) {
-      try { sessionStorage.setItem('synchro-msg', JSON.stringify(msg)); } catch { /* tant pis */ }
+      try { sessionStorage.setItem('synchro-msg', JSON.stringify({ ou, msg })); } catch { /* tant pis */ }
       window.location.reload();   // la base a change — repartir propre
       return;
     }
-    setSynMsg(msg);
+    setMsg(msg);
     setSyn(await window.api.synchro.etat());
+  };
+
+  const synLancer = async () => {
+    setSynOccupe(true); setSynMsg(null);
+    const r = await window.api.synchro.synchroniser();
+    setSynOccupe(false);
+    await annoncerSynchro(r, 'dossier', setSynMsg);
+  };
+
+  const drvSynchroniser = async () => {
+    setDrvOccupe(true); setDrvMsg(null); setDrvAction('fusion');
+    const r = await window.api.synchro.drive();
+    setDrvOccupe(false); setDrvAction(null);
+    setDrv(await window.api.drive.etat());
+    await annoncerSynchro(r, 'drive', setDrvMsg);
   };
 
   useEffect(() => { window.api.raccourcis.etat().then(setRaccourcis); }, []);
@@ -1661,6 +1677,9 @@ function Options({ etat, onEtat }) {
         ) : (
           <>
             <div className="choix-raccourcis">
+              <button className="bouton-neutre" onClick={drvSynchroniser} disabled={drvOccupe}>
+                <I.Echange t={16} /> Synchroniser
+              </button>
               <button className="bouton-neutre" onClick={() => drvPousser(false)} disabled={drvOccupe}>
                 <I.FlecheVert t={16} /> Sauvegarder sur Drive
               </button>
@@ -1673,16 +1692,26 @@ function Options({ etat, onEtat }) {
             </div>
             <div className="options-note">
               Connecté : {drv.email || 'compte Google'}.{' '}
-              {drv.synchroLe
-                ? 'Dernière synchro le ' + new Date(drv.synchroLe).toLocaleString('fr-FR') + '.'
+              {syn && syn.derniereDrive
+                ? 'Dernière synchro le ' + new Date(syn.derniereDrive.le).toLocaleString('fr-FR') + '.'
                 : 'Jamais synchronisé depuis ce poste.'}
+              {drv.synchroLe
+                ? ' Dernière sauvegarde complète le ' + new Date(drv.synchroLe).toLocaleString('fr-FR') + '.'
+                : ''}
+              {syn && syn.conflits ? ' ' + syn.conflits + ' conflit(s) à trancher.' : ''}
+            </div>
+            <div className="options-note">
+              <strong>Synchroniser</strong> fusionne ligne à ligne avec tes autres appareils :
+              rien n’est écrasé. <strong>Sauvegarder</strong> / <strong>Restaurer</strong> copient
+              ou remplacent l’ensemble de tes données d’un bloc.
             </div>
           </>
         )}
         {drvAction && (
           <div className="drive-encours">
             <span className="drive-pastille" />
-            {drvAction === 'envoi' ? 'Envoi des données vers Google Drive…'
+            {drvAction === 'fusion' ? 'Synchro avec Google Drive…'
+              : drvAction === 'envoi' ? 'Envoi des données vers Google Drive…'
               : drvAction === 'recuperation' ? 'Récupération des données depuis Google Drive…'
               : drvAction === 'reconnexion' ? 'Session Google expirée — autorise de nouveau l’accès dans le navigateur…'
               : 'Connexion à Google Drive — autorise l’accès dans le navigateur…'}

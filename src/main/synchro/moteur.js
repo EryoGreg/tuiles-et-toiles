@@ -34,7 +34,11 @@ const { versIso } = require('./hlc');
 
 const CHAMPS_LOCALE = ['artiste', 'titre', 'date', 'lieu', 'description', 'tags', 'image'];
 const TAGS = ['livre', 'etoile', 'bad_smiley'];
-const ENTITES = ['locale', 'override', 'archive', 'tag'];
+// stat : cle = oeuvre_id, champ = id de l'appareil qui compte, valeur =
+// { vues, dernier_vu }. Un seul ecrivain par champ (l'appareil lui-meme) :
+// jamais de conflit, total = somme des appareils.
+const ENTITES = ['locale', 'override', 'archive', 'tag', 'stat'];
+const RE_APPAREIL = /^[0-9a-f]{8}$/;
 
 function parse(v) { return v == null ? null : JSON.parse(v); }
 
@@ -111,6 +115,13 @@ function projeter(ctx, entite, cle, champ, val, hlc) {
     case 'tag':
       if (val == null) d.prepare('DELETE FROM user_tags WHERE oeuvre_id=? AND tag=?').run(cle, champ);
       else d.prepare('INSERT OR REPLACE INTO user_tags (oeuvre_id, tag, cree_le) VALUES (?, ?, ?)').run(cle, champ, t);
+      return;
+    case 'stat':
+      if (val == null) d.prepare('DELETE FROM user_stats WHERE oeuvre_id=? AND appareil=?').run(cle, champ);
+      else {
+        d.prepare('INSERT OR REPLACE INTO user_stats (oeuvre_id, appareil, vues, dernier_vu) VALUES (?, ?, ?, ?)')
+          .run(cle, champ, val.vues, val.dernier_vu || null);
+      }
       return;
     default:
       throw new Error('synchro : entite inconnue ' + entite);
@@ -260,6 +271,23 @@ function supprimerLocale(ctx, cle) {
   return ecrire(ctx, 'locale', cle, '_existe', pierreTombale(ctx, cle));
 }
 
+/**
+ * Compteurs de vues de CET appareil -> ops 'stat' (a appeler juste avant un
+ * envoi). Le tirage incremente user_stats directement, sans journal : une op
+ * par tirage serait du bruit, une op par oeuvre et par envoi suffit.
+ * @returns {number} ops emises
+ */
+function emettreStats(ctx) {
+  const id = ctx.appareil.id;
+  let n = 0;
+  ctx.d.transaction(() => {
+    for (const r of ctx.d.prepare('SELECT oeuvre_id, vues, dernier_vu FROM user_stats WHERE appareil=?').all(id)) {
+      if (ecrire(ctx, 'stat', r.oeuvre_id, id, { vues: r.vues || 0, dernier_vu: r.dernier_vu || null })) n++;
+    }
+  })();
+  return n;
+}
+
 // --- application d'une op distante ------------------------------------------
 
 function jsonOk(v, verif = () => true) {
@@ -274,7 +302,10 @@ function valide(op) {
   if (!ENTITES.includes(op.entite)) return false;
   if (op.entite === 'tag' && !TAGS.includes(op.champ)) return false;
   if (op.base != null && typeof op.base !== 'string') return false;
-  return jsonOk(op.valeur) && jsonOk(op.vus, (x) => Array.isArray(x) && x.every((h) => typeof h === 'string'));
+  const okValeur = op.entite === 'stat'
+    ? RE_APPAREIL.test(op.champ) && jsonOk(op.valeur, (v) => v === null || (v && Number.isInteger(v.vues) && v.vues >= 0))
+    : jsonOk(op.valeur);
+  return okValeur && jsonOk(op.vus, (x) => Array.isArray(x) && x.every((h) => typeof h === 'string'));
 }
 
 /**
@@ -328,6 +359,6 @@ function resoudre(ctx, id, choix) {
 
 module.exports = {
   CHAMPS_LOCALE, TAGS, ENTITES,
-  lire, valeur, lignes, existe, ecrire, supprimerLocale, pierreTombale,
+  lire, valeur, lignes, existe, ecrire, supprimerLocale, pierreTombale, emettreStats,
   appliquer, tetes, conflits, resoudre, valide
 };

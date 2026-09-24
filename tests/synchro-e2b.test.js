@@ -5,6 +5,7 @@
  *     node scripts/lancer-node.js tests/synchro-e2b.test.js [nbScenarios] [graine]
  *
  * TT_TRANSPORT=dossier : meme suite sur le transport dossier (disque, E2c).
+ * TT_TRANSPORT=drive   : meme suite sur le transport Drive (faux Drive en memoire, E2d).
  *
  * Plusieurs appareils dans un meme processus, chacun sur sa base en memoire,
  * relies par un transport memoire. Propriete verifiee : quelles que soient les
@@ -27,12 +28,26 @@ const { creerHorloge, formater } = require(path.join(RACINE, 'src/main/synchro/h
 const { creerTransportMemoire } = require(path.join(RACINE, 'src/main/synchro/transport-memoire'));
 const { creerTransportDossier } = require(path.join(RACINE, 'src/main/synchro/transport-dossier'));
 
-const SUR_DISQUE = process.env.TT_TRANSPORT === 'dossier';
+const { creerTransportDrive } = require(path.join(RACINE, 'src/main/synchro/transport-drive'));
+const { creerFauxDrive } = require('./faux-drive');
+
+const TRANSPORT = process.env.TT_TRANSPORT || 'memoire';
+const SUR_DISQUE = TRANSPORT === 'dossier';
 const TMP = SUR_DISQUE ? fs.mkdtempSync(path.join(os.tmpdir(), 'tt-e2b-')) : null;
 let nMondes = 0;
-const creerTransport = () => (SUR_DISQUE
-  ? creerTransportDossier(path.join(TMP, String(++nMondes)))
-  : creerTransportMemoire());
+/** Un « espace partage » par monde ; chaque appareil y accede par SON transport. */
+function creerEspace() {
+  if (TRANSPORT === 'drive') {
+    const faux = creerFauxDrive();
+    return () => creerTransportDrive(faux);
+  }
+  if (SUR_DISQUE) {
+    const racine = path.join(TMP, String(++nMondes));
+    return () => creerTransportDossier(racine);
+  }
+  const t = creerTransportMemoire();
+  return () => t;
+}
 
 const NB_SCENARIOS = parseInt(process.argv[2] || '400', 10);
 const GRAINE = parseInt(process.argv[3] || '20260924', 10);
@@ -47,15 +62,17 @@ async function test(nom, fn) {
 
 /** Horloge murale partagee ; chaque appareil a son decalage (horloge du telephone). */
 function creerMonde() {
-  const monde = { t: Date.parse('2026-09-24T10:00:00Z'), transport: creerTransport(), appareils: [] };
+  const espace = creerEspace();
+  const monde = { t: Date.parse('2026-09-24T10:00:00Z'), transport: espace(), appareils: [] };
   monde.avancer = (ms) => { monde.t += ms; };
   monde.appareil = (id, decalage = 0) => {
     const d = new Database(':memory:');
     d.exec(SCHEMA_USER);
     const a = { id, prefixe_ref: 'L' };
     const ctx = { d, appareil: a, horloge: creerHorloge(id, { maintenant: () => monde.t + decalage }) };
-    ctx.pousser = () => echange.pousser(ctx, monde.transport);
-    ctx.tirer = () => echange.tirer(ctx, monde.transport);
+    const t = espace();
+    ctx.pousser = () => echange.pousser(ctx, t);
+    ctx.tirer = () => echange.tirer(ctx, t);
     ctx.ecrire = (...args) => moteur.ecrire(ctx, ...args);
     ctx.val = (e, c, ch) => moteur.valeur(ctx, e, c, ch);
     ctx.conflits = () => moteur.conflits(ctx);
@@ -85,6 +102,7 @@ function photo(ctx) {
     tags: d.prepare('SELECT * FROM user_tags ORDER BY 1, 2').all(),
     archive: d.prepare('SELECT * FROM user_archive ORDER BY 1').all(),
     overrides: d.prepare('SELECT * FROM user_overrides ORDER BY 1, 2').all(),
+    stats: d.prepare('SELECT * FROM user_stats ORDER BY 1, 2').all(),
     conflits: d.prepare(`SELECT entite, cle, champ, hlc_gagnant, valeur_gagnante, hlc_perdant, valeur_perdante
       FROM conflits WHERE resolu=0 ORDER BY 1, 2, 3`).all()
   };
@@ -417,6 +435,14 @@ async function scenarioAleatoire(graine, nbActions) {
       const id = choix(PACK);
       a.ecrire('archive', id, '_', a.val('archive', id, '_') ? null : 1);
       act = 'archive ' + id;
+    } else if (r < 0.66) {
+      // Tirages comptes localement, emis en ops 'stat' avant l'envoi.
+      const id = choix(PACK);
+      a.d.prepare(`INSERT INTO user_stats (oeuvre_id, appareil, vues, dernier_vu) VALUES (?, ?, 1, ?)
+        ON CONFLICT(oeuvre_id, appareil) DO UPDATE SET vues = vues + 1, dernier_vu = excluded.dernier_vu`)
+        .run(id, a.appareil.id, new Date(m.t).toISOString());
+      moteur.emettreStats(a);
+      act = 'vue ' + id;
     } else if (r < 0.68) {
       const cs = a.conflits();
       if (!cs.length) continue;
@@ -453,7 +479,7 @@ async function scenarioAleatoire(graine, nbActions) {
 }
 
 async function propriete() {
-  console.log(`propriete : ${NB_SCENARIOS} scenarios x 3 appareils (graine ${GRAINE}, transport ${SUR_DISQUE ? 'dossier' : 'memoire'})`);
+  console.log(`propriete : ${NB_SCENARIOS} scenarios x 3 appareils (graine ${GRAINE}, transport ${TRANSPORT})`);
   const stats = { conflits: 0, locales: 0, ops: 0 };
   let echecs = 0;
   const t0 = Date.now();

@@ -152,7 +152,7 @@ function modifier(id, champs = {}) {
 /**
  * Supprime une tuile.
  *  - locale : pierre tombale _existe = { vu } (la ligne quitte oeuvres_locales,
- *             ses champs restent dans le registre) + tags retires, stats effacees
+ *             ses champs restent dans le registre) + tags retires
  *  - pack   : archive (masquee, jamais vraiment supprimee)
  */
 function supprimer(id) {
@@ -163,7 +163,8 @@ function supprimer(id) {
         etat.ecrire('tag', id, r.champ, null);
       }
       etat.supprimerLocale(id);
-      d.prepare('DELETE FROM user_stats WHERE oeuvre_id=?').run(id);
+      // Stats gardees (synchronisees, par appareil) : invisibles tant que la
+      // tuile est supprimee, de retour si elle est restauree.
     });
     appliquer();
     return { archivee: false };
