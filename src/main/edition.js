@@ -183,5 +183,5 @@ function appliquer() {
 }
 
 module.exports = {
-  configurer, creer, tuile, modifier, supprimer, nettoyerOrphelines, oublierImage
+  configurer, creer, tuile, modifier, supprimer, nettoyerOrphelines, oublierImage, imagesReferencees
 };

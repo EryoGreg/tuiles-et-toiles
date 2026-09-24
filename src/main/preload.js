@@ -70,6 +70,13 @@ contextBridge.exposeInMainWorld('api', {
     }
   },
 
+  synchro: {
+    etat: () => ipcRenderer.invoke('synchro:etat'),
+    choisirDossier: () => ipcRenderer.invoke('synchro:choisirDossier'),
+    oublier: () => ipcRenderer.invoke('synchro:oublier'),
+    synchroniser: () => ipcRenderer.invoke('synchro:synchroniser')
+  },
+
   maj: {
     verifier: () => ipcRenderer.invoke('maj:verifier'),
     telecharger: () => ipcRenderer.invoke('maj:telecharger'),

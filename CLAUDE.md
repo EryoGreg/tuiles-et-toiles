@@ -64,7 +64,17 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     champ d'une tuile supprimée masqués (réapparaissent à la restauration). Ops jamais
     regroupées à l'envoi. Test de propriété : 3 appareils, horloges décalées,
     `tests/synchro-e2b.test.js [n] [graine]`.
-  - É2c transport dossier local. É2d transport Drive : segments immuables
+  - É2c ✅ synchro par dossier partagé (clé USB, OneDrive, Syncthing) :
+    `synchro/transport-dossier.js` (écritures atomiques tmp → rename, noms hors motif ignorés
+    — copies de conflit des services de synchro), `synchro/rejoindre.js` (fiche
+    `appareils/<id>.json`, préfixe libre + renumérotation à la première entrée, course :
+    l'id le plus grand cède), `synchro/service.js` (images → ops → ops reçues → images
+    manquantes → `reconstruireVue`). Dossier choisi rangé dans `appareil.json`
+    (`dossier_synchro`), tout sous `<dossier>/Tuiles et Toiles - synchro/`. Options →
+    « Synchro entre appareils » : manuel (bouton), rechargement si des données arrivent.
+    `service.resoudre()` tranche **et** reconstruit la vue (à utiliser par l'écran Conflits).
+    `TT_TRANSPORT=dossier` rejoue toute la suite É2b sur disque.
+  - É2d transport Drive : segments immuables
     `journaux/<id>/<hlc>.ndjson`, images nommées par sha256, `appareils/<id>.json`.
     Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).
   - É2e snapshots (1 000 ops ou 7 jours), segments purgés par **accusé de lecture** de

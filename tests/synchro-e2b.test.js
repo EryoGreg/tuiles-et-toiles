@@ -4,6 +4,8 @@
  *
  *     node scripts/lancer-node.js tests/synchro-e2b.test.js [nbScenarios] [graine]
  *
+ * TT_TRANSPORT=dossier : meme suite sur le transport dossier (disque, E2c).
+ *
  * Plusieurs appareils dans un meme processus, chacun sur sa base en memoire,
  * relies par un transport memoire. Propriete verifiee : quelles que soient les
  * ecritures et l'ordre des synchros, une fois que tout le monde a pousse et
@@ -12,6 +14,8 @@
  */
 
 const assert = require('assert/strict');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
 
@@ -21,6 +25,14 @@ const moteur = require(path.join(RACINE, 'src/main/synchro/moteur'));
 const echange = require(path.join(RACINE, 'src/main/synchro/echange'));
 const { creerHorloge, formater } = require(path.join(RACINE, 'src/main/synchro/hlc'));
 const { creerTransportMemoire } = require(path.join(RACINE, 'src/main/synchro/transport-memoire'));
+const { creerTransportDossier } = require(path.join(RACINE, 'src/main/synchro/transport-dossier'));
+
+const SUR_DISQUE = process.env.TT_TRANSPORT === 'dossier';
+const TMP = SUR_DISQUE ? fs.mkdtempSync(path.join(os.tmpdir(), 'tt-e2b-')) : null;
+let nMondes = 0;
+const creerTransport = () => (SUR_DISQUE
+  ? creerTransportDossier(path.join(TMP, String(++nMondes)))
+  : creerTransportMemoire());
 
 const NB_SCENARIOS = parseInt(process.argv[2] || '400', 10);
 const GRAINE = parseInt(process.argv[3] || '20260924', 10);
@@ -35,7 +47,7 @@ async function test(nom, fn) {
 
 /** Horloge murale partagee ; chaque appareil a son decalage (horloge du telephone). */
 function creerMonde() {
-  const monde = { t: Date.parse('2026-09-24T10:00:00Z'), transport: creerTransportMemoire(), appareils: [] };
+  const monde = { t: Date.parse('2026-09-24T10:00:00Z'), transport: creerTransport(), appareils: [] };
   monde.avancer = (ms) => { monde.t += ms; };
   monde.appareil = (id, decalage = 0) => {
     const d = new Database(':memory:');
@@ -294,10 +306,11 @@ async function scenarios() {
   await test('op mal formee : rejetee partout, le reste passe', async () => {
     const m = creerMonde();
     const B = m.appareil('bbbb0002');
-    await m.transport.ecrireSegment('zzzz0009', 'x', [
-      { hlc: formater(m.t, 0, 'zzzz0009'), appareil: 'zzzz0009', entite: 'virus', cle: 'x', champ: 'y', valeur: '1', base: null },
-      { hlc: formater(m.t, 1, 'zzzz0009'), appareil: 'zzzz0009', entite: 'tag', cle: 'p:1', champ: 'pas_un_tag', valeur: '1', base: null },
-      { hlc: formater(m.t, 2, 'zzzz0009'), appareil: 'zzzz0009', entite: 'tag', cle: 'p:1', champ: 'etoile', valeur: '1', base: null }
+    const h = (n) => formater(m.t, n, 'ffff0009');
+    await m.transport.ecrireSegment('ffff0009', h(0) + '_' + h(2), [
+      { hlc: h(0), appareil: 'ffff0009', entite: 'virus', cle: 'x', champ: 'y', valeur: '1', base: null },
+      { hlc: h(1), appareil: 'ffff0009', entite: 'tag', cle: 'p:1', champ: 'pas_un_tag', valeur: '1', base: null },
+      { hlc: h(2), appareil: 'ffff0009', entite: 'tag', cle: 'p:1', champ: 'etoile', valeur: '1', base: null }
     ]);
     const r = await B.tirer();
     assert.equal(r.rejetees, 2);
@@ -440,7 +453,7 @@ async function scenarioAleatoire(graine, nbActions) {
 }
 
 async function propriete() {
-  console.log(`propriete : ${NB_SCENARIOS} scenarios x 3 appareils (graine ${GRAINE})`);
+  console.log(`propriete : ${NB_SCENARIOS} scenarios x 3 appareils (graine ${GRAINE}, transport ${SUR_DISQUE ? 'dossier' : 'memoire'})`);
   const stats = { conflits: 0, locales: 0, ops: 0 };
   let echecs = 0;
   const t0 = Date.now();
@@ -465,6 +478,7 @@ async function propriete() {
 (async () => {
   await scenarios();
   await propriete();
+  if (TMP) { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* verrou */ } }
   console.log(`\n${nOk} ok, ${nKo} KO`);
   process.exit(nKo ? 1 : 0);
 })();

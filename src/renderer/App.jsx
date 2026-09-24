@@ -1404,6 +1404,16 @@ function Options({ etat, onEtat }) {
   const [drvMsg, setDrvMsg] = useState(null);
   const [drvConflit, setDrvConflit] = useState(null);    // { sens: 'pousser'|'tirer', distantModifie? }
   const [drvAction, setDrvAction] = useState(null);      // 'connexion' | 'envoi' | 'recuperation'
+  const [syn, setSyn] = useState(null);                  // etat synchro par dossier
+  const [synOccupe, setSynOccupe] = useState(false);
+  // Message de la derniere synchro, survit au rechargement qui suit une fusion.
+  const [synMsg, setSynMsg] = useState(() => {
+    try {
+      const m = sessionStorage.getItem('synchro-msg');
+      if (m) { sessionStorage.removeItem('synchro-msg'); return JSON.parse(m); }
+    } catch { /* stockage indisponible */ }
+    return null;
+  });
 
   const totalMarques = etat.tags.livre + etat.tags.etoile + etat.tags.bad_smiley;
 
@@ -1466,6 +1476,40 @@ function Options({ etat, onEtat }) {
     if (r.aJour) { await fin(); drvFlash({ ok: 'Déjà à jour avec Drive.' }); return; }
     if (r.erreur) { await fin(); drvFlash({ erreur: r.erreur }); return; }
     window.location.reload();
+  };
+
+  useEffect(() => { window.api.synchro.etat().then(setSyn); }, []);
+
+  const synChoisir = async () => {
+    setSynMsg(null);
+    const r = await window.api.synchro.choisirDossier();
+    if (r.annule) return;
+    if (r.erreur) { setSynMsg({ erreur: r.erreur }); return; }
+    setSyn(r);
+  };
+  const synOublier = async () => { setSyn(await window.api.synchro.oublier()); setSynMsg(null); };
+
+  const synLancer = async () => {
+    setSynOccupe(true); setSynMsg(null);
+    const r = await window.api.synchro.synchroniser();
+    setSynOccupe(false);
+    if (r.erreur) { setSynMsg({ erreur: r.erreur }); return; }
+    const morceaux = [];
+    if (r.renumerotees.length) {
+      morceaux.push('Cet appareil numérote désormais ses tuiles « ' + r.prefixe + ' » : '
+        + r.renumerotees.map((x) => x.avant + ' → ' + x.apres).join(', ') + '.');
+    }
+    morceaux.push(r.poussees + ' modification(s) envoyée(s), ' + r.appliquees + ' reçue(s)'
+      + (r.imagesEnvoyees + r.imagesRecues ? ', ' + (r.imagesEnvoyees + r.imagesRecues) + ' image(s)' : '') + '.');
+    if (r.conflits) morceaux.push(r.conflits + ' conflit(s) à trancher — la valeur la plus récente est affichée en attendant.');
+    const msg = { ok: morceaux.join(' ') };
+    if (r.appliquees || r.renumerotees.length || r.imagesRecues) {
+      try { sessionStorage.setItem('synchro-msg', JSON.stringify(msg)); } catch { /* tant pis */ }
+      window.location.reload();   // la base a change — repartir propre
+      return;
+    }
+    setSynMsg(msg);
+    setSyn(await window.api.synchro.etat());
   };
 
   useEffect(() => { window.api.raccourcis.etat().then(setRaccourcis); }, []);
@@ -1677,6 +1721,51 @@ function Options({ etat, onEtat }) {
           )}
         </BoiteConfirmation>
       )}
+
+      <div className="filet" />
+
+      <section>
+        <div className="etiquette">Synchro entre appareils</div>
+        {!syn ? (
+          <div className="options-note">Chargement…</div>
+        ) : !syn.dossier ? (
+          <>
+            <button className="bouton-neutre" onClick={synChoisir}>
+              <I.Echange t={16} /> Choisir un dossier partagé…
+            </button>
+            <div className="options-note">
+              Un dossier que tes appareils voient tous : clé USB, dossier OneDrive, Dropbox ou
+              Syncthing. Chaque modification y est rangée ligne à ligne — rien n’est écrasé,
+              les deux côtés fusionnent.
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="choix-raccourcis">
+              <button className="bouton-neutre" onClick={synLancer} disabled={synOccupe}>
+                <I.Echange t={16} /> {synOccupe ? 'Synchro…' : 'Synchroniser maintenant'}
+              </button>
+              <button className="bouton-neutre" onClick={synChoisir} disabled={synOccupe}>
+                Changer de dossier…
+              </button>
+              <button className="bouton-neutre" onClick={synOublier} disabled={synOccupe}>
+                Oublier ce dossier
+              </button>
+            </div>
+            <div className="options-note">
+              Dossier : {syn.dossier}. Cet appareil : {syn.appareil.nom} (tuiles « {syn.appareil.prefixe} »).{' '}
+              {syn.derniere
+                ? 'Dernière synchro le ' + new Date(syn.derniere.le).toLocaleString('fr-FR') + '.'
+                : 'Jamais synchronisé.'}
+              {syn.conflits ? ' ' + syn.conflits + ' conflit(s) à trancher.' : ''}
+            </div>
+          </>
+        )}
+        {synMsg && synMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {synMsg.ok}</div>}
+        {synMsg && synMsg.erreur && (
+          <div className="options-note" style={{ color: 'var(--revoir)' }}>{synMsg.erreur}</div>
+        )}
+      </section>
 
       <div className="filet" />
 

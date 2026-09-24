@@ -14,6 +14,7 @@
  *   nom          affiche dans l'UI (« PC fixe »), modifiable
  *   prefixe_ref  numero d'affichage des tuiles creees ici : L1, M1…
  *                'L' tant que l'appareil n'a rejoint aucun compte
+ *   dossier_synchro  (optionnel) dossier partage choisi dans Options
  */
 
 const fs = require('fs');
@@ -55,4 +56,13 @@ function charger(dossier, { nom } = {}) {
   return a;
 }
 
-module.exports = { charger };
+/**
+ * Reecrit appareil.json (prefixe attribue en rejoignant, dossier de synchro).
+ * Reglages propres a l'installation : ne vont pas dans utilisateur.db, qui
+ * voyage d'un poste a l'autre par import zip.
+ */
+function sauver(dossier, a) {
+  ecrireAtomique(path.join(dossier, FICHIER), a);
+}
+
+module.exports = { charger, sauver };

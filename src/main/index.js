@@ -24,6 +24,7 @@ const drive = require('./drive');
 const maj = require('./maj');
 const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
+const synchro = require('./synchro/service');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
 // champ "name" du package.json (tuiles-et-toiles).
@@ -191,6 +192,7 @@ app.whenReady().then(() => {
     user: USER, imagesLocales: DOSSIER_IMAGES_LOCALES, pack: PACK, versionApp: app.getVersion()
   });
   drive.configurer({ dossierUser: DOSSIER_USER });
+  synchro.configurer({ dossierUser: DOSSIER_USER, imagesLocales: DOSSIER_IMAGES_LOCALES });
   maj.configurer({ dossierUser: DOSSIER_USER });
   maj.nettoyerApresMaj(journal);   // premier lancement apres une MAJ : retire l'ancien exe
 
@@ -350,6 +352,28 @@ ipcMain.handle('drive:pousser', async (e, opts) => {
 ipcMain.handle('drive:tirer', async (e, opts) => {
   const r = await drive.tirer(opts || {}, surReconnexionDrive(e));
   journal.ligne('drive tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
+  return r;
+});
+
+// Synchro par dossier partage (E2c) : fusion ligne a ligne, rien n'est ecrase.
+ipcMain.handle('synchro:etat', () => synchro.etat());
+ipcMain.handle('synchro:choisirDossier', async () => {
+  const r = await dialog.showOpenDialog(fenetre, {
+    title: 'Dossier de synchro (partagé entre tes appareils)',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (r.canceled || !r.filePaths[0]) return { annule: true };
+  const out = synchro.definirDossier(r.filePaths[0]);
+  journal.ligne('synchro dossier', { dossier: r.filePaths[0], erreur: out.erreur || null });
+  return out;
+});
+ipcMain.handle('synchro:oublier', () => { journal.ligne('synchro oublier dossier'); return synchro.oublierDossier(); });
+ipcMain.handle('synchro:synchroniser', async () => {
+  const r = await synchro.synchroniser();
+  journal.ligne('synchro', r.erreur ? { erreur: r.erreur } : {
+    poussees: r.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
+    images: [r.imagesEnvoyees, r.imagesRecues], prefixe: r.prefixe, renumerotees: r.renumerotees.length
+  });
   return r;
 });
 
