@@ -23,3 +23,6 @@ data/logs/
 
 # Identite de l'installation (synchro) : propre a chaque poste
 data/appareil.json
+
+# Point de reception des rapports d erreur (URL du script Google + cle) : pas dans un depot public
+src/main/rapport-config.json

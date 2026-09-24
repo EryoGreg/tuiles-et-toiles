@@ -249,14 +249,20 @@ correction).
   échec ne bloque plus la synchro. Démarrage : `depuisLancementMs` à l'ouverture de la base
   et à l'affichage de la fenêtre (mesure du problème de lenteur).
 - **Rapport d'erreur** (`src/main/rapport.js`, Options → « Signaler un problème ») :
-  formulaire (sujet, depuis quand, reproductible, description, email de contact
-  facultatif) → zip dans `Documents\Tuiles et Toiles - rapports\` (LISEZMOI, `rapport.txt`,
-  `rapport.json`, `journaux/` **masqués** : utilisateur Windows, nom du poste, emails —
-  les textes des tuiles restent) → aperçu → messagerie par défaut via `mailto:` (objet +
-  corps pré-remplis) + dossier du zip ouvert, à glisser en pièce jointe (mailto ne joint
-  rien). Repli : « Copier le texte ». Destinataire `wn7pocu65@mozmail.com` (relais
-  Firefox Relay). Objet : `[T&T rapport] <sujet> — v<version> — <date heure>` (préfixe
-  fixe pour le filtre de messagerie).
+  formulaire (sujet, depuis quand, reproductible, description et email de contact
+  facultatifs), aperçu dépliable, **un clic « Envoyer »**. L'app POSTe le rapport
+  (journaux **masqués** — utilisateur Windows, nom du poste, emails ; les textes des
+  tuiles restent — compressés gzip + base64, `rapport.json`) au script Google Apps Script
+  de l'utilisateur (`tools/rapport-reception.gs`, déployé en application Web « Tout le
+  monde », propriété `CLE`), qui envoie le mail à `wn7pocu65@mozmail.com` (relais Firefox
+  Relay) avec les journaux en pièces jointes `.txt` (au-delà de 20 Mo : `.gz`),
+  `replyTo` = email du testeur. Seule autorisation Google : envoyer des mails. Config :
+  `src/main/rapport-config.json` `{ url, cle }` (**gitignoré**, embarqué dans l'asar,
+  comme `oauth-client.json`). Hors ligne → `Documents\Tuiles et Toiles - rapports  en-attente\`, renvoyé 8 s après le lancement suivant. `url` vide (script pas encore
+  déployé) → repli messagerie `mailto:` avec le texte seul (≤ 1 900 car.). Objet :
+  `[T&T rapport] <sujet> — v<version> — <date heure> — R<ref>` (préfixe fixe pour le
+  filtre de messagerie). Le script est testé dans Node avec les services Google simulés
+  (`tests/journal-rapport.test.js`).
 
 ## Pièges de l'environnement
 

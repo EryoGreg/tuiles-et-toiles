@@ -9,7 +9,6 @@ const assert = require('assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const AdmZip = require('adm-zip');
 
 const RACINE = path.resolve(__dirname, '..');
 const journal = require(path.join(RACINE, 'src/main/journal'));
@@ -106,78 +105,189 @@ test('rotation : 5 Mo par fichier, 5 fichiers au plus', () => {
 
 console.log('rapport');
 
+const zlib = require('zlib');
+const vm = require('vm');
 const moi = os.userInfo().username;
 const poste = os.hostname();
+const DOSSIER = path.join(TMP, 'rapports');
+const CLE = 'cle-de-test';
+const INFOS = () => ({ os: 'win32 test', appareil: { id: 'aaaa0001', nom: poste }, donnees: { dossier: 'C:\\Users\\' + moi } });
+const FORM = {
+  sujet: 'image', depuis: 'semaine', reproductible: 'toujours',
+  description: 'La photo Москва.jpg ne s’importe pas', email: 'testeur@exemple.fr'
+};
 
-test('masquage : utilisateur dans les chemins (simple et double antislash), poste, emails', () => {
-  const t = [
-    'C:\\Users\\' + moi + '\\AppData\\Roaming',
-    JSON.stringify({ p: 'C:\\Users\\' + moi + '\\Documents' }),
-    '/home/' + moi + '/x',
-    'appareil ' + poste + ' pret',
-    'contact : jean.dupont@exemple.fr, dest : ' + rapport.DESTINATAIRE
-  ].join('\n');
-  const m = rapport.masquer(t);
-  assert.ok(!new RegExp('Users\\\\{1,2}' + moi, 'i').test(m), m);
-  assert.ok(!m.includes('/home/' + moi));
-  assert.ok(m.includes('<utilisateur>'));
-  if (poste.length >= 3) assert.ok(!new RegExp('(^|[^A-Za-z0-9])' + poste + '([^A-Za-z0-9]|$)', 'i').test(m), m);
-  assert.ok(m.includes('<email>'));
-  assert.ok(m.includes(rapport.DESTINATAIRE), 'le destinataire reste lisible');
-  assert.ok(rapport.masquer('moi@ici.fr', { garder: ['moi@ici.fr'] }).includes('moi@ici.fr'));
-});
+/**
+ * Script Google de reception (tools/rapport-reception.gs) execute dans Node,
+ * services Google simules : on teste la chaine complete app -> script -> mail.
+ */
+function scriptGoogle() {
+  const proprietes = new Map([['CLE', CLE]]);
+  const mails = [];
+  const blob = (octets, type, nom) => ({
+    octets: Buffer.from(octets), type, nom,
+    getBytes() { return this.octets; }, getDataAsString() { return this.octets.toString('utf8'); }
+  });
+  const bac = {
+    Utilities: {
+      newBlob: (d, type, nom) => blob(typeof d === 'string' ? Buffer.from(d, 'utf8') : d, type, nom),
+      base64Decode: (s) => Buffer.from(s, 'base64'),
+      base64Encode: (b) => Buffer.from(b).toString('base64'),
+      gzip: (b) => blob(zlib.gzipSync(b.octets), 'application/x-gzip', b.nom + '.gz'),
+      ungzip: (b) => blob(zlib.gunzipSync(b.octets), 'text/plain', b.nom),
+      formatDate: (d) => d.toISOString().slice(0, 13).replace(/\D/g, '')
+    },
+    PropertiesService: { getScriptProperties: () => ({
+      getProperty: (k) => (proprietes.has(k) ? proprietes.get(k) : null),
+      setProperty: (k, v) => proprietes.set(k, v),
+      deleteProperty: (k) => proprietes.delete(k),
+      getKeys: () => [...proprietes.keys()]
+    }) },
+    MailApp: { sendEmail: (to, objet, corps, options) => mails.push({ to, objet, corps, options }) },
+    ContentService: {
+      MimeType: { JSON: 'json' },
+      createTextOutput: (t) => ({ contenu: t, setMimeType() { return this; }, getContent() { return this.contenu; } })
+    },
+    Logger: { log: () => {} }
+  };
+  vm.createContext(bac);
+  vm.runInContext(fs.readFileSync(path.join(RACINE, 'tools/rapport-reception.gs'), 'utf8'), bac);
+  // fetch vers le script : doPost avec le corps recu.
+  const fetch = async (url, opts) => {
+    const out = bac.doPost({ postData: { contents: opts.body } });
+    return { ok: true, status: 200, text: async () => out.getContent() };
+  };
+  return { fetch, mails, proprietes };
+}
 
-test('horodatage local avec decalage + UTC', () => {
-  const h = rapport.horodatage(new Date('2026-09-24T11:45:07Z'));
-  assert.match(h.local, /^2026-09-24T\d{2}:45:07[+-]\d{2}:\d{2}$/);
-  assert.equal(h.utc, '2026-09-24T11:45:07.000Z');
-  assert.match(h.fichier, /^2026-09-24_\d{6}$/);
-});
+const horsLigne = async () => { throw new Error('net::ERR_INTERNET_DISCONNECTED'); };
 
-test('rapport complet : zip (LISEZMOI, rapport, journaux masques) + mail pre-rempli', () => {
+function configurer(fetch, url = 'https://script.google.com/macros/s/x/exec') {
+  rapport.configurer({ dossier: DOSSIER, version: '9.9.9', infos: INFOS, config: { url, cle: CLE }, fetch });
+}
+
+async function testA(nom, fn) {
+  try { await fn(); nOk++; console.log('  ok  ' + nom); }
+  catch (e) { nKo++; console.log('  KO  ' + nom + '\n      ' + String(e.stack || e).split('\n').slice(0, 5).join('\n      ')); }
+}
+
+(async () => {
+  test('masquage : utilisateur dans les chemins (simple et double antislash), poste, emails', () => {
+    const t = [
+      'C:\\Users\\' + moi + '\\AppData\\Roaming',
+      JSON.stringify({ p: 'C:\\Users\\' + moi + '\\Documents' }),
+      '/home/' + moi + '/x',
+      'appareil ' + poste + ' pret',
+      'contact : jean.dupont@exemple.fr, dest : ' + rapport.DESTINATAIRE
+    ].join('\n');
+    const m = rapport.masquer(t);
+    assert.ok(!new RegExp('Users\\\\{1,2}' + moi, 'i').test(m), m);
+    assert.ok(!m.includes('/home/' + moi));
+    assert.ok(m.includes('<utilisateur>'));
+    if (poste.length >= 3) assert.ok(!new RegExp('(^|[^A-Za-z0-9])' + poste + '([^A-Za-z0-9]|$)', 'i').test(m), m);
+    assert.ok(m.includes('<email>'));
+    assert.ok(m.includes(rapport.DESTINATAIRE), 'le destinataire reste lisible');
+    assert.ok(rapport.masquer('moi@ici.fr', { garder: ['moi@ici.fr'] }).includes('moi@ici.fr'));
+  });
+
+  test('horodatage local avec decalage + UTC', () => {
+    const h = rapport.horodatage(new Date('2026-09-24T11:45:07Z'));
+    assert.match(h.local, /^2026-09-24T\d{2}:45:07[+-]\d{2}:\d{2}$/);
+    assert.equal(h.utc, '2026-09-24T11:45:07.000Z');
+  });
+
   journal.evt('image', 'chemin', { chemin: 'C:\\Users\\' + moi + '\\Pictures\\Москва.jpg' }, 'ERREUR');
-  const DOSSIER = path.join(TMP, 'rapports');
-  rapport.configurer({
-    dossier: DOSSIER, version: '9.9.9',
-    infos: () => ({ os: 'win32 test', appareil: { id: 'aaaa0001', nom: poste }, donnees: { dossier: 'C:\\Users\\' + moi } })
+
+  await testA('un clic : le rapport arrive par mail, journaux en .txt masques, sans zip', async () => {
+    const g = scriptGoogle();
+    configurer(g.fetch);
+    const r = await rapport.envoyer(FORM);
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(g.mails.length, 1);
+    const m = g.mails[0];
+    assert.equal(m.to, rapport.DESTINATAIRE);
+    assert.match(m.objet, /^\[T&T rapport\] Image non importée ou mal affichée — v9\.9\.9 — \d{4}-\d{2}-\d{2} \d{2}:\d{2} — R\d{12}-[0-9a-f]{4}$/);
+    assert.equal(m.options.replyTo, 'testeur@exemple.fr', 'repondre = email du testeur');
+    assert.match(m.corps, /Depuis quand   : Depuis quelques jours/);
+    assert.match(m.corps, /Reproductible  : Oui, à chaque fois/);
+    assert.match(m.corps, /La photo Москва\.jpg/);
+    const noms = m.options.attachments.map((a) => a.nom);
+    assert.ok(noms.includes('journal.log.txt') && noms.includes('rapport.json'), noms.join());
+    assert.ok(!noms.some((n) => /\.zip$/.test(n)), 'aucun zip');
+    const log = m.options.attachments.find((a) => a.nom === 'journal.log.txt').getDataAsString();
+    assert.ok(log.includes('Москва.jpg'), 'les textes restent');
+    assert.ok(!new RegExp('Users\\\\{1,2}' + moi, 'i').test(log), 'utilisateur masque');
+    const json = JSON.parse(m.options.attachments.find((a) => a.nom === 'rapport.json').getDataAsString());
+    assert.equal(json.application.donnees.dossier, 'C:\\Users\\<utilisateur>');
+    assert.equal(json.formulaire.email, 'testeur@exemple.fr');
+    assert.ok(!fs.existsSync(DOSSIER), 'rien ecrit sur disque quand tout va bien');
   });
-  const r = rapport.preparer({
-    sujet: 'image', depuis: 'semaine', reproductible: 'toujours',
-    description: 'La photo Москва.jpg ne s’importe pas', email: 'testeur@exemple.fr'
+
+  await testA('gros journaux : au-dela de 20 Mo, les plus anciens joints compresses (.gz)', async () => {
+    const g = scriptGoogle();
+    configurer(g.fetch);
+    await rapport.envoyer(FORM);
+    const pieces = g.mails[0].options.attachments;
+    const txt = pieces.filter((a) => /\.txt$/.test(a.nom)).reduce((s, a) => s + a.octets.length, 0);
+    assert.ok(txt <= 20 * 1024 * 1024, 'texte ' + txt);
+    assert.ok(pieces.some((a) => /\.gz$/.test(a.nom)), pieces.map((a) => a.nom).join());
   });
-  assert.ok(fs.existsSync(r.chemin));
-  assert.match(r.nom, /^rapport-\d{4}-\d{2}-\d{2}_\d{6}-image\.zip$/);
-  assert.ok(fs.existsSync(path.join(DOSSIER, lisezmoi.NOM)), 'LISEZMOI du dossier des rapports');
-  assert.match(r.objet, /^\[T&T rapport\] Image non importée ou mal affichée — v9\.9\.9 — \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
-  assert.match(r.corps, /Depuis quand : Depuis quelques jours/);
-  assert.match(r.corps, /Reproductible : Oui, à chaque fois/);
-  assert.match(r.corps, /Contact : testeur@exemple\.fr/);
-  assert.match(r.corps, new RegExp(r.nom.replace(/\./g, '\\.')));
-  assert.ok(r.apercu.niveaux.ERREUR >= 1);
 
-  const zip = new AdmZip(r.chemin);
-  const noms = zip.getEntries().map((e) => e.entryName).sort();
-  assert.ok(noms.includes('LISEZMOI.txt') && noms.includes('rapport.txt') && noms.includes('rapport.json'));
-  assert.ok(noms.includes('journaux/journal.log'));
-  const log = zip.readAsText('journaux/journal.log');
-  assert.ok(log.includes('Москва.jpg'), 'les textes restent');
-  assert.ok(!new RegExp('Users\\\\{1,2}' + moi, 'i').test(log), 'utilisateur masque dans le journal');
-  const json = JSON.parse(zip.readAsText('rapport.json'));
-  assert.equal(json.formulaire.email, 'testeur@exemple.fr', 'email saisi volontairement : garde');
-  assert.equal(json.application.donnees.dossier, 'C:\\Users\\<utilisateur>');
-  assert.ok(json.horodatage.local && json.horodatage.utc);
-  assert.equal(json.session, journal.SESSION);
-  // Le mail : destinataire, objet et corps encodes.
-  const m = rapport.dernierRapport().mailto;
-  assert.ok(m.startsWith('mailto:' + rapport.DESTINATAIRE + '?subject='));
-  assert.ok(decodeURIComponent(m).includes('[T&T rapport]'));
-  assert.ok(m.length < 4000, 'mailto raisonnable : ' + m.length);
-});
+  await testA('cle refusee par le script -> rapport mis en attente', async () => {
+    const g = scriptGoogle();
+    g.proprietes.set('CLE', 'autre');
+    configurer(g.fetch);
+    const r = await rapport.envoyer(FORM);
+    assert.equal(r.enAttente, true);
+    assert.match(r.erreur, /cle refusee/);
+    assert.equal(g.mails.length, 0);
+  });
 
-test('sujet inconnu -> « Autre »', () => {
-  assert.match(rapport.preparer({ sujet: 'nimporte', depuis: 'inconnu', reproductible: 'parfois' }).objet, /\] Autre — /);
-});
+  await testA('hors ligne : en attente (LISEZMOI), puis renvoye au lancement suivant', async () => {
+    fs.rmSync(DOSSIER, { recursive: true, force: true });
+    configurer(horsLigne);
+    const r = await rapport.envoyer(FORM);
+    assert.equal(r.enAttente, true);
+    const attente = path.join(DOSSIER, 'en-attente');
+    assert.equal(fs.readdirSync(attente).filter((n) => n.endsWith('.json')).length, 1);
+    assert.ok(fs.existsSync(path.join(attente, lisezmoi.NOM)));
+    assert.ok(fs.existsSync(path.join(DOSSIER, lisezmoi.NOM)));
+    assert.equal(rapport.choix().enAttente, 1);
+    // Toujours hors ligne : reporte, rien de perdu.
+    assert.deepEqual(await rapport.renvoyerEnAttente(), { envoyes: 0, restants: 1 });
+    // Retour du reseau.
+    const g = scriptGoogle();
+    configurer(g.fetch);
+    assert.deepEqual(await rapport.renvoyerEnAttente(), { envoyes: 1, restants: 0 });
+    assert.equal(g.mails.length, 1);
+    assert.match(g.mails[0].objet, new RegExp(r.id + '$'));
+  });
 
-try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* verrou */ }
-console.log(`\n${nOk} ok, ${nKo} KO`);
-process.exit(nKo ? 1 : 0);
+  await testA('script pas encore deploye (url vide) : repli messagerie, texte seul, lien court', async () => {
+    configurer(null, '');
+    assert.equal(rapport.choix().envoiDirect, false);
+    const r = await rapport.envoyer({ ...FORM, description: 'x'.repeat(5000) });
+    assert.equal(r.secours, true);
+    assert.ok(r.mailto.startsWith('mailto:' + rapport.DESTINATAIRE + '?subject='));
+    assert.ok(r.mailto.length <= 1900, 'longueur ' + r.mailto.length);
+    assert.ok(decodeURIComponent(r.mailto).includes('[…tronqué]'));
+  });
+
+  await testA('apercu : objet, corps, liste des journaux, rien d\'envoye', async () => {
+    const g = scriptGoogle();
+    configurer(g.fetch);
+    const a = rapport.apercu(FORM);
+    assert.match(a.objet, /^\[T&T rapport\]/);
+    assert.ok(a.journaux.length >= 1 && a.journaux[0].nom === 'journal.log');
+    assert.equal(g.mails.length, 0);
+  });
+
+  await testA('sujet inconnu -> « Autre »', async () => {
+    configurer(null, '');
+    assert.match(rapport.apercu({ sujet: 'nimporte' }).objet, /\] Autre — /);
+  });
+
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* verrou */ }
+  console.log(`\n${nOk} ok, ${nKo} KO`);
+  process.exit(nKo ? 1 : 0);
+})();

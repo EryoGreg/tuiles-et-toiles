@@ -1856,10 +1856,10 @@ function Options({ etat, onEtat }) {
           <I.FlecheVert t={16} /> Envoyer le log pour rapport d’erreur
         </button>
         <div className="options-note">
-          Prépare un rapport (journal de fonctionnement, version, état de l’application) et
-          ouvre ta messagerie avec le mail pré-rempli. Ton nom d’utilisateur Windows, le nom
-          de ton ordinateur et tes adresses email sont masqués ; tu vois ce qui part avant
-          d’envoyer.
+          Envoie en un clic un rapport au développeur : ta description, le journal de
+          fonctionnement et l’état de l’application. Ton nom d’utilisateur Windows, le nom de
+          ton ordinateur et tes adresses email sont masqués ; tu peux voir ce qui part avant
+          d’envoyer. Sans connexion, le rapport part au prochain lancement.
         </div>
       </section>
 
@@ -1916,13 +1916,15 @@ function Options({ etat, onEtat }) {
 
 /* ------------------------------------------------------- rapport d'erreur */
 
-// Deux temps : le formulaire, puis l'apercu du rapport pret (zip masque) avec
-// l'ouverture de la messagerie. Rien ne part sans l'utilisateur.
+// Un clic : le rapport (formulaire + journaux masques) part directement au
+// script de reception, qui le transmet par mail. Apercu depliable avant envoi.
+// Hors ligne : mis en attente, renvoye au prochain lancement.
 function FormulaireRapport({ onFermer }) {
   const [choix, setChoix] = useState(null);
   const [f, setF] = useState({ sujet: '', depuis: '', reproductible: '', description: '', email: '' });
-  const [pret, setPret] = useState(null);       // rapport prepare
+  const [apercu, setApercu] = useState(null);
   const [occupe, setOccupe] = useState(false);
+  const [fini, setFini] = useState(null);       // resultat de l'envoi
   const [msg, setMsg] = useState(null);
 
   useEffect(() => { window.api.rapport.choix().then(setChoix); }, []);
@@ -1932,26 +1934,47 @@ function FormulaireRapport({ onFermer }) {
     return () => window.removeEventListener('keydown', clavier);
   }, [onFermer]);
 
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const set = (k) => (e) => { setF((x) => ({ ...x, [k]: e.target.value })); setApercu(null); };
   const complet = f.sujet && f.depuis && f.reproductible;
+  const voir = async (e) => { if (e.target.open && !apercu) setApercu(await window.api.rapport.apercu(f)); };
 
-  const preparer = async () => {
+  const envoyer = async () => {
     setOccupe(true); setMsg(null);
-    const r = await window.api.rapport.preparer(f);
+    const r = await window.api.rapport.envoyer(f);
     setOccupe(false);
-    if (r.erreur) { setMsg({ erreur: r.erreur }); return; }
-    setPret(r);
+    if (r.erreur && !r.enAttente) { setMsg({ erreur: r.erreur }); return; }
+    setFini(r);
   };
-  const action = async (fn, ok) => {
-    const r = await fn();
-    setMsg(r && r.erreur ? { erreur: r.erreur } : { ok });
+  const copier = async () => {
+    await window.api.rapport.copier(f);
+    setMsg({ ok: 'Texte du rapport copié : colle-le dans un mail à ' + choix.destinataire + '.' });
   };
+
+  if (fini) {
+    return (
+      <div className="recouvrement" onClick={onFermer}>
+        <div className="boite-dialogue boite-rapport" onClick={(e) => e.stopPropagation()}>
+          <h3>{fini.ok ? 'Rapport envoyé' : fini.enAttente ? 'Rapport mis de côté' : 'Messagerie ouverte'}</h3>
+          <p>
+            {fini.ok && <>Merci ! Le rapport <strong>{fini.id}</strong> est parti avec le journal complet.</>}
+            {fini.enAttente && <>Pas de connexion pour l’instant ({fini.erreur}). Le rapport <strong>{fini.id}</strong> partira
+              tout seul au prochain lancement de l’application.</>}
+            {fini.secours && <>L’envoi direct n’est pas encore configuré : ta messagerie s’est ouverte avec le rapport
+              (texte seul, sans le journal complet). Il ne reste qu’à cliquer « Envoyer ».</>}
+          </p>
+          <div className="actions">
+            <button className="bouton-valide" onClick={onFermer}><I.Coche t={14} /> Fermer</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="recouvrement" onClick={onFermer}>
       <div className="boite-dialogue boite-rapport" onClick={(e) => e.stopPropagation()}>
         <h3>Envoyer le log pour rapport d’erreur</h3>
-        {!choix ? <p>Chargement…</p> : !pret ? (
+        {!choix ? <p>Chargement…</p> : (
           <>
             <label className="rapport-champ">
               <span>Quel est le problème ?</span>
@@ -1983,49 +2006,33 @@ function FormulaireRapport({ onFermer }) {
               <span>Ton email, pour qu’on puisse te répondre <em>(facultatif)</em></span>
               <input className="editeur-input" type="email" value={f.email} onChange={set('email')} />
             </label>
-            {msg && msg.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{msg.erreur}</div>}
-            <div className="actions">
-              <button className="bouton-neutre" onClick={onFermer}>Annuler</button>
-              <button className="bouton-valide" onClick={preparer} disabled={!complet || occupe}>
-                <I.Coche t={14} /> {occupe ? 'Préparation…' : 'Préparer le rapport'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p>
-              Rapport prêt : <strong>{pret.nom}</strong> ({Math.round(pret.octets / 1024)} Ko), rangé dans
-              Documents › Tuiles et Toiles - rapports. Il contient
-              {' '}{pret.apercu.lignes} lignes de journal
-              {pret.apercu.niveaux.ERREUR ? ', dont ' + pret.apercu.niveaux.ERREUR + ' erreur(s)' : ''}
-              {pret.apercu.niveaux.WARN ? ' et ' + pret.apercu.niveaux.WARN + ' avertissement(s)' : ''}.
-            </p>
-            <details className="rapport-apercu">
-              <summary>Voir ce qui sera envoyé (masqué)</summary>
-              <pre>{'À : ' + pret.destinataire + '\nObjet : ' + pret.objet + '\n\n' + pret.corps}</pre>
-              {pret.apercu.anomalies.length > 0 && (
-                <pre>{'Dernières anomalies du journal :\n' + pret.apercu.anomalies.join('\n')}</pre>
-              )}
-              <pre>{JSON.stringify(pret.apercu.application, null, 2)}</pre>
-            </details>
-            <p className="options-note">
-              « Ouvrir ma messagerie » crée le mail et ouvre le dossier du zip : glisse le fichier
-              dans le mail, puis envoie. Sans messagerie installée : copie le texte et envoie-le
-              depuis ta boîte mail à {pret.destinataire}, zip en pièce jointe.
-            </p>
+
+            {complet && (
+              <details className="rapport-apercu" onToggle={voir}>
+                <summary>Voir ce qui sera envoyé</summary>
+                {!apercu ? <p>Préparation…</p> : apercu.erreur ? <p>{apercu.erreur}</p> : (
+                  <>
+                    <pre>{'Objet : ' + apercu.objet + '\n\n' + apercu.corps}</pre>
+                    <p>
+                      Journaux joints : {apercu.journaux.map((j) => j.nom + ' (' + Math.round(j.octets / 1024) + ' Ko)').join(', ')}
+                      {' '}— nom d’utilisateur Windows, nom de l’ordinateur et emails masqués.
+                    </p>
+                  </>
+                )}
+              </details>
+            )}
+
+            {choix.enAttente > 0 && (
+              <div className="options-note">{choix.enAttente} rapport(s) précédent(s) en attente : ils repartiront au prochain lancement.</div>
+            )}
             {msg && msg.ok && <div className="options-confirmation"><I.Coche t={14} /> {msg.ok}</div>}
             {msg && msg.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{msg.erreur}</div>}
             <div className="actions rapport-actions">
-              <button className="bouton-neutre" onClick={() => action(window.api.rapport.copier, 'Texte du mail copié.')}>
-                Copier le texte
+              <button className="bouton-neutre" onClick={copier} disabled={!complet}>Copier le texte</button>
+              <button className="bouton-neutre" onClick={onFermer}>Annuler</button>
+              <button className="bouton-valide" onClick={envoyer} disabled={!complet || occupe}>
+                <I.Coche t={14} /> {occupe ? 'Envoi…' : choix.envoiDirect ? 'Envoyer le rapport' : 'Ouvrir ma messagerie'}
               </button>
-              <button className="bouton-neutre" onClick={() => action(window.api.rapport.dossier, 'Dossier ouvert.')}>
-                Ouvrir le dossier
-              </button>
-              <button className="bouton-valide" onClick={() => action(window.api.rapport.messagerie, 'Messagerie ouverte — joins le zip au mail.')}>
-                <I.Coche t={14} /> Ouvrir ma messagerie
-              </button>
-              <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
             </div>
           </>
         )}

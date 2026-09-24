@@ -221,8 +221,15 @@ app.whenReady().then(() => {
   rapport.configurer({
     dossier: path.join(app.getPath('documents'), 'Tuiles et Toiles - rapports'),
     version: app.getVersion(),
-    infos: infosRapport
+    infos: infosRapport,
+    fetch: (url, opts) => net.fetch(url, opts)
   });
+  // Rapports restes en attente (envoi hors ligne) : renvoi discret.
+  setTimeout(() => {
+    rapport.renvoyerEnAttente()
+      .then((r) => { if (r.envoyes || r.restants) journal.evt('rapport', 'attente', r); })
+      .catch((e) => journal.erreur('rapport', 'renvoi', e));
+  }, 8000);
   maj.configurer({ dossierUser: DOSSIER_USER });
   maj.nettoyerApresMaj(journal);   // premier lancement apres une MAJ : retire l'ancien exe
 
@@ -550,33 +557,25 @@ gerer('reglages:definir', (_e, { cle, valeur }) => {
   return true;
 });
 
-// Rapport d'erreur : zip masque + messagerie pre-remplie (rien ne part seul).
+// Rapport d'erreur : envoi direct au script de reception (un clic) ; repli
+// messagerie si le script n'est pas configure ; en attente si hors ligne.
 gerer('rapport:choix', () => rapport.choix());
-gerer('rapport:preparer', (_e, formulaire) => {
-  try { return rapport.preparer(formulaire || {}); }
-  catch (e) { journal.erreur('rapport', 'preparer', e); return { erreur: 'Rapport impossible : ' + e.message }; }
+gerer('rapport:apercu', (_e, formulaire) => {
+  try { return rapport.apercu(formulaire || {}); }
+  catch (e) { journal.erreur('rapport', 'apercu', e); return { erreur: 'Aperçu impossible : ' + e.message }; }
 });
-gerer('rapport:messagerie', async () => {
-  const r = rapport.dernierRapport();
-  if (!r) return { erreur: 'Aucun rapport préparé.' };
-  shell.showItemInFolder(r.chemin);
-  try { await shell.openExternal(r.mailto); }
-  catch (e) {
-    journal.erreur('rapport', 'messagerie-absente', e);
-    return { erreur: 'Aucune messagerie ne s’est ouverte. Copie le texte du mail et envoie-le depuis ta boîte mail, avec le zip en pièce jointe.' };
+gerer('rapport:envoyer', async (_e, formulaire) => {
+  let r;
+  try { r = await rapport.envoyer(formulaire || {}); }
+  catch (e) { journal.erreur('rapport', 'envoyer', e); return { erreur: 'Rapport impossible : ' + e.message }; }
+  if (r.secours) {
+    try { await shell.openExternal(r.mailto); }
+    catch (e) { journal.erreur('rapport', 'messagerie-absente', e); return { ...r, erreur: 'Aucune messagerie ne s’est ouverte : copie le texte et envoie-le depuis ta boîte mail.' }; }
   }
-  journal.evt('rapport', 'messagerie-ouverte', { nom: r.nom, longueurMailto: r.mailto.length });
-  return { ok: true };
+  return r;
 });
-gerer('rapport:dossier', () => {
-  const r = rapport.dernierRapport();
-  if (r) shell.showItemInFolder(r.chemin);
-  return { ok: !!r };
-});
-gerer('rapport:copier', () => {
-  const r = rapport.dernierRapport();
-  if (!r) return { erreur: 'Aucun rapport préparé.' };
-  clipboard.writeText('À : ' + rapport.DESTINATAIRE + '\nObjet : ' + r.objet + '\n\n' + r.corps);
+gerer('rapport:copier', (_e, formulaire) => {
+  clipboard.writeText(rapport.texteACopier(formulaire || {}));
   return { ok: true };
 });
 

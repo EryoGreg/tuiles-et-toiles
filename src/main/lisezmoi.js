@@ -121,30 +121,25 @@ const TEXTES = {
     'Ne modifie pas le contenu de l\'archive : l\'import pourrait échouer.'
   ],
 
-  // Documents\Tuiles et Toiles - rapports\
+  // Documents\Tuiles et Toiles - rapports\ (cree seulement si un envoi echoue)
   rapports: [
     ...titre('Rapports d\'erreur Tuiles et Toiles'),
-    'Chaque fichier rapport-<date>-<sujet>.zip a été préparé par',
-    'l\'application (Options → « Signaler un problème ») pour être joint à',
-    'un mail au développeur. Il contient le journal de fonctionnement de',
-    'l\'application, avec ton nom d\'utilisateur Windows, le nom de ton',
-    'ordinateur et tes adresses email masqués.',
-    '',
-    'Rien n\'est envoyé automatiquement : c\'est toi qui joins le zip à un',
-    'mail. Une fois le mail parti, tu peux supprimer ces fichiers.'
+    'Les rapports d\'erreur (Options → « Signaler un problème ») partent',
+    'directement au développeur. Ce dossier n\'apparaît que si un envoi',
+    'n\'a pas pu se faire (pas de connexion) : le rapport attend alors dans',
+    'en-attente/ et repart tout seul au prochain lancement.'
   ],
 
-  rapport: [
-    ...titre('Rapport d\'erreur Tuiles et Toiles'),
-    'Préparé par l\'application pour aider à comprendre un problème.',
+  rapports_attente: [
+    ...titre('Rapports en attente d\'envoi'),
+    'Rapports d\'erreur qui n\'ont pas pu partir (pas de connexion au',
+    'moment de l\'envoi). L\'application les renvoie automatiquement au',
+    'prochain lancement, puis les supprime.',
     '',
-    'rapport.txt     Le formulaire rempli et l\'état de l\'application',
-    '                (version, système, compteurs, synchro).',
-    'rapport.json    Les mêmes informations, lisibles par un programme.',
-    'journaux/       Journal de fonctionnement (une ligne par événement).',
-    '                Nom d\'utilisateur Windows, nom du poste et emails',
-    '                masqués. Filtrer par niveau (ERREUR, WARN) ou par',
-    '                domaine (image, synchro, drive…).'
+    'Ils contiennent le journal de fonctionnement de l\'application, avec',
+    'ton nom d\'utilisateur Windows, le nom de ton ordinateur et tes',
+    'adresses email masqués. Tu peux les supprimer si tu ne veux plus',
+    'les envoyer.'
   ],
 
   // %APPDATA%\Tuiles et Toiles\ (dossier de donnees de l'installation).

@@ -1,32 +1,38 @@
 'use strict';
 /**
- * Rapport d'erreur : formulaire -> zip (journal masque + infos systeme) ->
- * messagerie par defaut pre-remplie (destinataire, objet, corps). Le zip est
- * a glisser en piece jointe : un lien mailto: ne peut pas joindre de fichier,
- * le dossier du zip est donc ouvert a cote.
+ * Rapport d'erreur : formulaire -> envoi direct, en un clic, au script Google
+ * de reception (tools/rapport-reception.gs), qui transmet par mail avec les
+ * journaux en pieces jointes. Rien a joindre a la main.
  *
- * Rien ne part sans l'utilisateur : il voit un apercu, puis envoie lui-meme
- * depuis sa messagerie.
+ *   config (src/main/rapport-config.json, hors depot) : { url, cle }
+ *   url vide (script pas encore deploye) -> repli : messagerie pre-remplie
+ *   avec le texte seul (mailto ne peut pas joindre de fichier).
  *
- * Masquage (dans le zip seulement ; journal.log local intact) : nom
- * d'utilisateur Windows et nom du poste dans les chemins, adresses email
- * (sauf celle de contact que l'utilisateur saisit volontairement). Les textes
- * des tuiles restent : ils servent a reproduire un cas (cyrillique, caractere
- * interdit…).
+ * Hors ligne / service injoignable : le rapport est range dans
+ * Documents\Tuiles et Toiles - rapports\en-attente\ et renvoye tout seul au
+ * lancement suivant (regle 1 : jamais bloquant).
  *
- * Objet des mails : « [T&T rapport] <sujet> — v<version> — <date heure> »,
+ * Masquage (dans ce qui part seulement ; journal.log local intact) : nom
+ * d'utilisateur Windows et nom du poste, adresses email (sauf celle de
+ * contact saisie volontairement). Les textes des tuiles restent : ils servent
+ * a reproduire un cas (cyrillique, caractere interdit…).
+ *
+ * Objet : « [T&T rapport] <sujet> — v<version> — <date heure> — <ref> »,
  * prefixe fixe pour un filtre de messagerie.
  */
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const AdmZip = require('adm-zip');
+const zlib = require('zlib');
+const crypto = require('crypto');
 const journal = require('./journal');
 const lisezmoi = require('./lisezmoi');
 
 const DESTINATAIRE = 'wn7pocu65@mozmail.com';
 const PREFIXE_OBJET = '[T&T rapport]';
+const DELAI_ENVOI = 90000;
+const MAX_MAILTO = 1900;   // au-dela, Windows / certains clients tronquent le lien
 
 const SUJETS = [
   { cle: 'synchro', libelle: 'Synchro entre appareils' },
@@ -58,15 +64,27 @@ const REPRODUCTIBLE = [
 ];
 
 let cfg = null;
-let dernier = null;   // dernier rapport prepare (pour messagerie / dossier)
 
 /**
- * @param {{ dossier: string, version: string, infos: () => object }} c
- *   dossier : ou ranger les zips ; infos : etat de l'app au moment du rapport
+ * @param {{ dossier, version, infos: () => object, config?: {url, cle},
+ *   fetch?: Function }} c  fetch : net.fetch d'Electron (injectable en test)
  */
-function configurer(c) { cfg = c; }
+function configurer(c) {
+  cfg = { ...c };
+  if (!cfg.config) {
+    try { cfg.config = require('./rapport-config.json'); } catch { cfg.config = {}; }
+  }
+}
 
-function choix() { return { sujets: SUJETS, depuis: DEPUIS, reproductible: REPRODUCTIBLE, destinataire: DESTINATAIRE }; }
+const configure = () => !!(cfg && cfg.config && cfg.config.url && cfg.config.cle);
+const dossierAttente = () => path.join(cfg.dossier, 'en-attente');
+
+function choix() {
+  return {
+    sujets: SUJETS, depuis: DEPUIS, reproductible: REPRODUCTIBLE, destinataire: DESTINATAIRE,
+    envoiDirect: configure(), enAttente: listerAttente().length
+  };
+}
 
 // --- masquage ---------------------------------------------------------------
 
@@ -91,6 +109,10 @@ function masquer(texte, { garder = [] } = {}) {
   return t;
 }
 
+function masquerObjet(o, garder) {
+  try { return JSON.parse(masquer(JSON.stringify(o), { garder })); } catch { return o; }
+}
+
 // --- construction -------------------------------------------------------------
 
 function horodatage(d = new Date()) {
@@ -108,116 +130,195 @@ function horodatage(d = new Date()) {
 
 const libelle = (liste, cle) => (liste.find((x) => x.cle === cle) || { libelle: cle || '—' }).libelle;
 
-/** Comptes par niveau et dernieres erreurs, sur le journal courant. */
+/** Comptes par niveau et dernieres anomalies, sur un journal. */
 function resumeJournal(texte) {
   const lignes = texte.split('\n').filter(Boolean);
   const niveaux = {};
-  const erreurs = [];
+  const anomalies = [];
   for (const l of lignes) {
     const m = /^\S+\s+(DEBUG|INFO|WARN|ERREUR)\s/.exec(l);
     if (!m) continue;
     niveaux[m[1]] = (niveaux[m[1]] || 0) + 1;
-    if (m[1] === 'ERREUR' || m[1] === 'WARN') erreurs.push(l);
+    if (m[1] === 'ERREUR' || m[1] === 'WARN') anomalies.push(l);
   }
-  return { lignes: lignes.length, niveaux, dernieresAnomalies: erreurs.slice(-15) };
+  return { lignes: lignes.length, niveaux, dernieresAnomalies: anomalies.slice(-15) };
 }
 
-/**
- * Prepare le zip et le mail. Ne contacte rien.
- * @param {{ sujet, depuis, reproductible, description, email }} f
- */
-function preparer(f = {}) {
+/** Rapport complet, masque, pret a partir. Ne contacte rien. */
+function construire(f = {}) {
   const h = horodatage();
+  const id = 'R' + h.fichier.replace(/[-_]/g, '').slice(2) + '-' + crypto.randomBytes(2).toString('hex');
   const infos = (() => { try { return cfg.infos(); } catch (e) { return { erreurInfos: e.message }; } })();
   const sujet = SUJETS.some((s) => s.cle === f.sujet) ? f.sujet : 'autre';
-  const garder = f.email ? [f.email] : [];
+  const email = String(f.email || '').trim() || null;
+  const garder = email ? [email] : [];
   const formulaire = {
     sujet: libelle(SUJETS, sujet), depuis: libelle(DEPUIS, f.depuis),
     reproductible: libelle(REPRODUCTIBLE, f.reproductible),
-    description: String(f.description || '').slice(0, 20000), email: String(f.email || '').trim() || null
+    description: String(f.description || '').slice(0, 20000), email
   };
-  journal.evt('rapport', 'preparer', { sujet, depuis: f.depuis, reproductible: f.reproductible,
-    description: journal.decrireTexte(formulaire.description), emailFourni: !!formulaire.email });
 
-  // Journaux masques (le plus recent d'abord).
-  const fichiers = journal.fichiers();
-  const journaux = fichiers.map((chemin) => {
+  const journaux = journal.fichiers().map((chemin) => {
     let brut = '';
     try { brut = fs.readFileSync(chemin, 'utf8'); } catch (e) { brut = '(illisible : ' + e.message + ')'; }
     return { nom: path.basename(chemin), texte: masquer(brut, { garder }) };
   });
   const resume = resumeJournal(journaux.length ? journaux[0].texte : '');
+  const application = masquerObjet(infos, garder);
 
-  const rapport = {
-    horodatage: h, formulaire, application: masquerObjet(infos, garder),
-    session: journal.SESSION, journal: { fichiers: journaux.map((j) => j.nom), ...resume }
-  };
-  const texte = [
-    PREFIXE_OBJET + ' ' + formulaire.sujet,
+  const objet = `${PREFIXE_OBJET} ${formulaire.sujet} — v${cfg.version} — ${h.lisible} — ${id}`;
+  const corps = [
+    'Rapport ' + id + ' du ' + h.local + ' (UTC ' + h.utc + ')',
     '',
-    'Rapport du ' + h.local + ' (UTC ' + h.utc + ')',
-    'Sujet            : ' + formulaire.sujet,
-    'Depuis quand     : ' + formulaire.depuis,
-    'Reproductible    : ' + formulaire.reproductible,
-    'Contact          : ' + (formulaire.email || '(non renseigné)'),
+    'Sujet          : ' + formulaire.sujet,
+    'Depuis quand   : ' + formulaire.depuis,
+    'Reproductible  : ' + formulaire.reproductible,
+    'Contact        : ' + (formulaire.email || '(non renseigné)'),
+    'Version        : ' + cfg.version + ' — ' + (application.os || ''),
+    'Appareil       : ' + ((application.appareil && application.appareil.id) || '?') + ' · session ' + journal.SESSION,
     '',
-    'Description :',
-    formulaire.description || '(aucune)',
-    '',
-    'Application :',
-    JSON.stringify(rapport.application, null, 2),
+    'Ce qui s’est passé :',
+    formulaire.description || '(non décrit)',
     '',
     'Journal : ' + resume.lignes + ' lignes, ' + JSON.stringify(resume.niveaux),
     'Dernières anomalies :',
-    ...resume.dernieresAnomalies
+    ...(resume.dernieresAnomalies.length ? resume.dernieresAnomalies : ['(aucune)']),
+    '',
+    'État de l’application :',
+    JSON.stringify(application, null, 2)
   ].join('\n');
 
-  const nom = `rapport-${h.fichier}-${sujet}.zip`;
-  fs.mkdirSync(cfg.dossier, { recursive: true });
-  lisezmoi.deposer(cfg.dossier, 'rapports');
-  const chemin = path.join(cfg.dossier, nom);
-  const zip = new AdmZip();
-  zip.addFile(lisezmoi.NOM, Buffer.from(lisezmoi.texte('rapport'), 'utf8'));
-  zip.addFile('rapport.txt', Buffer.from(texte, 'utf8'));
-  zip.addFile('rapport.json', Buffer.from(JSON.stringify(rapport, null, 2), 'utf8'));
-  for (const j of journaux) zip.addFile('journaux/' + j.nom, Buffer.from(j.texte, 'utf8'));
-  zip.writeZip(chemin);
-
-  const objet = `${PREFIXE_OBJET} ${formulaire.sujet} — v${cfg.version} — ${h.lisible}`;
-  const corps = [
-    'Bonjour,',
-    '',
-    'Sujet : ' + formulaire.sujet,
-    'Depuis quand : ' + formulaire.depuis,
-    'Reproductible : ' + formulaire.reproductible,
-    'Horodatage : ' + h.local,
-    'Version : ' + cfg.version + ' — ' + (infos.os || ''),
-    'Appareil : ' + ((infos.appareil && infos.appareil.id) || '?') + ' · session ' + journal.SESSION,
-    formulaire.email ? 'Contact : ' + formulaire.email : null,
-    '',
-    'Ce qui s’est passé :',
-    formulaire.description ? formulaire.description.slice(0, 700) + (formulaire.description.length > 700 ? ' […suite dans le zip]' : '') : '(non décrit)',
-    '',
-    '— Pièce jointe à ajouter : ' + nom,
-    '  (le dossier qui la contient vient de s’ouvrir : glisse le fichier dans ce mail)'
-  ].filter((l) => l !== null).join('\n');
-  const mailto = 'mailto:' + DESTINATAIRE + '?subject=' + encodeURIComponent(objet) + '&body=' + encodeURIComponent(corps);
-
-  dernier = { chemin, nom, objet, corps, mailto };
-  journal.evt('rapport', 'zip-pret', { nom, octets: fs.statSync(chemin).size, journaux: journaux.map((j) => j.nom), niveaux: resume.niveaux });
   return {
-    chemin, nom, objet, corps, destinataire: DESTINATAIRE, octets: fs.statSync(chemin).size,
-    apercu: { niveaux: resume.niveaux, lignes: resume.lignes, anomalies: resume.dernieresAnomalies, application: rapport.application }
+    id, horodatage: h, objet, corps, contact: email,
+    rapport: { id, horodatage: h, formulaire, application, session: journal.SESSION, journal: { fichiers: journaux.map((j) => j.nom), ...resume } },
+    journaux, resume
   };
 }
 
-function masquerObjet(o, garder) {
-  try { return JSON.parse(masquer(JSON.stringify(o), { garder })); } catch { return o; }
+/** Ce qui partira, pour l'apercu du formulaire (textes des journaux exclus). */
+function apercu(f) {
+  const r = construire(f);
+  return {
+    id: r.id, objet: r.objet, corps: r.corps, destinataire: DESTINATAIRE, envoiDirect: configure(),
+    journaux: r.journaux.map((j) => ({ nom: j.nom, octets: Buffer.byteLength(j.texte) })),
+    niveaux: r.resume.niveaux, lignes: r.resume.lignes
+  };
 }
 
-function dernierRapport() { return dernier; }
+function charge(r) {
+  return {
+    v: 1, cle: cfg.config.cle, id: r.id, objet: r.objet, corps: r.corps, contact: r.contact, rapport: r.rapport,
+    journaux: r.journaux.map((j) => {
+      const brut = Buffer.from(j.texte, 'utf8');
+      return { nom: j.nom, octets: brut.length, gz64: zlib.gzipSync(brut).toString('base64') };
+    })
+  };
+}
+
+async function poster(corpsJson) {
+  const ctl = new AbortController();
+  const minuteur = setTimeout(() => ctl.abort(), DELAI_ENVOI);
+  try {
+    const res = await cfg.fetch(cfg.config.url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corpsJson, signal: ctl.signal
+    });
+    const txt = await res.text();
+    let rep = null;
+    try { rep = JSON.parse(txt); } catch { /* page HTML : mauvais deploiement */ }
+    if (!res.ok || !rep) throw new Error('Réception ' + res.status + (rep ? '' : ' (réponse inattendue : le script est-il déployé en « Tout le monde » ?)'));
+    if (!rep.ok) throw new Error('Refus du service : ' + rep.erreur);
+    return rep;
+  } finally { clearTimeout(minuteur); }
+}
+
+// --- rapports en attente (hors ligne) ------------------------------------------
+
+function listerAttente() {
+  if (!cfg) return [];
+  try { return fs.readdirSync(dossierAttente()).filter((n) => /^rapport-.*\.json$/.test(n)).sort(); }
+  catch { return []; }
+}
+
+function mettreEnAttente(corpsJson, id) {
+  fs.mkdirSync(dossierAttente(), { recursive: true });
+  lisezmoi.deposer(cfg.dossier, 'rapports');
+  lisezmoi.deposer(dossierAttente(), 'rapports_attente');
+  const chemin = path.join(dossierAttente(), 'rapport-' + id + '.json');
+  fs.writeFileSync(chemin, corpsJson, 'utf8');
+  return chemin;
+}
+
+/**
+ * Envoie le rapport. En echec (hors ligne, service absent), il est garde en
+ * attente et renvoye au prochain lancement.
+ * @returns {Promise<{ok, id} | {enAttente, id, erreur} | {secours, mailto, id}>}
+ */
+async function envoyer(f) {
+  const r = construire(f);
+  const t0 = Date.now();
+  journal.evt('rapport', 'envoi:debut', {
+    id: r.id, sujet: r.rapport.formulaire.sujet, depuis: f.depuis, reproductible: f.reproductible,
+    description: journal.decrireTexte(r.rapport.formulaire.description), emailFourni: !!r.contact,
+    journaux: r.journaux.map((j) => j.nom), direct: configure()
+  });
+
+  if (!configure()) {
+    journal.avertir('rapport', 'envoi-direct-non-configure', { id: r.id });
+    return { secours: true, id: r.id, mailto: mailto(r) };
+  }
+  const corpsJson = JSON.stringify(charge(r));
+  try {
+    const rep = await poster(corpsJson);
+    journal.evt('rapport', 'envoi:fin', { id: r.id, octets: corpsJson.length, pieces: rep.pieces, ms: Date.now() - t0 });
+    return { ok: true, id: r.id };
+  } catch (e) {
+    const chemin = mettreEnAttente(corpsJson, r.id);
+    journal.erreur('rapport', 'envoi-echec', e, { id: r.id, enAttente: chemin, octets: corpsJson.length, ms: Date.now() - t0 });
+    return { enAttente: true, id: r.id, erreur: e.message };
+  }
+}
+
+/** Renvoie les rapports restes en attente. Silencieux si hors ligne. */
+async function renvoyerEnAttente() {
+  if (!configure()) return { envoyes: 0, restants: listerAttente().length };
+  let envoyes = 0;
+  for (const nom of listerAttente()) {
+    const chemin = path.join(dossierAttente(), nom);
+    try {
+      const corps = fs.readFileSync(chemin, 'utf8');
+      // La cle a pu changer depuis la mise en attente : on remet la courante.
+      const obj = JSON.parse(corps);
+      obj.cle = cfg.config.cle;
+      await poster(JSON.stringify(obj));
+      fs.rmSync(chemin, { force: true });
+      envoyes++;
+      journal.evt('rapport', 'renvoi', { fichier: nom });
+    } catch (e) {
+      journal.evt('rapport', 'renvoi-reporte', { fichier: nom, erreur: e.message }, 'WARN');
+      break;   // hors ligne : inutile d'insister sur les suivants
+    }
+  }
+  return { envoyes, restants: listerAttente().length };
+}
+
+/** Repli sans service : messagerie avec le texte (tronque), sans piece jointe. */
+function mailto(r) {
+  const base = 'mailto:' + DESTINATAIRE + '?subject=' + encodeURIComponent(r.objet) + '&body=';
+  let corps = r.corps;
+  while (corps.length > 200 && (base + encodeURIComponent(corps)).length > MAX_MAILTO) {
+    corps = corps.slice(0, Math.floor(corps.length * 0.85));
+  }
+  if (corps !== r.corps) corps += '\n[…tronqué]';
+  return base + encodeURIComponent(corps);
+}
+
+/** Texte complet a coller dans un mail (dernier recours). */
+function texteACopier(f) {
+  const r = construire(f);
+  return 'À : ' + DESTINATAIRE + '\nObjet : ' + r.objet + '\n\n' + r.corps;
+}
 
 module.exports = {
-  configurer, choix, preparer, dernierRapport, masquer, resumeJournal, horodatage,
-  DESTINATAIRE, PREFIXE_OBJET, SUJETS, DEPUIS, REPRODUCTIBLE
+  configurer, choix, apercu, envoyer, renvoyerEnAttente, texteACopier, masquer, resumeJournal, horodatage,
+  construire, DESTINATAIRE, PREFIXE_OBJET, SUJETS, DEPUIS, REPRODUCTIBLE
 };

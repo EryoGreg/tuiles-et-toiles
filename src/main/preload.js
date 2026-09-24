@@ -82,10 +82,9 @@ contextBridge.exposeInMainWorld('api', {
 
   rapport: {
     choix: () => ipcRenderer.invoke('rapport:choix'),
-    preparer: (formulaire) => ipcRenderer.invoke('rapport:preparer', formulaire),
-    messagerie: () => ipcRenderer.invoke('rapport:messagerie'),
-    dossier: () => ipcRenderer.invoke('rapport:dossier'),
-    copier: () => ipcRenderer.invoke('rapport:copier')
+    apercu: (formulaire) => ipcRenderer.invoke('rapport:apercu', formulaire),
+    envoyer: (formulaire) => ipcRenderer.invoke('rapport:envoyer', formulaire),
+    copier: (formulaire) => ipcRenderer.invoke('rapport:copier', formulaire)
   },
 
   maj: {
