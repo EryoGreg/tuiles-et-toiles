@@ -69,6 +69,20 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).
   - É2e snapshots (1 000 ops ou 7 jours), segments purgés par **accusé de lecture** de
     tous les appareils actifs (inactif après 90 j), rebase, UI conflits.
+  - **À faire, PC et mobile :**
+    - **Corbeille** (entrée de menu + compteur) : tuiles locales supprimées (pierre tombale,
+      encore au registre) **et** œuvres du pack archivées — aujourd'hui aucune UI ne
+      désarchive. Restaurer = `_existe = 1` / archive → NULL, propagé par la synchro. Afficher
+      « supprimée le X, définitivement effacée le Y » (purge des pierres tombales à la
+      compaction, É2e ; les archives du pack ne sont jamais purgées). Ne plus retirer les
+      marques à la suppression d'une tuile locale : elles sont déjà invisibles (jointure sur
+      `oeuvres_effectives`) et reviendraient ainsi avec la tuile.
+    - **Conflits : jamais de modale au lancement** (règle 1 — la synchro tourne en fond, et au
+      musée on ne veut pas être bloqué). La valeur gagnante s'affiche, rien n'attend de
+      réponse. Signalement discret : toast à la fin d'une synchro qui en trouve (« 2 conflits
+      à trancher — Voir »), pastille sur une entrée de menu « Conflits », marque sur les
+      tuiles concernées (galeries, éditeur). Écran « Conflits » : les deux valeurs côte à
+      côte, appareil + date de chacune, boutons « garder celle-ci ».
   Décisions actées : préfixe de ref par appareil (`L`, puis `M`, `N`, `P`…) attribué en
   rejoignant ; les tuiles d'un appareil **jamais partagées** sont renumérotées une fois en
   rejoignant (« ref figée » vaut à partir du partage).
