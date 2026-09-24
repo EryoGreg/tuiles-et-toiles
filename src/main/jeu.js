@@ -8,6 +8,7 @@
  */
 
 const db = require('./db');
+const etat = require('./synchro/etat');
 const { decrire, TOUT, normaliser } = require('./masques');
 
 let sac = [];
@@ -77,10 +78,11 @@ function tirer(filtre = null) {
   const valeursTags = String(o.tags || '').split(',').map((s) => s.trim()).filter(Boolean);
   const tagsAffiche = f && valeursTags.length === 1 ? o.tags : null;
 
+  // Compteur de CET appareil (hors journal : additionne a la synchro).
   db.instance().prepare(
-    `INSERT INTO user_stats (oeuvre_id, vues, dernier_vu) VALUES (?, 1, ?)
-     ON CONFLICT(oeuvre_id) DO UPDATE SET vues = vues + 1, dernier_vu = excluded.dernier_vu`
-  ).run(id, new Date().toISOString());
+    `INSERT INTO user_stats (oeuvre_id, appareil, vues, dernier_vu) VALUES (?, ?, 1, ?)
+     ON CONFLICT(oeuvre_id, appareil) DO UPDATE SET vues = vues + 1, dernier_vu = excluded.dernier_vu`
+  ).run(id, etat.appareil().id, new Date().toISOString());
 
   return {
     id: o.id,

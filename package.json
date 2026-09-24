@@ -11,6 +11,7 @@
     "dist": "node scripts/faire-icone.js && node node_modules/vite/bin/vite.js build && node node_modules/electron-builder/out/cli/cli.js --win portable",
     "polices": "node scripts/polices.js",
     "import": "node scripts/lancer-node.js src/main/import.js",
+    "test": "node scripts/lancer-node.js tests/synchro-e2a.test.js",
     "postinstall": "node scripts/binaire-sqlite.js"
   },
   "dependencies": {

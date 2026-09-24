@@ -9,6 +9,7 @@
 
 const { app, BrowserWindow, ipcMain, nativeTheme, protocol, net, dialog } = require('electron');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 
@@ -21,6 +22,8 @@ const journal = require('./journal');
 const sauvegarde = require('./sauvegarde');
 const drive = require('./drive');
 const maj = require('./maj');
+const appareil = require('./synchro/appareil');
+const etat = require('./synchro/etat');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
 // champ "name" du package.json (tuiles-et-toiles).
@@ -174,6 +177,12 @@ app.whenReady().then(() => {
     }
     return new Response('', { status: 404 });
   });
+
+  // Identite de l'installation (appareil.json, hors utilisateur.db) : avant
+  // db.ouvrir, dont le hook d'ouverture migre les stats et fait la genese.
+  const moi = appareil.charger(DOSSIER_USER, { nom: os.hostname() });
+  etat.configurer({ appareil: moi });
+  journal.ligne('appareil', { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref });
 
   db.ouvrir(USER, PACK);
   edition.configurer(DOSSIER_IMAGES_LOCALES);

@@ -20,3 +20,6 @@ src/main/oauth-client.json
 *.db-wal
 *.db-shm
 data/logs/
+
+# Identite de l'installation (synchro) : propre a chaque poste
+data/appareil.json

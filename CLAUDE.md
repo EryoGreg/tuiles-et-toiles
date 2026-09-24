@@ -43,11 +43,30 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   *test user*, ou publier l'app. Options → « Google Drive » : Connecter / Sauvegarder / Restaurer
   / Déconnecter. Pas d'auto push/pull pour l'instant (boutons manuels).
 - É2 (payant) fusion ligne à ligne via journal de changements keyé par `id` stable.
+  Cible : PC ↔ mobile (portage Capacitor prévu), plusieurs appareils. Découpage :
+  - É2a ✅ journal local (`src/main/synchro/`). `appareil.json` (id 8 hex aléatoire,
+    `prefixe_ref`) **hors** `utilisateur.db` — sinon un import zip clonerait l'identité.
+    HLC `ms(16)-cpt(4)-appareil`, triable en chaîne. Registre `etat` (source de vérité) +
+    journal `changements` + `conflits`. **Toute écriture synchronisable passe par
+    `etat.ecrire()`**, qui projette dans `user_tags` / `user_archive` / `user_overrides` /
+    `oeuvres_locales` (le code de lecture ne change pas). Suppression locale = pierre tombale
+    `_existe = NULL`, champs gardés au registre. `user_stats` = un compteur **par appareil**
+    (total = SUM), hors journal. Genèse à la première ouverture d'une base : une op par ligne
+    existante, HLC = **date réelle** de la ligne. `npm test`.
+  - É2b moteur de fusion pur (`appliquer` / `tirer`, LWW par HLC, conflit si ni l'un ni
+    l'autre ne s'est vu) + test de propriété 3 appareils, transport mémoire.
+  - É2c transport dossier local. É2d transport Drive : segments immuables
+    `journaux/<id>/<hlc>.ndjson`, images nommées par sha256, `appareils/<id>.json`.
+    Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).
+  - É2e snapshots (1 000 ops ou 7 jours), segments purgés par **accusé de lecture** de
+    tous les appareils actifs (inactif après 90 j), rebase, UI conflits.
+  Décisions actées : préfixe de ref par appareil (`L`, puis `M`, `N`, `P`…) attribué en
+  rejoignant ; les tuiles d'un appareil **jamais partagées** sont renumérotées une fois en
+  rejoignant (« ref figée » vaut à partir du partage).
 
 Contrainte : la synchro est **toujours optionnelle et non bloquante** — l'app tourne
-identique sans compte Drive (règle 1). Piège connu : `ref_local_seq` peut produire deux
-`#L1` sur deux postes ; les `id` (`local:<uuid>`) restent uniques, seul l'affichage est à
-renuméroter à la fusion (É2).
+identique sans compte Drive (règle 1). Les `id` (`local:<uuid>`) restent uniques ; le
+doublon de `#L1` entre postes est réglé par le préfixe de ref par appareil (É2a/É2d).
 
 **Après** — MAJ de pack + catalogue de packs en ligne (gratuits / payants).
 Direction retenue (dev repoussé) : héberger `manifest.json` + `pack-*.db` sur un

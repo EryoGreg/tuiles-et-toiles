@@ -54,10 +54,16 @@ CREATE TABLE IF NOT EXISTS user_tags (
   PRIMARY KEY (oeuvre_id, tag)
 );
 
+-- Un compteur PAR APPAREIL : a la synchro, les vues s'additionnent (3 ici +
+-- 2 sur le telephone = 5) au lieu de s'ecraser. Total = SUM(vues).
+-- appareil = '' : ligne venue d'une base v1, rattachee a l'appareil courant a
+-- l'ouverture (synchro/etat.js).
 CREATE TABLE IF NOT EXISTS user_stats (
-  oeuvre_id   TEXT PRIMARY KEY,
+  oeuvre_id   TEXT NOT NULL,
+  appareil    TEXT NOT NULL DEFAULT '',
   vues        INTEGER DEFAULT 0,
-  dernier_vu  TEXT
+  dernier_vu  TEXT,
+  PRIMARY KEY (oeuvre_id, appareil)
 );
 
 CREATE TABLE IF NOT EXISTS user_corrections (
@@ -132,11 +138,61 @@ CREATE TABLE IF NOT EXISTS oeuvres_effectives (
   masques     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_effectives_recherche ON oeuvres_effectives(recherche);
+
+-- Synchro (synchro/etat.js). etat = derniere version connue de chaque champ
+-- synchronise : c'est la source de verite, user_tags / user_archive /
+-- user_overrides / oeuvres_locales en sont des projections. Garde aussi les
+-- valeurs d'une tuile supprimee (pierre tombale _existe = NULL) pour pouvoir
+-- la restaurer. valeur = JSON, NULL = absent.
+CREATE TABLE IF NOT EXISTS etat (
+  entite  TEXT NOT NULL,   -- 'locale' | 'override' | 'archive' | 'tag'
+  cle     TEXT NOT NULL,   -- oeuvre_id
+  champ   TEXT NOT NULL,   -- nom du champ, tag, '_existe', '_'
+  valeur  TEXT,
+  hlc     TEXT NOT NULL,   -- version courante
+  base    TEXT,            -- version qu'elle a remplacee
+  PRIMARY KEY (entite, cle, champ)
+);
+
+-- Journal des operations, locales et recues. hlc unique (suffixe appareil)
+-- -> rejouer une op deja connue ne fait rien. pousse = 0 : pas encore envoyee.
+CREATE TABLE IF NOT EXISTS changements (
+  hlc       TEXT PRIMARY KEY,
+  appareil  TEXT NOT NULL,
+  entite    TEXT NOT NULL,
+  cle       TEXT NOT NULL,
+  champ     TEXT NOT NULL,
+  valeur    TEXT,
+  base      TEXT,
+  pousse    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chg_cle ON changements(entite, cle, champ);
+CREATE INDEX IF NOT EXISTS idx_chg_a_pousser ON changements(pousse) WHERE pousse = 0;
+
+-- Modifications concurrentes d'un meme champ (aucune n'a vu l'autre).
+-- Remplie par la fusion (E2b), videe par l'utilisateur.
+CREATE TABLE IF NOT EXISTS conflits (
+  id               INTEGER PRIMARY KEY,
+  entite           TEXT NOT NULL,
+  cle              TEXT NOT NULL,
+  champ            TEXT NOT NULL,
+  hlc_gagnant      TEXT NOT NULL,
+  valeur_gagnante  TEXT,
+  hlc_perdant      TEXT NOT NULL,
+  valeur_perdante  TEXT,
+  detecte_le       TEXT NOT NULL,
+  resolu           INTEGER NOT NULL DEFAULT 0
+);
 `;
 
 const CHAMPS_TXT = ['artiste', 'titre', 'date', 'lieu', 'description', 'tags'];
 
 let db = null;
+
+// Appeles a chaque ouverture (lancement, apres un import zip), avant la
+// reconstruction de la vue : migrations et genese du journal (synchro/etat.js).
+const apresOuverture = [];
+function surOuverture(fn) { apresOuverture.push(fn); }
 
 /**
  * Ouvre utilisateur.db (inscriptible) et attache pack.db en lecture.
@@ -151,6 +207,7 @@ function ouvrir(cheminUser, cheminPack) {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_USER);
   db.prepare('ATTACH DATABASE ? AS pack').run(cheminPack);
+  for (const fn of apresOuverture) fn(db);
   reconstruireVue();   // au lancement : peut sauter si la couche user est vide
   return db;
 }
@@ -406,18 +463,13 @@ function tagsDe(oeuvreId) {
     .all(oeuvreId).map((r) => r.tag);
 }
 
+// Les ecritures de tags passent par le journal (etat.ecrire projette dans
+// user_tags). require paresseux : synchro/etat depend de ce module.
 function basculerTag(oeuvreId, tag) {
-  const d = instance();
-  const existe = d.prepare(
-    'SELECT 1 FROM user_tags WHERE oeuvre_id = ? AND tag = ?'
-  ).get(oeuvreId, tag);
-  if (existe) {
-    d.prepare('DELETE FROM user_tags WHERE oeuvre_id = ? AND tag = ?').run(oeuvreId, tag);
-    return false;
-  }
-  d.prepare('INSERT INTO user_tags (oeuvre_id, tag, cree_le) VALUES (?, ?, ?)')
-    .run(oeuvreId, tag, new Date().toISOString());
-  return true;
+  const etat = require('./synchro/etat');
+  const actif = etat.valeur('tag', oeuvreId, tag) != null;
+  etat.ecrire('tag', oeuvreId, tag, actif ? null : 1);
+  return !actif;
 }
 
 /**
@@ -437,7 +489,10 @@ function parTagUtilisateur(tag, texte = '') {
 
 /** Retire toutes les marques livre / etoile / bad_smiley. @returns {number} lignes supprimees. */
 function effacerTousLesTags() {
-  return instance().prepare('DELETE FROM user_tags').run().changes;
+  const etat = require('./synchro/etat');
+  const lignes = instance().prepare('SELECT oeuvre_id, tag FROM user_tags').all();
+  etat.lot(() => { for (const r of lignes) etat.ecrire('tag', r.oeuvre_id, r.tag, null); });
+  return lignes.length;
 }
 
 function comptesTags() {
@@ -474,7 +529,8 @@ function definirEtatSync(cle, valeur) {
 }
 
 module.exports = {
-  ouvrir, instance, fermer, exporterVers, migrer, reconstruireVue, SCHEMA_PACK, SCHEMA_USER,
+  ouvrir, surOuverture, instance, fermer, exporterVers, migrer, reconstruireVue, SCHEMA_PACK, SCHEMA_USER,
+  CHAMPS_TXT,
   compterOeuvres, oeuvre, packMeta, chercher, parCategorie, parNumero,
   tagsDe, basculerTag, parTagUtilisateur, comptesTags, effacerTousLesTags,
   reglage, definirReglage, etatSync, definirEtatSync
