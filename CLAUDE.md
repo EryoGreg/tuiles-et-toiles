@@ -258,7 +258,8 @@ correction).
   Relay) avec les journaux en pièces jointes `.txt` (au-delà de 20 Mo : `.gz`),
   `replyTo` = email du testeur. Seule autorisation Google : envoyer des mails. Config :
   `src/main/rapport-config.json` `{ url, cle }` (**gitignoré**, embarqué dans l'asar,
-  comme `oauth-client.json`). Hors ligne → `Documents\Tuiles et Toiles - rapports  en-attente\`, renvoyé 8 s après le lancement suivant. `url` vide (script pas encore
+  comme `oauth-client.json`). Hors ligne → `Documents\Tuiles et Toiles - rapports\en-attente\`,
+  renvoyé 8 s après le lancement suivant. `url` vide (script pas encore
   déployé) → repli messagerie `mailto:` avec le texte seul (≤ 1 900 car.). Objet :
   `[T&T rapport] <sujet> — v<version> — <date heure> — R<ref>` (préfixe fixe pour le
   filtre de messagerie). Le script est testé dans Node avec les services Google simulés
