@@ -1592,6 +1592,10 @@ function Options({ etat, onEtat }) {
 
       <div className="filet" />
 
+      <SectionMaj etat={etat} definir={definir} />
+
+      <div className="filet" />
+
       <section>
         <div className="etiquette">Google Drive</div>
         {!drv ? (
@@ -1868,6 +1872,138 @@ function PropositionRaccourcis({ onFermer }) {
   );
 }
 
+/* ---------------------------------------------------------- mise a jour */
+
+// Etat de mise a jour partage entre le bandeau (verification au lancement) et
+// la section Options. phase : null | 'verif' | 'ajour' | 'dispo' |
+// 'telechargement' | 'pret' | 'erreur'. Rien n'est telecharge sans clic.
+function useMaj() {
+  const [s, setS] = useState({ phase: null });
+  const [progression, setProgression] = useState(null);
+  useEffect(() => window.api.maj.onProgression(setProgression), []);
+
+  const verifier = useCallback(async (silencieux) => {
+    setS({ phase: 'verif' });
+    const r = await window.api.maj.verifier();
+    if (r.disponible) setS({ phase: 'dispo', info: r });
+    else if (r.aJour) setS({ phase: silencieux ? null : 'ajour' });
+    else setS(silencieux ? { phase: null } : { phase: 'erreur', erreur: r.erreur });
+  }, []);
+
+  const telecharger = useCallback(async () => {
+    setProgression(null);
+    setS((p) => ({ ...p, phase: 'telechargement', erreur: null }));
+    const r = await window.api.maj.telecharger();
+    if (r.ok) setS((p) => ({ ...p, phase: 'pret' }));
+    else setS((p) => ({ ...p, phase: 'dispo', erreur: r.pageOuverte ? null : r.erreur }));
+  }, []);
+
+  const installer = useCallback(async () => {
+    const r = await window.api.maj.installer();
+    if (r.erreur) setS((p) => ({ ...p, erreur: r.erreur }));
+  }, []);
+
+  return { ...s, progression, verifier, telecharger, installer };
+}
+
+const MajContext = createContext(null);
+
+const enMo = (octets) => Math.round(octets / 1048576) + ' Mo';
+
+function pourcent(p) {
+  return p && p.total ? Math.floor((p.recu / p.total) * 100) : 0;
+}
+
+// Boutons d'action selon la phase (bandeau et Options).
+function ActionsMaj({ maj }) {
+  if (maj.phase === 'dispo') {
+    return (
+      <button className="bouton-valide" onClick={maj.telecharger}>
+        <I.FlecheVert t={14} bas />
+        {maj.info.installable
+          ? 'Télécharger la version ' + maj.info.version + ' (' + enMo(maj.info.taille) + ')'
+          : 'Voir la version ' + maj.info.version + ' sur GitHub'}
+      </button>
+    );
+  }
+  if (maj.phase === 'pret') {
+    return (
+      <button className="bouton-valide" onClick={maj.installer}>
+        <I.Rafraichir t={14} /> Redémarrer sur la version {maj.info.version}
+      </button>
+    );
+  }
+  if (maj.phase === 'telechargement') {
+    return (
+      <div className="maj-progression">
+        <div className="maj-jauge"><span style={{ width: pourcent(maj.progression) + '%' }} /></div>
+        Téléchargement… {pourcent(maj.progression)} %
+      </div>
+    );
+  }
+  return null;
+}
+
+// Bandeau discret en bas a droite quand une version plus recente existe.
+function BandeauMaj() {
+  const maj = useContext(MajContext);
+  const [masque, setMasque] = useState(false);
+  if (!maj || masque || !['dispo', 'telechargement', 'pret'].includes(maj.phase)) return null;
+  return (
+    <div className="maj-bandeau">
+      <div className="maj-bandeau-titre">
+        {maj.phase === 'pret'
+          ? 'Version ' + maj.info.version + ' prête'
+          : 'Version ' + maj.info.version + ' disponible'}
+      </div>
+      <div className="options-note">
+        {maj.phase === 'pret'
+          ? 'L’application va se fermer et se relancer. Tes données sont conservées.'
+          : 'Tu utilises la version ' + maj.info.actuelle + '. Tes données sont conservées.'}
+      </div>
+      {maj.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{maj.erreur}</div>}
+      <div className="maj-bandeau-actions">
+        <ActionsMaj maj={maj} />
+        {maj.phase !== 'telechargement' && (
+          <button className="bouton-neutre" onClick={() => setMasque(true)}>Plus tard</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Section « Mises à jour » des Options.
+function SectionMaj({ etat, definir }) {
+  const maj = useContext(MajContext);
+  const occupe = maj.phase === 'verif' || maj.phase === 'telechargement';
+  return (
+    <section>
+      <div className="etiquette">Mises à jour</div>
+      <div className="choix-raccourcis">
+        <button className="bouton-neutre" onClick={() => maj.verifier(false)} disabled={occupe}>
+          <I.Rafraichir t={16} /> {maj.phase === 'verif' ? 'Recherche…' : 'Rechercher une mise à jour'}
+        </button>
+        <button
+          className={'raccourci-bouton' + (etat.majAuto ? ' pose' : '')}
+          onClick={() => definir('maj_auto', etat.majAuto ? '0' : '1')}
+        >
+          {etat.majAuto ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
+          Vérifier au lancement
+        </button>
+      </div>
+      <ActionsMaj maj={maj} />
+      {maj.phase === 'ajour' && (
+        <div className="options-confirmation"><I.Coche t={14} /> Tu as la dernière version.</div>
+      )}
+      {maj.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{maj.erreur}</div>}
+      <div className="options-note">
+        Version installée : {etat.version}. Les nouvelles versions viennent de
+        github.com/EryoGreg/tuiles-et-toiles ; seul l’exe est remplacé, tes données restent.
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [etat, setEtat] = useState(null);
   const [page, setPage] = useState('menu');
@@ -1890,6 +2026,18 @@ export default function App() {
 
   const charger = useCallback(async () => setEtat(await window.api.etat()), []);
   useEffect(() => { charger(); }, [charger]);
+
+  // Mise a jour : verification discrete peu apres le lancement (reglage
+  // maj_auto), silencieuse si hors ligne ou deja a jour.
+  const maj = useMaj();
+  const majVerifiee = useRef(false);
+  useEffect(() => {
+    if (!etat || majVerifiee.current) return undefined;
+    majVerifiee.current = true;
+    if (!etat.majAuto) return undefined;
+    const t = setTimeout(() => maj.verifier(true), 4000);
+    return () => clearTimeout(t);
+  }, [etat, maj.verifier]);
 
   // Densite de grille : chargee du reglage, appliquee en var CSS globale,
   // cyclee 5 -> 7 -> 9 par le bouton de BarreFiltres.
@@ -2070,16 +2218,18 @@ export default function App() {
   if (!etat) return <div className="chargement">chargement…</div>;
   if (page === 'menu') {
     return (
-      <>
+      <MajContext.Provider value={maj}>
         <Menu etat={etat} aller={naviguer} onQuitter={tenterFermeture} />
+        <BandeauMaj />
         {dialogueFermeture}
         {dialogueRaccourcis}
         {dialoguePropositionRaccourcis}
-      </>
+      </MajContext.Provider>
     );
   }
 
   return (
+   <MajContext.Provider value={maj}>
     <GrilleContext.Provider value={{ colonnes, cycler: cyclerColonnes }}>
      <NavContext.Provider value={navValue}>
       <div className="appli">
@@ -2104,8 +2254,10 @@ export default function App() {
         {dialogueFermeture}
         {dialogueRaccourcis}
         {dialoguePropositionRaccourcis}
+        <BandeauMaj />
       </div>
      </NavContext.Provider>
     </GrilleContext.Provider>
+   </MajContext.Provider>
   );
 }

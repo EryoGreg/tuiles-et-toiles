@@ -20,6 +20,7 @@ const raccourcis = require('./raccourcis');
 const journal = require('./journal');
 const sauvegarde = require('./sauvegarde');
 const drive = require('./drive');
+const maj = require('./maj');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
 // champ "name" du package.json (tuiles-et-toiles).
@@ -93,15 +94,7 @@ function lireVersionPack(chemin) {
   } catch (_) { return null; }
 }
 
-// a strictement superieure a b ? (semver "x.y.z")
-function versionSuperieure(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
-  }
-  return false;
-}
+const { versionSuperieure } = maj;
 
 let fenetre = null;
 let fermetureAutorisee = false;
@@ -189,6 +182,8 @@ app.whenReady().then(() => {
     user: USER, imagesLocales: DOSSIER_IMAGES_LOCALES, pack: PACK, versionApp: app.getVersion()
   });
   drive.configurer({ dossierUser: DOSSIER_USER });
+  maj.configurer({ dossierUser: DOSSIER_USER });
+  maj.nettoyerApresMaj(journal);   // premier lancement apres une MAJ : retire l'ancien exe
 
   // Premier lancement : thème Dracula par défaut (aucun réglage encore posé).
   if (db.reglage('theme') == null) db.definirReglage('theme', 'dracula');
@@ -224,6 +219,8 @@ ipcMain.handle('etat', () => ({
   sidebarRepliee: db.reglage('sidebar_repliee', '0') === '1',
   grilleColonnes: parseInt(db.reglage('grille_colonnes', '5'), 10) || 5,
   raccourcisProposes: db.reglage('raccourcis_proposes', '0') === '1',
+  majAuto: db.reglage('maj_auto', '1') === '1',
+  version: app.getVersion(),
   derniereSynchro: db.etatSync('derniere_synchro')
 }));
 
@@ -344,6 +341,30 @@ ipcMain.handle('drive:pousser', async (e, opts) => {
 ipcMain.handle('drive:tirer', async (e, opts) => {
   const r = await drive.tirer(opts || {}, surReconnexionDrive(e));
   journal.ligne('drive tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
+  return r;
+});
+
+// Mise a jour : verification (au lancement si maj_auto, ou bouton Options),
+// telechargement avec progression, puis installation = relance sur le nouvel exe.
+ipcMain.handle('maj:verifier', async () => {
+  const r = await maj.verifier();
+  journal.ligne('maj verifier', { disponible: r.disponible ? r.version : null, erreur: r.erreur || null });
+  return r;
+});
+ipcMain.handle('maj:telecharger', async (e) => {
+  const r = await maj.telecharger((recu, total) => {
+    if (!e.sender.isDestroyed()) e.sender.send('maj:progression', { recu, total });
+  });
+  journal.ligne('maj telecharger', { ok: !!r.ok, erreur: r.erreur || null });
+  return r;
+});
+ipcMain.handle('maj:installer', () => {
+  const r = maj.installer();
+  journal.ligne('maj installer', { ok: !!r.ok, erreur: r.erreur || null });
+  if (r.ok) {
+    fermetureAutorisee = true;
+    setTimeout(() => app.quit(), 500);
+  }
   return r;
 });
 

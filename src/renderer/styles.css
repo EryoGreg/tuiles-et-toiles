@@ -1065,3 +1065,27 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .np-chip:hover { border-color: var(--trait-fort); }
 .np-chip.actif { border-color: var(--laiton); background: color-mix(in srgb, var(--laiton) 15%, var(--surface)); color: var(--encre-vive); }
 .np-chip-n { font-family: var(--mono); font-size: 11px; color: var(--discret); }
+
+/* --- mise a jour ------------------------------------------------------------ */
+
+.maj-bandeau {
+  position: fixed; right: 22px; bottom: 22px; z-index: 50;
+  width: min(380px, calc(100vw - 44px));
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 18px 20px; border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--valide) 45%, var(--trait-fort));
+  box-shadow: 0 30px 60px -28px rgba(0, 0, 0, 0.8);
+}
+.maj-bandeau-titre { font-family: var(--serif); font-size: 18px; color: var(--encre-vive); }
+.maj-bandeau-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+
+.maj-progression {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 12.5px; color: var(--attenue); font-variant-numeric: tabular-nums;
+}
+.maj-jauge {
+  width: 180px; height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--trait);
+}
+.maj-jauge span { display: block; height: 100%; background: var(--valide); transition: width 0.2s; }

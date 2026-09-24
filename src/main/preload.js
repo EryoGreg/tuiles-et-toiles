@@ -70,6 +70,17 @@ contextBridge.exposeInMainWorld('api', {
     }
   },
 
+  maj: {
+    verifier: () => ipcRenderer.invoke('maj:verifier'),
+    telecharger: () => ipcRenderer.invoke('maj:telecharger'),
+    installer: () => ipcRenderer.invoke('maj:installer'),
+    onProgression: (fn) => {
+      const ecouteur = (_e, p) => fn(p);
+      ipcRenderer.on('maj:progression', ecouteur);
+      return () => ipcRenderer.removeListener('maj:progression', ecouteur);
+    }
+  },
+
   raccourcis: {
     etat: () => ipcRenderer.invoke('raccourcis:etat'),
     perimes: () => ipcRenderer.invoke('raccourcis:perimes'),

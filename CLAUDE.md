@@ -59,6 +59,26 @@ payants → endpoint de licence plus tard ; packs gratuits livrables dès le hos
 statique. Téléchargement = action explicite, jamais bloquant, échec silencieux
 hors-ligne (règle 1).
 
+## Dépôt, releases et mise à jour de l'app
+
+- Dépôt **public** github.com/EryoGreg/tuiles-et-toiles. Bristol (github.com/EryoGreg/bristol)
+  en est un fork à historique partagé (base commune : tag `v0.1.0`) ; y porter les correctifs par
+  `git cherry-pick` (remote `tuiles-et-toiles`). `oauth-client.json` n'est jamais versionné.
+- Publier une version : `npm version x.y.z --no-git-tag-version` (le numéro nomme l'exe et le
+  dossier d'extraction portable), `npm run dist`, commit + tag `vx.y.z`, push, puis
+  `gh release create vx.y.z release/Tuiles-et-Toiles-x.y.z.exe`. L'exe ne va jamais dans git
+  (> 100 Mo).
+- **Mise à jour intégrée** (`src/main/maj.js`) : `electron-updater` ne gère pas la cible portable,
+  donc c'est fait à la main. `releases/latest` via l'API GitHub (anonyme, dépôt public), exe
+  téléchargé à côté de l'exe courant (`PORTABLE_EXECUTABLE_FILE`), taille + SHA-256 vérifiés contre
+  le `digest` publié par GitHub, lancement du nouvel exe, marqueur `maj-en-cours.json` ; au
+  démarrage suivant, le nouvel exe supprime l'ancien. Vérification discrète 4 s après le lancement
+  (réglage `maj_auto`, désactivable dans Options), rien n'est téléchargé sans clic. Hors ligne →
+  silencieux (règle 1). Les raccourcis qui visaient l'ancien exe sont signalés par la détection de
+  raccourcis périmés existante.
+- Nom d'asset attendu par l'updater : `Tuiles-et-Toiles-x.y.z.exe` (`MOTIF_EXE`). Le changer casse
+  la mise à jour des installations existantes.
+
 ## Règles non négociables
 
 1. **Le pack est du contenu, remplaçable en bloc.** `data/pack.db` est généré
