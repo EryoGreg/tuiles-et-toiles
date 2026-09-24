@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Journal : trace des deplacements et actions cote rendu -> journal.log.
   log: (msg, extra) => ipcRenderer.send('journal', msg, extra),
+  // Journal structure : domaine, evenement, details, niveau (DEBUG/INFO/WARN/ERREUR).
+  evt: (domaine, quoi, donnees, niveau) => ipcRenderer.send('journal:evt', domaine, quoi, donnees, niveau),
 
   jeu: {
     tirer: (tagJeu) => ipcRenderer.invoke('jeu:tirer', tagJeu),
@@ -44,7 +46,7 @@ contextBridge.exposeInMainWorld('api', {
     modifier: (id, champs) => ipcRenderer.invoke('edition:modifier', { id, champs }),
     supprimer: (id) => ipcRenderer.invoke('edition:supprimer', id),
     choisirImage: () => ipcRenderer.invoke('edition:choisirImage'),
-    importerImage: (octets) => ipcRenderer.invoke('edition:importerImage', octets),
+    importerImage: (octets, meta) => ipcRenderer.invoke('edition:importerImage', octets, meta),
     importerImageUrl: (url) => ipcRenderer.invoke('edition:importerImageUrl', url),
     oublierImage: (nom) => ipcRenderer.invoke('edition:oublierImage', nom)
   },
@@ -76,6 +78,14 @@ contextBridge.exposeInMainWorld('api', {
     oublier: () => ipcRenderer.invoke('synchro:oublier'),
     synchroniser: () => ipcRenderer.invoke('synchro:synchroniser'),
     drive: () => ipcRenderer.invoke('synchro:drive')
+  },
+
+  rapport: {
+    choix: () => ipcRenderer.invoke('rapport:choix'),
+    preparer: (formulaire) => ipcRenderer.invoke('rapport:preparer', formulaire),
+    messagerie: () => ipcRenderer.invoke('rapport:messagerie'),
+    dossier: () => ipcRenderer.invoke('rapport:dossier'),
+    copier: () => ipcRenderer.invoke('rapport:copier')
   },
 
   maj: {

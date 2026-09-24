@@ -27,6 +27,7 @@ const { NOM_RACINE } = require('./format');
 const { rejoindre } = require('./rejoindre');
 const { creerTransportDossier } = require('./transport-dossier');
 const { creerTransportDrive } = require('./transport-drive');
+const journal = require('../journal');
 
 const SOUS_DOSSIER = NOM_RACINE;
 
@@ -83,8 +84,12 @@ async function definirDossier(dossier) {
     fs.writeFileSync(essai, '');
     fs.rmSync(essai);
   } catch (e) {
+    journal.erreur('synchro', 'dossier-non-inscriptible', e, { dossier, dossierTexte: journal.decrireTexte(dossier) });
     return { erreur: 'Impossible d’écrire dans ce dossier : ' + e.message };
   }
+  journal.evt('synchro', 'dossier-choisi', {
+    dossier, dossierTexte: journal.decrireTexte(dossier), miroirDrive: !!avertissement(dossier)
+  });
   await creerTransportDossier(racine(dossier)).preparer(etat.appareil().id);
   etat.appareil().dossier_synchro = dossier;
   sauverAppareil();
@@ -97,44 +102,101 @@ function oublierDossier() {
   return etatSynchro();
 }
 
+/**
+ * Images dans un sens. Une image en echec est journalisee et ne bloque pas
+ * la synchro : elle sera retentee a la suivante.
+ */
 async function transfererImages(t, sens) {
   let n = 0;
+  const faites = [], manquantes = [], echecs = [], invalides = [];
   for (const nom of edition.imagesReferencees()) {
-    if (!t.imageValide(nom)) continue;
+    if (!t.imageValide(nom)) { invalides.push(nom); continue; }
     const local = path.join(cfg.imagesLocales, nom);
-    if (sens === 'envoi') {
-      if (fs.existsSync(local) && await t.envoyerImage(nom, local)) n++;
-    } else if (!fs.existsSync(local)) {
-      if (await t.recupererImage(nom, local)) n++;
+    try {
+      if (sens === 'envoi') {
+        if (!fs.existsSync(local)) { manquantes.push(nom); continue; }
+        if (await t.envoyerImage(nom, local)) { n++; faites.push({ nom, octets: fs.statSync(local).size }); }
+      } else if (!fs.existsSync(local)) {
+        if (await t.recupererImage(nom, local)) { n++; faites.push({ nom, octets: fs.statSync(local).size }); }
+        else manquantes.push(nom);
+      }
+    } catch (e) {
+      if (e && e.jetonMort) throw e;
+      echecs.push({ nom, erreur: e.message });
+      journal.erreur('synchro', 'image-' + sens, e, { nom });
     }
   }
+  const niveau = echecs.length ? 'WARN' : 'INFO';
+  journal.evt('synchro', 'images-' + sens, {
+    transferees: faites, manquantes: manquantes.length ? manquantes : undefined,
+    echecs: echecs.length ? echecs : undefined, nomsInvalides: invalides.length ? invalides : undefined
+  }, niveau);
   return n;
 }
 
-/** Cœur commun. Leve en cas d'echec (le jeton Drive mort doit remonter). */
-async function coeur(t) {
+/**
+ * Cœur commun. Leve en cas d'echec (le jeton Drive mort doit remonter) ;
+ * l'etape en cours est ajoutee au message et journalisee.
+ */
+async function coeur(t, sorte) {
   const a = etat.appareil();
   fs.mkdirSync(cfg.imagesLocales, { recursive: true });
   const ctx = etat.contexte();
-
-  await t.preparer(a.id);
-  const rj = await rejoindre(ctx, t, { nom: a.nom, enregistrerPrefixe: () => sauverAppareil() });
-  moteur.emettreStats(ctx);
-  const imagesEnvoyees = await transfererImages(t, 'envoi');
-  const p = await echange.pousser(ctx, t);
-  const r = await echange.tirer(ctx, t);
-  const imagesRecues = await transfererImages(t, 'reception');
-
-  if (r.appliquees || rj.renumerotees.length || imagesRecues) {
-    db.reconstruireVue({ force: true });
-    jeu.reinitialiserSac();
-  }
-  return {
-    le: new Date().toISOString(),
-    poussees: p.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
-    imagesEnvoyees, imagesRecues,
-    prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees
+  const t0 = Date.now();
+  let etape = 'depart';
+  const pas = async (nom, fn) => {
+    etape = nom;
+    const t1 = Date.now();
+    const r = await fn();
+    journal.debug('synchro', 'etape:' + nom, { ms: Date.now() - t1 });
+    return r;
   };
+  journal.evt('synchro', 'debut', {
+    par: sorte, appareil: a.id, nom: a.nom, prefixe: a.prefixe_ref,
+    racine: t.racine || (sorte === 'drive' ? 'Google Drive/' + SOUS_DOSSIER : undefined),
+    aPousser: ctx.d.prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
+    curseurs: ctx.d.prepare("SELECT cle, valeur FROM sync WHERE cle LIKE 'curseur:%'").all()
+  });
+
+  try {
+    await pas('preparer', () => t.preparer(a.id));
+    const rj = await pas('rejoindre', () => rejoindre(ctx, t, { nom: a.nom, enregistrerPrefixe: () => sauverAppareil() }));
+    journal.evt('synchro', 'appareils', {
+      premiereFois: rj.premiereFois, prefixe: rj.prefixe, renumerotees: rj.renumerotees, appareils: rj.appareils
+    });
+    const stats = await pas('stats', () => moteur.emettreStats(ctx));
+    const imagesEnvoyees = await pas('images-envoi', () => transfererImages(t, 'envoi'));
+    const p = await pas('pousser', () => echange.pousser(ctx, t));
+    journal.evt('synchro', 'pousse', { ops: p.poussees, segment: p.segment, stats });
+    const r = await pas('tirer', () => echange.tirer(ctx, t));
+    journal.evt('synchro', 'tire', {
+      appliquees: r.appliquees, bilan: r.bilan, parAppareil: r.parAppareil, conflits: r.conflits
+    }, r.rejetees ? 'WARN' : 'INFO');
+    if (r.rejetees) journal.avertir('synchro', 'ops-rejetees', { n: r.rejetees, exemples: r.exemplesRejetes });
+    const imagesRecues = await pas('images-reception', () => transfererImages(t, 'reception'));
+
+    if (r.appliquees || rj.renumerotees.length || imagesRecues) {
+      await pas('vue', () => { db.reconstruireVue({ force: true }); jeu.reinitialiserSac(); });
+    }
+    const ouverts = etat.conflits();
+    if (ouverts.length) {
+      journal.avertir('synchro', 'conflits-ouverts', ouverts.map((c) => ({
+        entite: c.entite, cle: c.cle, champ: c.champ, gagnant: c.hlc_gagnant, perdant: c.hlc_perdant
+      })));
+    }
+    const bilan = {
+      le: new Date().toISOString(),
+      poussees: p.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
+      imagesEnvoyees, imagesRecues,
+      prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees
+    };
+    journal.evt('synchro', 'fin', { par: sorte, ...bilan, ms: Date.now() - t0 });
+    return bilan;
+  } catch (e) {
+    journal.erreur('synchro', 'echec', e, { par: sorte, etape, ms: Date.now() - t0, jetonMort: !!e.jetonMort });
+    if (!e.jetonMort) e.message = '[' + etape + '] ' + e.message;
+    throw e;
+  }
 }
 
 async function exclusif(fn) {
@@ -148,11 +210,12 @@ function synchroniser() {
   const a = etat.appareil();
   if (!a.dossier_synchro) return Promise.resolve({ erreur: 'Aucun dossier de synchro choisi.' });
   if (!fs.existsSync(a.dossier_synchro)) {
+    journal.avertir('synchro', 'dossier-introuvable', { dossier: a.dossier_synchro });
     return Promise.resolve({ erreur: 'Dossier de synchro introuvable (clé USB débranchée, lecteur réseau absent ?).' });
   }
   return exclusif(async () => {
     try {
-      const bilan = await coeur(creerTransportDossier(racine(a.dossier_synchro)));
+      const bilan = await coeur(creerTransportDossier(racine(a.dossier_synchro)), 'dossier');
       db.definirEtatSync('dossier_derniere', JSON.stringify(bilan));
       return bilan;
     } catch (e) {
@@ -170,7 +233,7 @@ function synchroniser() {
 function synchroniserDrive(surReconnexion, apiTest) {
   return exclusif(async () => {
     const op = async (oauth) => {
-      const bilan = await coeur(creerTransportDrive(apiTest || drive.api(oauth)));
+      const bilan = await coeur(creerTransportDrive(apiTest || drive.api(oauth)), 'drive');
       db.definirEtatSync('drive_fusion_derniere', JSON.stringify(bilan));
       return bilan;
     };
@@ -186,7 +249,11 @@ function synchroniserDrive(surReconnexion, apiTest) {
  * L'op emise partira a la prochaine synchro et fermera le conflit ailleurs.
  */
 function resoudre(id, choix) {
+  const c = etat.conflits().find((x) => x.id === id);
   const h = etat.resoudre(id, choix);
+  journal.evt('synchro', 'conflit-tranche', {
+    id, choix, entite: c && c.entite, cle: c && c.cle, champ: c && c.champ, op: h
+  });
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
   return { hlc: h, conflits: etat.conflits() };

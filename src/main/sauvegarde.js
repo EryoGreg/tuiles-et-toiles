@@ -20,6 +20,7 @@ const AdmZip = require('adm-zip');
 
 const db = require('./db');
 const lisezmoi = require('./lisezmoi');
+const journal = require('./journal');
 const jeu = require('./jeu');
 
 let cfg = null;
@@ -79,6 +80,10 @@ function exporter(cheminZip) {
 
   fs.mkdirSync(path.dirname(cheminZip), { recursive: true });
   zip.writeZip(cheminZip);
+  journal.evt('sauvegarde', 'zip-ecrit', {
+    cheminZip, cheminTexte: journal.decrireTexte(cheminZip), octets: fs.statSync(cheminZip).size,
+    dbOctets: fs.statSync(tmp).size, images: images.length, comptes: manifest
+  });
   try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
 
   return { octets: fs.statSync(cheminZip).size, manifest };
@@ -120,8 +125,15 @@ function inspecter(cheminZip) {
  * @returns {{ manifest, sauvegardePrecedente, comptes }|{ erreur }}
  */
 function importer(cheminZip) {
+  const t0 = Date.now();
   const insp = inspecter(cheminZip);
-  if (insp.erreur) return insp;
+  if (insp.erreur) {
+    journal.avertir('sauvegarde', 'import-zip-refuse', { cheminZip, cheminTexte: journal.decrireTexte(cheminZip), erreur: insp.erreur });
+    return insp;
+  }
+  journal.evt('sauvegarde', 'import:debut', {
+    cheminZip, octets: fs.statSync(cheminZip).size, manifest: insp.manifest, comptesAvant: comptesLocaux()
+  });
 
   const zip = new AdmZip(cheminZip);
   const bufDb = zip.getEntry('utilisateur.db').getData();
@@ -159,6 +171,10 @@ function importer(cheminZip) {
   db.ouvrir(cfg.user, cfg.pack);
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
+  journal.evt('sauvegarde', 'import:fin', {
+    sauvegardePrecedente, comptesApres: comptesLocaux(),
+    images: fs.readdirSync(cfg.imagesLocales).filter((f) => f !== lisezmoi.NOM).length, ms: Date.now() - t0
+  });
 
   return { manifest: insp.manifest, sauvegardePrecedente, comptes: comptesLocaux() };
 }

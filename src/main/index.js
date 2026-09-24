@@ -7,7 +7,7 @@
  * ici, le processus principal detiendra le jeton OAuth.
  */
 
-const { app, BrowserWindow, ipcMain, nativeTheme, protocol, net, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, protocol, net, dialog, shell, clipboard, screen } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -23,6 +23,7 @@ const sauvegarde = require('./sauvegarde');
 const drive = require('./drive');
 const maj = require('./maj');
 const lisezmoi = require('./lisezmoi');
+const rapport = require('./rapport');
 const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
@@ -70,6 +71,9 @@ function preparerDonnees() {
   const vLivree = lireVersionPack(PACK_LIVRE);
   if (vLivree && (!vInstall || versionSuperieure(vLivree, vInstall))) {
     fs.copyFileSync(PACK_LIVRE, PACK);
+    journal.evt('db', 'pack-installe', { de: vInstall, vers: vLivree });
+  } else {
+    journal.debug('db', 'pack-garde', { installe: vInstall, livre: vLivree });
   }
 
   // Migration depuis une install v1 : recopie les tables user_* dans
@@ -81,8 +85,9 @@ function preparerDonnees() {
     try {
       db.migrer(ANCIEN, USER, registre);
       fs.renameSync(ANCIEN, ANCIEN + '.avant-v2');
+      journal.evt('db', 'migration-v1-v2', { ancien: ANCIEN, registre: Object.keys(registre).length });
     } catch (e) {
-      console.error('Migration v1 -> v2 echouee :', e.message);
+      journal.erreur('db', 'migration-v1-v2', e, { ancien: ANCIEN });
     }
   }
 }
@@ -128,14 +133,19 @@ function creerFenetre() {
     }
   });
 
-  fenetre.once('ready-to-show', () => fenetre.show());
+  fenetre.once('ready-to-show', () => {
+    fenetre.show();
+    journal.evt('app', 'fenetre-affichee', { depuisLancementMs: Math.round(process.uptime() * 1000) });
+  });
 
   // Erreurs et console du rendu -> journal.
   fenetre.webContents.on('console-message', (_e, niveau, message, ligne, source) => {
-    if (niveau >= 3) journal.ligne('[ui] console.error', { message, source: source + ':' + ligne });
+    if (niveau >= 2) journal.evt('ui', niveau >= 3 ? 'console.error' : 'console.warn', { message, source: source + ':' + ligne }, niveau >= 3 ? 'ERREUR' : 'WARN');
   });
-  fenetre.webContents.on('render-process-gone', (_e, d) => journal.ligne('ERREUR rendu perdu', d));
-  fenetre.webContents.on('did-fail-load', (_e, code, desc) => journal.ligne('ERREUR did-fail-load', { code, desc }));
+  fenetre.webContents.on('render-process-gone', (_e, d) => journal.evt('app', 'rendu-perdu', d, 'ERREUR'));
+  fenetre.webContents.on('did-fail-load', (_e, code, desc, url) => journal.evt('app', 'did-fail-load', { code, desc, url }, 'ERREUR'));
+  fenetre.webContents.on('unresponsive', () => journal.evt('app', 'fenetre-ne-repond-plus', null, 'WARN'));
+  fenetre.webContents.on('responsive', () => journal.evt('app', 'fenetre-repond-de-nouveau'));
 
   // Garde-fou fermeture : la croix Windows ne quitte pas directement, le rendu
   // affiche d'abord le dialogue de confirmation. Seul app:quitter (bouton du
@@ -161,9 +171,17 @@ function creerFenetre() {
 }
 
 app.whenReady().then(() => {
-  journal.configurer(path.join(DOSSIER_USER, 'logs'));
+  journal.configurer(path.join(DOSSIER_USER, 'logs'), {
+    version: app.getVersion(), dev: DEV,
+    electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node,
+    os: `${os.platform()} ${os.release()} ${os.arch()}`, locale: app.getLocale(),
+    memoireGo: Math.round(os.totalmem() / 1e8) / 10, libreGo: Math.round(os.freemem() / 1e8) / 10,
+    cpus: os.cpus().length + ' x ' + ((os.cpus()[0] || {}).model || '?'),
+    exe: process.execPath, portable: process.env.PORTABLE_EXECUTABLE_FILE || null,
+    donnees: DOSSIER_USER, demarrageMs: Math.round(process.uptime() * 1000)
+  });
   journal.armerErreurs(app);
-  journal.ligne('demarrage', { dev: DEV, version: app.getVersion(), pack: lireVersionPack(PACK_LIVRE) });
+  journal.evt('app', 'demarrage', { pack: lireVersionPack(PACK_LIVRE), packInstalle: lireVersionPack(PACK) });
   preparerDonnees();
   // Un LISEZMOI dans chaque dossier cree par l'app. Pas en dev : data/ est le depot.
   if (!DEV) {
@@ -190,7 +208,7 @@ app.whenReady().then(() => {
   // db.ouvrir, dont le hook d'ouverture migre les stats et fait la genese.
   const moi = appareil.charger(DOSSIER_USER, { nom: os.hostname() });
   etat.configurer({ appareil: moi });
-  journal.ligne('appareil', { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref });
+  journal.evt('app', 'appareil', { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref, dossierSynchro: moi.dossier_synchro || null });
 
   db.ouvrir(USER, PACK);
   edition.configurer(DOSSIER_IMAGES_LOCALES);
@@ -200,13 +218,21 @@ app.whenReady().then(() => {
   });
   drive.configurer({ dossierUser: DOSSIER_USER });
   synchro.configurer({ dossierUser: DOSSIER_USER, imagesLocales: DOSSIER_IMAGES_LOCALES });
+  rapport.configurer({
+    dossier: path.join(app.getPath('documents'), 'Tuiles et Toiles - rapports'),
+    version: app.getVersion(),
+    infos: infosRapport
+  });
   maj.configurer({ dossierUser: DOSSIER_USER });
   maj.nettoyerApresMaj(journal);   // premier lancement apres une MAJ : retire l'ancien exe
 
   // Premier lancement : thème Dracula par défaut (aucun réglage encore posé).
   if (db.reglage('theme') == null) db.definirReglage('theme', 'dracula');
 
-  journal.ligne('base ouverte', { oeuvres: db.compterOeuvres(), theme: db.reglage('theme') });
+  journal.evt('db', 'base-ouverte', {
+    oeuvres: db.compterOeuvres(), theme: db.reglage('theme'), depuisLancementMs: Math.round(process.uptime() * 1000),
+    utilisateurDbOctets: fs.existsSync(USER) ? fs.statSync(USER).size : null
+  });
 
   // Aucun raccourci n'est cree automatiquement : au premier lancement le rendu
   // propose (bureau / barre / menu Demarrer), rappel qu'Options le refait.
@@ -228,9 +254,78 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Etat de l'application joint a un rapport d'erreur (masque par rapport.js).
+function infosRapport() {
+  const d = db.instance();
+  const n = (sql) => { try { return d.prepare(sql).get().n; } catch { return null; } };
+  const a = etat.appareil();
+  const s = synchro.etat();
+  const dv = drive.etat();
+  const pack = db.packMeta();
+  return {
+    version: app.getVersion(), dev: DEV, os: `${os.platform()} ${os.release()} ${os.arch()}`,
+    electron: process.versions.electron, locale: app.getLocale(),
+    memoireGo: Math.round(os.totalmem() / 1e8) / 10, libreGo: Math.round(os.freemem() / 1e8) / 10,
+    ecrans: screen.getAllDisplays().map((x) => x.size.width + 'x' + x.size.height + '@' + x.scaleFactor),
+    enMarcheDepuisMin: Math.round(process.uptime() / 60),
+    portable: !!process.env.PORTABLE_EXECUTABLE_FILE, exe: process.execPath,
+    appareil: { id: a.id, nom: a.nom, prefixe: a.prefixe_ref },
+    pack: { version: pack.version, hash: pack.hash, oeuvres: pack.n_oeuvres },
+    donnees: {
+      oeuvresAffichees: n('SELECT COUNT(*) n FROM oeuvres_effectives'),
+      tuilesLocales: n('SELECT COUNT(*) n FROM oeuvres_locales'),
+      corrections: n('SELECT COUNT(*) n FROM user_overrides'),
+      archives: n('SELECT COUNT(*) n FROM user_archive'),
+      marques: n('SELECT COUNT(*) n FROM user_tags'),
+      sansMasque: n("SELECT COUNT(*) n FROM oeuvres_effectives WHERE masques IS NULL OR masques = '[]'"),
+      imagesLocales: fs.existsSync(DOSSIER_IMAGES_LOCALES) ? fs.readdirSync(DOSSIER_IMAGES_LOCALES).length : 0,
+      utilisateurDbOctets: fs.existsSync(USER) ? fs.statSync(USER).size : null
+    },
+    synchro: {
+      opsJournal: n('SELECT COUNT(*) n FROM changements'), aPousser: n('SELECT COUNT(*) n FROM changements WHERE pousse=0'),
+      conflitsOuverts: s.conflits, dossier: s.dossier, derniereDossier: s.derniere, derniereDrive: s.derniereDrive
+    },
+    drive: { configure: dv.configure, connecte: dv.connecte, derniereSauvegarde: dv.synchroLe },
+    reglages: { theme: db.reglage('theme'), majAuto: db.reglage('maj_auto', '1') }
+  };
+}
+
 // --- canaux IPC ------------------------------------------------------------
 
-ipcMain.handle('etat', () => ({
+// Chaque canal est journalise : arguments resumes, duree, resultat ou erreur.
+// Lectures appelees en boucle -> DEBUG ; resultat { erreur } -> WARN.
+const ROUTINE = new Set([
+  'etat', 'drive:etat', 'synchro:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
+  'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero',
+  'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile'
+]);
+
+function resumerResultat(r) {
+  if (Array.isArray(r)) return { liste: r.length };
+  if (!r || typeof r !== 'object') return r;
+  const o = {};
+  for (const [k, v] of Object.entries(r)) {
+    o[k] = Array.isArray(v) ? { liste: v.length } : (v && typeof v === 'object' && !(v instanceof Error) ? '[objet]' : v);
+  }
+  return o;
+}
+
+function gerer(canal, fn) {
+  ipcMain.handle(canal, async (e, ...args) => {
+    const t0 = Date.now();
+    try {
+      const r = await fn(e, ...args);
+      const niveau = r && r.erreur ? 'WARN' : ROUTINE.has(canal) ? 'DEBUG' : 'INFO';
+      journal.evt('ipc', canal, { args, ms: Date.now() - t0, resultat: resumerResultat(r) }, niveau);
+      return r;
+    } catch (err) {
+      journal.erreur('ipc', canal, err, { args, ms: Date.now() - t0 });
+      throw err;
+    }
+  });
+}
+
+gerer('etat', () => ({
   oeuvres: db.compterOeuvres(),
   tags: db.comptesTags(),
   theme: db.reglage('theme', 'auto'),
@@ -243,62 +338,64 @@ ipcMain.handle('etat', () => ({
 }));
 
 ipcMain.on('journal', (_e, msg, extra) => journal.ligne('[ui] ' + msg, extra));
+ipcMain.on('journal:evt', (_e, domaine, quoi, donnees, niveau) =>
+  journal.evt(domaine || 'ui', quoi, donnees, ['DEBUG', 'INFO', 'WARN', 'ERREUR'].includes(niveau) ? niveau : 'INFO'));
 
-ipcMain.handle('edition:creer', (_e, champs) => {
-  const r = edition.creer(champs || {});
-  journal.ligne('edition creer', { ref: r.ref, masques: r.masques });
-  return r;
-});
-ipcMain.handle('edition:tuile', (_e, id) => edition.tuile(id));
-ipcMain.handle('edition:modifier', (_e, { id, champs }) => {
-  const r = edition.modifier(id, champs || {});
-  journal.ligne('edition modifier', { id, ref: r.ref, masques: r.masques });
-  return r;
-});
-ipcMain.handle('edition:supprimer', (_e, id) => {
-  const r = edition.supprimer(id);
-  journal.ligne('edition supprimer', { id, archivee: r.archivee });
-  return r;
-});
+// Detail (champs decrits, image, masques) journalise par edition.js.
+gerer('edition:creer', (_e, champs) => edition.creer(champs || {}));
+gerer('edition:tuile', (_e, id) => edition.tuile(id));
+gerer('edition:modifier', (_e, { id, champs }) => edition.modifier(id, champs || {}));
+gerer('edition:supprimer', (_e, id) => edition.supprimer(id));
 
-ipcMain.handle('edition:importerImageUrl', async (_e, url) => {
+gerer('edition:importerImageUrl', async (_e, url) => {
+  const refus = (erreur, detail) => {
+    journal.avertir('image', 'url-refusee', { url, urlTexte: journal.decrireTexte(url), erreur, ...detail });
+    return { erreur };
+  };
+  const t0 = Date.now();
   try {
     const u = new URL(url);
-    if (!/^https?:$/.test(u.protocol)) return { erreur: 'URL non supportée.' };
+    if (!/^https?:$/.test(u.protocol)) return refus('URL non supportée.', { protocole: u.protocol });
     const res = await net.fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
           + '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
       }
     });
-    if (!res.ok) return { erreur: 'Téléchargement refusé (' + res.status + ').' };
+    const reponse = {
+      status: res.status, contentType: res.headers.get('content-type'),
+      contentLength: res.headers.get('content-length'), urlFinale: res.url, ms: Date.now() - t0
+    };
+    journal.evt('image', 'url-reponse', { url, ...reponse });
+    if (!res.ok) return refus('Téléchargement refusé (' + res.status + ').', reponse);
     if (!(res.headers.get('content-type') || '').startsWith('image/')) {
-      return { erreur: 'Le lien ne pointe pas vers une image.' };
+      return refus('Le lien ne pointe pas vers une image.', reponse);
     }
     const ab = await res.arrayBuffer();
-    if (ab.byteLength > 25 * 1024 * 1024) return { erreur: 'Image trop lourde (> 25 Mo).' };
-    return await images.importer(Buffer.from(ab), DOSSIER_IMAGES_LOCALES);
+    if (ab.byteLength > 25 * 1024 * 1024) return refus('Image trop lourde (> 25 Mo).', { ...reponse, octets: ab.byteLength });
+    return await images.importer(Buffer.from(ab), DOSSIER_IMAGES_LOCALES, { origine: 'url', url });
   } catch (e) {
+    journal.erreur('image', 'url-echec', e, { url, urlTexte: journal.decrireTexte(url), ms: Date.now() - t0 });
     return { erreur: 'Échec : ' + e.message + '. Télécharge l’image puis glisse le fichier.' };
   }
 });
 
-ipcMain.handle('edition:choisirImage', async () => {
+gerer('edition:choisirImage', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Choisir une image',
     filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'] }],
     properties: ['openFile']
   });
-  if (r.canceled || !r.filePaths[0]) return null;
-  return images.importer(r.filePaths[0], DOSSIER_IMAGES_LOCALES);
+  if (r.canceled || !r.filePaths[0]) { journal.evt('image', 'selecteur-annule'); return null; }
+  return images.importer(r.filePaths[0], DOSSIER_IMAGES_LOCALES, { origine: 'selecteur' });
 });
 
-ipcMain.handle('edition:importerImage', (_e, octets) =>
-  images.importer(Buffer.from(octets), DOSSIER_IMAGES_LOCALES));
+gerer('edition:importerImage', (_e, octets, meta) =>
+  images.importer(Buffer.from(octets), DOSSIER_IMAGES_LOCALES, { origine: 'depot', ...(meta || {}) }));
 
-ipcMain.handle('edition:oublierImage', (_e, nom) => edition.oublierImage(nom));
+gerer('edition:oublierImage', (_e, nom) => edition.oublierImage(nom));
 
-ipcMain.handle('sauvegarde:exporter', async () => {
+gerer('sauvegarde:exporter', async () => {
   const defaut = 'tuiles-et-toiles-' + new Date().toISOString().slice(0, 10) + '.zip';
   const r = await dialog.showSaveDialog(fenetre, {
     title: 'Exporter mes données',
@@ -308,15 +405,15 @@ ipcMain.handle('sauvegarde:exporter', async () => {
   if (r.canceled || !r.filePath) return { annule: true };
   try {
     const out = sauvegarde.exporter(r.filePath);
-    journal.ligne('sauvegarde export', { chemin: r.filePath, octets: out.octets });
+    journal.evt('sauvegarde', 'export', { chemin: r.filePath, octets: out.octets, manifest: out.manifest });
     return { chemin: r.filePath, ...out };
   } catch (e) {
-    journal.ligne('ERREUR sauvegarde export', { message: e.message });
+    journal.erreur('sauvegarde', 'export', e, { chemin: r.filePath });
     return { erreur: e.message };
   }
 });
 
-ipcMain.handle('sauvegarde:choisir', async () => {
+gerer('sauvegarde:choisir', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Choisir une sauvegarde',
     filters: [{ name: 'Archive zip', extensions: ['zip'] }],
@@ -326,88 +423,76 @@ ipcMain.handle('sauvegarde:choisir', async () => {
   return { chemin: r.filePaths[0], ...sauvegarde.inspecter(r.filePaths[0]) };
 });
 
-ipcMain.handle('sauvegarde:importer', (_e, chemin) => {
+gerer('sauvegarde:importer', (_e, chemin) => {
   try {
     const out = sauvegarde.importer(chemin);
-    if (out.erreur) { journal.ligne('sauvegarde import refuse', { chemin, erreur: out.erreur }); return out; }
-    journal.ligne('sauvegarde import', { chemin, comptes: out.comptes });
+    if (out.erreur) { journal.evt('sauvegarde', 'import-refuse', { chemin, erreur: out.erreur }); return out; }
+    journal.evt('sauvegarde', 'import', { chemin, comptes: out.comptes });
     return out;
   } catch (e) {
-    journal.ligne('ERREUR sauvegarde import', { message: e.message });
+    journal.erreur('sauvegarde', 'import', e, { chemin });
     return { erreur: e.message };
   }
 });
 
-ipcMain.handle('drive:etat', () => drive.etat());
-ipcMain.handle('drive:connecter', async () => {
+gerer('drive:etat', () => drive.etat());
+gerer('drive:connecter', async () => {
   const r = await drive.connecter();
-  journal.ligne('drive connecter', { connecte: !!r.connecte, erreur: r.erreur || null });
+  journal.evt('drive', 'connecter', { connecte: !!r.connecte, erreur: r.erreur || null });
   return { ...drive.etat(), ...r };
 });
-ipcMain.handle('drive:deconnecter', () => { drive.deconnecter(); journal.ligne('drive deconnecter'); return drive.etat(); });
+gerer('drive:deconnecter', () => { drive.deconnecter(); journal.evt('drive', 'deconnecter'); return drive.etat(); });
 // Jeton refuse par Google en cours d'operation : drive.js relance le flux
 // OAuth ; on previent le rendu pour qu'il affiche « autorise dans le navigateur ».
 const surReconnexionDrive = (e) => () => {
-  journal.ligne('drive reconnexion auto');
+  journal.evt('drive', 'reconnexion-auto');
   if (!e.sender.isDestroyed()) e.sender.send('drive:reconnexion');
 };
-ipcMain.handle('drive:pousser', async (e, opts) => {
+gerer('drive:pousser', async (e, opts) => {
   const r = await drive.pousser(opts || {}, surReconnexionDrive(e));
-  journal.ligne('drive pousser', { ok: !!r.ok, conflit: !!r.conflit, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
+  journal.evt('drive', 'pousser', { ok: !!r.ok, conflit: !!r.conflit, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
   return r;
 });
-ipcMain.handle('drive:tirer', async (e, opts) => {
+gerer('drive:tirer', async (e, opts) => {
   const r = await drive.tirer(opts || {}, surReconnexionDrive(e));
-  journal.ligne('drive tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
+  journal.evt('drive', 'tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
   return r;
 });
 
 // Synchro par dossier partage (E2c) : fusion ligne a ligne, rien n'est ecrase.
-ipcMain.handle('synchro:etat', () => synchro.etat());
-ipcMain.handle('synchro:choisirDossier', async () => {
+gerer('synchro:etat', () => synchro.etat());
+gerer('synchro:choisirDossier', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Dossier de synchro (partagé entre tes appareils)',
     properties: ['openDirectory', 'createDirectory']
   });
   if (r.canceled || !r.filePaths[0]) return { annule: true };
   const out = await synchro.definirDossier(r.filePaths[0]);
-  journal.ligne('synchro dossier', { dossier: r.filePaths[0], erreur: out.erreur || null });
+  journal.evt('synchro', 'dossier', { dossier: r.filePaths[0], erreur: out.erreur || null });
   return out;
 });
-ipcMain.handle('synchro:oublier', () => { journal.ligne('synchro oublier dossier'); return synchro.oublierDossier(); });
-const journaliserSynchro = (quoi, r) => journal.ligne(quoi, r.erreur ? { erreur: r.erreur } : {
-    poussees: r.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
-    images: [r.imagesEnvoyees, r.imagesRecues], prefixe: r.prefixe, renumerotees: r.renumerotees.length,
-    reconnecte: !!r.reconnecte
-  });
-ipcMain.handle('synchro:synchroniser', async () => {
-  const r = await synchro.synchroniser();
-  journaliserSynchro('synchro dossier', r);
-  return r;
-});
-ipcMain.handle('synchro:drive', async (e) => {
-  const r = await synchro.synchroniserDrive(surReconnexionDrive(e));
-  journaliserSynchro('synchro drive', r);
-  return r;
-});
+gerer('synchro:oublier', () => { journal.evt('synchro', 'oublier-dossier'); return synchro.oublierDossier(); });
+// Bilan detaille journalise par synchro/service.js (domaine synchro).
+gerer('synchro:synchroniser', () => synchro.synchroniser());
+gerer('synchro:drive', (e) => synchro.synchroniserDrive(surReconnexionDrive(e)));
 
 // Mise a jour : verification (au lancement si maj_auto, ou bouton Options),
 // telechargement avec progression, puis installation = relance sur le nouvel exe.
-ipcMain.handle('maj:verifier', async () => {
+gerer('maj:verifier', async () => {
   const r = await maj.verifier();
-  journal.ligne('maj verifier', { disponible: r.disponible ? r.version : null, erreur: r.erreur || null });
+  journal.evt('maj', 'verifier', { disponible: r.disponible ? r.version : null, erreur: r.erreur || null });
   return r;
 });
-ipcMain.handle('maj:telecharger', async (e) => {
+gerer('maj:telecharger', async (e) => {
   const r = await maj.telecharger((recu, total) => {
     if (!e.sender.isDestroyed()) e.sender.send('maj:progression', { recu, total });
   });
-  journal.ligne('maj telecharger', { ok: !!r.ok, erreur: r.erreur || null });
+  journal.evt('maj', 'telecharger', { ok: !!r.ok, erreur: r.erreur || null });
   return r;
 });
-ipcMain.handle('maj:installer', () => {
+gerer('maj:installer', () => {
   const r = maj.installer();
-  journal.ligne('maj installer', { ok: !!r.ok, erreur: r.erreur || null });
+  journal.evt('maj', 'installer', { ok: !!r.ok, erreur: r.erreur || null });
   if (r.ok) {
     fermetureAutorisee = true;
     setTimeout(() => app.quit(), 500);
@@ -415,34 +500,34 @@ ipcMain.handle('maj:installer', () => {
   return r;
 });
 
-ipcMain.handle('raccourcis:etat', () => raccourcis.etat());
-ipcMain.handle('raccourcis:perimes', () => raccourcis.perimes());
-ipcMain.handle('raccourcis:basculer', async (_e, type) => {
+gerer('raccourcis:etat', () => raccourcis.etat());
+gerer('raccourcis:perimes', () => raccourcis.perimes());
+gerer('raccourcis:basculer', async (_e, type) => {
   const r = await raccourcis.basculer(type);
   return { etat: raccourcis.etat(), manuel: r.manuel };
 });
-ipcMain.handle('raccourcis:reparer', (_e, types) => {
+gerer('raccourcis:reparer', (_e, types) => {
   raccourcis.reparer(types);
   return raccourcis.etat();
 });
 
-ipcMain.handle('jeu:tirer', (_e, tagJeu) => jeu.tirer(tagJeu || null));
-ipcMain.handle('jeu:reveler', (_e, id) => jeu.reveler(id));
-ipcMain.handle('jeu:apercu', (_e, id) => jeu.apercu(id));
-ipcMain.handle('jeu:categories', () => jeu.categories());
-ipcMain.handle('jeu:apercuCategories', (_e, sel) => jeu.apercuCategories(sel || {}));
+gerer('jeu:tirer', (_e, tagJeu) => jeu.tirer(tagJeu || null));
+gerer('jeu:reveler', (_e, id) => jeu.reveler(id));
+gerer('jeu:apercu', (_e, id) => jeu.apercu(id));
+gerer('jeu:categories', () => jeu.categories());
+gerer('jeu:apercuCategories', (_e, sel) => jeu.apercuCategories(sel || {}));
 
-ipcMain.handle('oeuvres:chercher', (_e, criteres) => db.chercher(criteres || {}));
-ipcMain.handle('oeuvres:numero', (_e, n) => db.parNumero(n));
-ipcMain.handle('oeuvres:parTag', (_e, { tag, texte } = {}) => jeu.listerParTag(tag, texte));
-ipcMain.handle('oeuvres:toutes', (_e, criteres) => jeu.listerToutes(criteres));
+gerer('oeuvres:chercher', (_e, criteres) => db.chercher(criteres || {}));
+gerer('oeuvres:numero', (_e, n) => db.parNumero(n));
+gerer('oeuvres:parTag', (_e, { tag, texte } = {}) => jeu.listerParTag(tag, texte));
+gerer('oeuvres:toutes', (_e, criteres) => jeu.listerToutes(criteres));
 
-ipcMain.handle('tags:basculer', (_e, { id, tag }) => ({
+gerer('tags:basculer', (_e, { id, tag }) => ({
   actif: db.basculerTag(id, tag),
   comptes: db.comptesTags()
 }));
 
-ipcMain.handle('tags:effacerTout', () => ({
+gerer('tags:effacerTout', () => ({
   supprimes: db.effacerTousLesTags(),
   comptes: db.comptesTags()
 }));
@@ -453,7 +538,7 @@ const THEMES_CLAIRS = new Set([
   'clair', 'parchemin', 'lin', 'sepia', 'sepia-profond', 'taupe', 'ardoise'
 ]);
 
-ipcMain.handle('reglages:definir', (_e, { cle, valeur }) => {
+gerer('reglages:definir', (_e, { cle, valeur }) => {
   db.definirReglage(cle, valeur);
   if (cle === 'theme') {
     // Le rendu affiche notre propre palette via data-theme ; ceci ne pilote
@@ -465,12 +550,42 @@ ipcMain.handle('reglages:definir', (_e, { cle, valeur }) => {
   return true;
 });
 
-ipcMain.handle('theme:systeme', () => (nativeTheme.shouldUseDarkColors ? 'sombre' : 'clair'));
+// Rapport d'erreur : zip masque + messagerie pre-remplie (rien ne part seul).
+gerer('rapport:choix', () => rapport.choix());
+gerer('rapport:preparer', (_e, formulaire) => {
+  try { return rapport.preparer(formulaire || {}); }
+  catch (e) { journal.erreur('rapport', 'preparer', e); return { erreur: 'Rapport impossible : ' + e.message }; }
+});
+gerer('rapport:messagerie', async () => {
+  const r = rapport.dernierRapport();
+  if (!r) return { erreur: 'Aucun rapport préparé.' };
+  shell.showItemInFolder(r.chemin);
+  try { await shell.openExternal(r.mailto); }
+  catch (e) {
+    journal.erreur('rapport', 'messagerie-absente', e);
+    return { erreur: 'Aucune messagerie ne s’est ouverte. Copie le texte du mail et envoie-le depuis ta boîte mail, avec le zip en pièce jointe.' };
+  }
+  journal.evt('rapport', 'messagerie-ouverte', { nom: r.nom, longueurMailto: r.mailto.length });
+  return { ok: true };
+});
+gerer('rapport:dossier', () => {
+  const r = rapport.dernierRapport();
+  if (r) shell.showItemInFolder(r.chemin);
+  return { ok: !!r };
+});
+gerer('rapport:copier', () => {
+  const r = rapport.dernierRapport();
+  if (!r) return { erreur: 'Aucun rapport préparé.' };
+  clipboard.writeText('À : ' + rapport.DESTINATAIRE + '\nObjet : ' + r.objet + '\n\n' + r.corps);
+  return { ok: true };
+});
+
+gerer('theme:systeme', () => (nativeTheme.shouldUseDarkColors ? 'sombre' : 'clair'));
 
 // La confirmation de fermeture est une fenetre HTML aux tons de l'appli (voir
 // App.jsx), pas une boite de dialogue Windows : plus de son systeme. Ce canal
 // ferme directement, la question a deja ete posee cote rendu.
-ipcMain.handle('app:quitter', () => {
+gerer('app:quitter', () => {
   fermetureAutorisee = true;
   if (fenetre) fenetre.close(); else app.quit();
   return true;

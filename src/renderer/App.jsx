@@ -1112,24 +1112,43 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
     setImgInfo(null);
   };
 
+  // Echec inattendu (exception cote principal) : message visible + journal.
+  const echecImage = (origine, err) => {
+    window.api.evt('image', 'import-exception', { origine, message: String(err && err.message || err) }, 'ERREUR');
+    setImgErreur('Import impossible : ' + String(err && err.message || err) + ' — détails dans le journal.');
+  };
+
   const choisir = async () => {
     if (imgEnCours || champs.image) return;
     setImgEnCours(true);
-    try { poser(await window.api.edition.choisirImage()); } finally { setImgEnCours(false); }
+    try { poser(await window.api.edition.choisirImage()); }
+    catch (err) { echecImage('selecteur', err); }
+    finally { setImgEnCours(false); }
   };
   const deposer = async (e) => {
     e.preventDefault();
     setSurvol(false);
     if (imgEnCours) return;
-    const f = [...(e.dataTransfer.files || [])].find((x) => x.type.startsWith('image/'));
+    const tous = [...(e.dataTransfer.files || [])];
+    const f = tous.find((x) => x.type.startsWith('image/'));
     const url = f ? null : urlDepuisDrop(e.dataTransfer);
-    if (!f && !url) { setImgErreur('Dépôt non reconnu — glisse un fichier ou une image d’une page web.'); return; }
+    const detail = {
+      fichiers: tous.map((x) => ({ nom: x.name, type: x.type || '(vide)', octets: x.size })),
+      types: [...(e.dataTransfer.types || [])], url
+    };
+    if (!f && !url) {
+      window.api.evt('image', 'depot-non-reconnu', detail, 'WARN');
+      setImgErreur('Dépôt non reconnu — glisse un fichier ou une image d’une page web.');
+      return;
+    }
+    window.api.evt('image', 'depot', { ...detail, retenu: f ? f.name : url });
     setImgEnCours(true);
     try {
       poser(f
-        ? await window.api.edition.importerImage(await f.arrayBuffer())
+        ? await window.api.edition.importerImage(await f.arrayBuffer(), { nom: f.name, type: f.type, octets: f.size })
         : await window.api.edition.importerImageUrl(url));
-    } finally { setImgEnCours(false); }
+    } catch (err) { echecImage(f ? 'depot-fichier' : 'depot-url', err); }
+    finally { setImgEnCours(false); }
   };
 
   const annuler = () => { purge(champs.image); onAnnuler(); };
@@ -1141,6 +1160,7 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
         ? await window.api.edition.modifier(tuile.id, champs)
         : await window.api.edition.creer(champs));
     } catch (e) {
+      window.api.evt('edition', mode + '-exception', { id: tuile && tuile.id, message: String(e && e.message || e) }, 'ERREUR');
       setEnCours(false);
     }
   };
@@ -1415,6 +1435,8 @@ function Options({ etat, onEtat }) {
   const [syn, setSyn] = useState(null);                  // etat synchro (dossier + Drive)
   const [synOccupe, setSynOccupe] = useState(false);
   const [synMsg, setSynMsg] = useState(msgRecharge && msgRecharge.ou === 'dossier' ? msgRecharge.msg : null);
+
+  const [rapportOuvert, setRapportOuvert] = useState(false);
 
   const totalMarques = etat.tags.livre + etat.tags.etoile + etat.tags.bad_smiley;
 
@@ -1826,6 +1848,23 @@ function Options({ etat, onEtat }) {
         </div>
       </section>
 
+      <div className="filet" />
+
+      <section>
+        <div className="etiquette">Signaler un problème</div>
+        <button className="bouton-neutre" onClick={() => setRapportOuvert(true)}>
+          <I.FlecheVert t={16} /> Envoyer le log pour rapport d’erreur
+        </button>
+        <div className="options-note">
+          Prépare un rapport (journal de fonctionnement, version, état de l’application) et
+          ouvre ta messagerie avec le mail pré-rempli. Ton nom d’utilisateur Windows, le nom
+          de ton ordinateur et tes adresses email sont masqués ; tu vois ce qui part avant
+          d’envoyer.
+        </div>
+      </section>
+
+      {rapportOuvert && <FormulaireRapport onFermer={() => setRapportOuvert(false)} />}
+
       {sauvImport && (
         <BoiteConfirmation
           titre="Importer cette sauvegarde ?"
@@ -1871,6 +1910,126 @@ function Options({ etat, onEtat }) {
           </p>
         </BoiteConfirmation>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------- rapport d'erreur */
+
+// Deux temps : le formulaire, puis l'apercu du rapport pret (zip masque) avec
+// l'ouverture de la messagerie. Rien ne part sans l'utilisateur.
+function FormulaireRapport({ onFermer }) {
+  const [choix, setChoix] = useState(null);
+  const [f, setF] = useState({ sujet: '', depuis: '', reproductible: '', description: '', email: '' });
+  const [pret, setPret] = useState(null);       // rapport prepare
+  const [occupe, setOccupe] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => { window.api.rapport.choix().then(setChoix); }, []);
+  useEffect(() => {
+    const clavier = (e) => { if (e.key === 'Escape') onFermer(); };
+    window.addEventListener('keydown', clavier);
+    return () => window.removeEventListener('keydown', clavier);
+  }, [onFermer]);
+
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const complet = f.sujet && f.depuis && f.reproductible;
+
+  const preparer = async () => {
+    setOccupe(true); setMsg(null);
+    const r = await window.api.rapport.preparer(f);
+    setOccupe(false);
+    if (r.erreur) { setMsg({ erreur: r.erreur }); return; }
+    setPret(r);
+  };
+  const action = async (fn, ok) => {
+    const r = await fn();
+    setMsg(r && r.erreur ? { erreur: r.erreur } : { ok });
+  };
+
+  return (
+    <div className="recouvrement" onClick={onFermer}>
+      <div className="boite-dialogue boite-rapport" onClick={(e) => e.stopPropagation()}>
+        <h3>Envoyer le log pour rapport d’erreur</h3>
+        {!choix ? <p>Chargement…</p> : !pret ? (
+          <>
+            <label className="rapport-champ">
+              <span>Quel est le problème ?</span>
+              <select className="editeur-input" value={f.sujet} onChange={set('sujet')} autoFocus>
+                <option value="">— choisir —</option>
+                {choix.sujets.map((x) => <option key={x.cle} value={x.cle}>{x.libelle}</option>)}
+              </select>
+            </label>
+            <label className="rapport-champ">
+              <span>Depuis quand ?</span>
+              <select className="editeur-input" value={f.depuis} onChange={set('depuis')}>
+                <option value="">— choisir —</option>
+                {choix.depuis.map((x) => <option key={x.cle} value={x.cle}>{x.libelle}</option>)}
+              </select>
+            </label>
+            <label className="rapport-champ">
+              <span>Le problème se reproduit-il ?</span>
+              <select className="editeur-input" value={f.reproductible} onChange={set('reproductible')}>
+                <option value="">— choisir —</option>
+                {choix.reproductible.map((x) => <option key={x.cle} value={x.cle}>{x.libelle}</option>)}
+              </select>
+            </label>
+            <label className="rapport-champ">
+              <span>Que s’est-il passé ? Qu’attendais-tu ? <em>(facultatif)</em></span>
+              <textarea className="editeur-textarea rapport-description" value={f.description} onChange={set('description')}
+                placeholder="Ex. : j’ai glissé une photo nommée « Москва.jpg », rien ne s’est affiché." spellCheck />
+            </label>
+            <label className="rapport-champ">
+              <span>Ton email, pour qu’on puisse te répondre <em>(facultatif)</em></span>
+              <input className="editeur-input" type="email" value={f.email} onChange={set('email')} />
+            </label>
+            {msg && msg.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{msg.erreur}</div>}
+            <div className="actions">
+              <button className="bouton-neutre" onClick={onFermer}>Annuler</button>
+              <button className="bouton-valide" onClick={preparer} disabled={!complet || occupe}>
+                <I.Coche t={14} /> {occupe ? 'Préparation…' : 'Préparer le rapport'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>
+              Rapport prêt : <strong>{pret.nom}</strong> ({Math.round(pret.octets / 1024)} Ko), rangé dans
+              Documents › Tuiles et Toiles - rapports. Il contient
+              {' '}{pret.apercu.lignes} lignes de journal
+              {pret.apercu.niveaux.ERREUR ? ', dont ' + pret.apercu.niveaux.ERREUR + ' erreur(s)' : ''}
+              {pret.apercu.niveaux.WARN ? ' et ' + pret.apercu.niveaux.WARN + ' avertissement(s)' : ''}.
+            </p>
+            <details className="rapport-apercu">
+              <summary>Voir ce qui sera envoyé (masqué)</summary>
+              <pre>{'À : ' + pret.destinataire + '\nObjet : ' + pret.objet + '\n\n' + pret.corps}</pre>
+              {pret.apercu.anomalies.length > 0 && (
+                <pre>{'Dernières anomalies du journal :\n' + pret.apercu.anomalies.join('\n')}</pre>
+              )}
+              <pre>{JSON.stringify(pret.apercu.application, null, 2)}</pre>
+            </details>
+            <p className="options-note">
+              « Ouvrir ma messagerie » crée le mail et ouvre le dossier du zip : glisse le fichier
+              dans le mail, puis envoie. Sans messagerie installée : copie le texte et envoie-le
+              depuis ta boîte mail à {pret.destinataire}, zip en pièce jointe.
+            </p>
+            {msg && msg.ok && <div className="options-confirmation"><I.Coche t={14} /> {msg.ok}</div>}
+            {msg && msg.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{msg.erreur}</div>}
+            <div className="actions rapport-actions">
+              <button className="bouton-neutre" onClick={() => action(window.api.rapport.copier, 'Texte du mail copié.')}>
+                Copier le texte
+              </button>
+              <button className="bouton-neutre" onClick={() => action(window.api.rapport.dossier, 'Dossier ouvert.')}>
+                Ouvrir le dossier
+              </button>
+              <button className="bouton-valide" onClick={() => action(window.api.rapport.messagerie, 'Messagerie ouverte — joins le zip au mail.')}>
+                <I.Coche t={14} /> Ouvrir ma messagerie
+              </button>
+              <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

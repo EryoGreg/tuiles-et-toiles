@@ -26,6 +26,7 @@ const { OAuth2Client } = require('google-auth-library');
 
 const db = require('./db');
 const sauvegarde = require('./sauvegarde');
+const journal = require('./journal');
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const NOM_DOSSIER = 'Tuiles et Toiles';
@@ -78,8 +79,11 @@ function ecrireJeton(obj) {
 }
 
 function deconnecter() {
-  try { if (cfg) fs.rmSync(cfg.jeton, { force: true }); } catch { /* deja parti */ }
+  const avait = !!(cfg && fs.existsSync(cfg.jeton));
+  try { if (cfg) fs.rmSync(cfg.jeton, { force: true }); }
+  catch (e) { journal.erreur('drive', 'deconnexion-fichier-jeton', e); }
   client = null;
+  journal.evt('drive', 'deconnecte', { jetonSupprime: avait });
 }
 
 // --- etat ----------------------------------------------------------------
@@ -137,7 +141,8 @@ async function connecter() {
 
   let port; let promesse;
   try { ({ port, promesse } = await serveurRedirection(attendu)); }
-  catch (e) { return { erreur: e.message }; }
+  catch (e) { journal.erreur('drive', 'oauth-serveur-local', e); return { erreur: e.message }; }
+  journal.evt('drive', 'oauth-debut', { port, client: c.id.slice(0, 12) + '…' });
 
   // Hote « localhost » : correspond au redirect_uri enregistre (le port est
   // ignore pour une redirection loopback d'un client Desktop). Le serveur, lui,
@@ -153,20 +158,31 @@ async function connecter() {
     state: attendu
   });
 
-  await shell.openExternal(url);
+  try { await shell.openExternal(url); journal.evt('drive', 'oauth-navigateur-ouvert'); }
+  catch (e) { journal.erreur('drive', 'oauth-navigateur', e); }
 
   let code;
+  const t0 = Date.now();
   try { code = await promesse; }
-  catch (e) { return { erreur: e.message }; }
+  catch (e) { journal.avertir('drive', 'oauth-sans-code', { erreur: e.message, attenteMs: Date.now() - t0 }); return { erreur: e.message }; }
+  journal.evt('drive', 'oauth-code-recu', { attenteMs: Date.now() - t0 });
 
   let tokens;
   try { ({ tokens } = await oauth.getToken({ code, codeVerifier: verifier })); }
-  catch (e) { return { erreur: 'Échange du code refusé : ' + (e.message || e) }; }
+  catch (e) {
+    journal.erreur('drive', 'oauth-echange-refuse', e, { reponse: e && e.response && e.response.data });
+    return { erreur: 'Échange du code refusé : ' + (e.message || e) };
+  }
+  journal.evt('drive', 'oauth-jetons', {
+    jetonLongTerme: !!tokens.refresh_token, scopes: tokens.scope, expire: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null
+  });
   if (!tokens.refresh_token) {
+    journal.avertir('drive', 'oauth-sans-refresh-token');
     return { erreur: 'Google n’a pas renvoyé de refresh token. Révoque l’accès dans ton compte Google puis réessaie.' };
   }
   // Consentement granulaire : la case Drive peut rester decochee.
   if (tokens.scope && !tokens.scope.split(' ').includes(SCOPE)) {
+    journal.avertir('drive', 'oauth-scope-refuse', { scopes: tokens.scope, attendu: SCOPE });
     return { erreur: 'Accès à Google Drive non accordé — reconnecte-toi et coche la case Google Drive sur l’écran de Google.' };
   }
 
@@ -179,6 +195,7 @@ async function connecter() {
 
   ecrireJeton({ refresh_token: tokens.refresh_token, email });
   client = null;
+  journal.evt('drive', 'oauth-connecte', { email, chiffrement: safeStorage.isEncryptionAvailable() });
   return { connecte: true, email };
 }
 
@@ -202,6 +219,28 @@ function clientCourant() {
 
 // --- appels Drive ----------------------------------------------------------
 
+/** net.fetch journalise (requete HTTP vers Google). Jamais l'en-tete Authorization. */
+async function requete(url, opts = {}) {
+  const t0 = Date.now();
+  const u = new URL(url);
+  const corps = opts.body;
+  const info = {
+    m: opts.method || 'GET',
+    chemin: u.pathname.replace(/^\/(upload\/)?drive\/v3/, (x, up) => (up ? 'upload:' : '')),
+    q: u.searchParams.get('q') || undefined,
+    upload: u.searchParams.get('uploadType') || undefined,
+    envoye: corps ? (corps.byteLength != null ? corps.byteLength : String(corps).length) : undefined
+  };
+  try {
+    const res = await net.fetch(url, opts);
+    journal.evt('drive', 'http', { ...info, status: res.status, ms: Date.now() - t0 }, res.ok ? 'DEBUG' : 'WARN');
+    return res;
+  } catch (e) {
+    journal.erreur('drive', 'http', e, { ...info, ms: Date.now() - t0, horsLigne: /ENOTFOUND|ECONN|ETIMEDOUT|ERR_INTERNET|ERR_NAME/.test(String(e && e.message)) });
+    throw e;
+  }
+}
+
 // Jeton refuse par Google : refresh token expire (7 jours tant que l'ecran de
 // consentement est en « Test »), revoque par l'utilisateur, ou scope Drive non
 // coche au consentement. Seule issue : refaire le flux OAuth.
@@ -213,15 +252,21 @@ function erreurJetonMort(detail) {
 
 async function jetonAcces(oauth) {
   let r;
+  const t0 = Date.now();
   try { r = await oauth.getAccessToken(); }
   catch (e) {
     const code = e && e.response && e.response.data && e.response.data.error;
+    const detail = { code, description: e && e.response && e.response.data && e.response.data.error_description, ms: Date.now() - t0 };
     if (code === 'invalid_grant' || /invalid_grant/.test(String(e && e.message))) {
+      journal.avertir('drive', 'jeton-refuse', { ...detail, raison: 'refresh token expire ou revoque (7 j en mode Test)' });
       throw erreurJetonMort('invalid_grant');
     }
+    journal.erreur('drive', 'jeton-echec', e, detail);
     throw e;
   }
-  if (!r || !r.token) throw erreurJetonMort('jeton vide');
+  if (!r || !r.token) { journal.avertir('drive', 'jeton-vide'); throw erreurJetonMort('jeton vide'); }
+  const ms = Date.now() - t0;
+  if (ms > 50) journal.debug('drive', 'jeton-rafraichi', { ms });   // sinon : jeton en cache
   return r.token;
 }
 
@@ -240,7 +285,7 @@ async function appelJson(oauth, methode, url, corps) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(corps);
   }
-  const res = await net.fetch(url, opts);
+  const res = await requete(url, opts);
   const txt = await res.text();
   if (!res.ok) {
     verifierAcces(res.status, txt);
@@ -291,7 +336,7 @@ async function majLisezmoi(oauth, dossierId, cle = 'racine') {
   const id = r.files && r.files[0] && r.files[0].id;
 
   if (id) {
-    await net.fetch(UPLOAD + '/files/' + id + '?uploadType=media',
+    await requete(UPLOAD + '/files/' + id + '?uploadType=media',
       { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'text/plain; charset=UTF-8' }, body: donnees });
     return;
   }
@@ -303,7 +348,7 @@ async function majLisezmoi(oauth, dossierId, cle = 'racine') {
     donnees,
     Buffer.from('\r\n--' + limite + '--\r\n')
   ]);
-  await net.fetch(UPLOAD + '/files?uploadType=multipart',
+  await requete(UPLOAD + '/files?uploadType=multipart',
     { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps });
 }
 
@@ -312,7 +357,7 @@ async function televerser(oauth, dossierId, cheminZip, existant) {
   const donnees = fs.readFileSync(cheminZip);
 
   if (existant) {
-    const res = await net.fetch(
+    const res = await requete(
       UPLOAD + '/files/' + existant.id + '?uploadType=media&fields=id,headRevisionId,modifiedTime',
       { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/zip' }, body: donnees }
     );
@@ -328,7 +373,7 @@ async function televerser(oauth, dossierId, cheminZip, existant) {
     donnees,
     Buffer.from('\r\n--' + limite + '--\r\n')
   ]);
-  const res = await net.fetch(
+  const res = await requete(
     UPLOAD + '/files?uploadType=multipart&fields=id,headRevisionId,modifiedTime',
     { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps }
   );
@@ -344,7 +389,7 @@ async function echecEnvoi(res) {
 
 async function telecharger(oauth, fichierId, cible) {
   const token = await jetonAcces(oauth);
-  const res = await net.fetch(API + '/files/' + fichierId + '?alt=media',
+  const res = await requete(API + '/files/' + fichierId + '?alt=media',
     { headers: { Authorization: 'Bearer ' + token } });
   if (!res.ok) {
     const txt = await res.text();
@@ -368,7 +413,7 @@ async function envoiMultipart(oauth, meta, octets, mime) {
     octets,
     Buffer.from('\r\n--' + limite + '--\r\n')
   ]);
-  const res = await net.fetch(UPLOAD + '/files?uploadType=multipart&fields=id',
+  const res = await requete(UPLOAD + '/files?uploadType=multipart&fields=id',
     { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps });
   if (!res.ok) await echecEnvoi(res);
   return (await res.json()).id;
@@ -411,13 +456,13 @@ function api(oauth) {
     },
     async majFichier(id, octets, mime) {
       const token = await jetonAcces(oauth);
-      const res = await net.fetch(UPLOAD + '/files/' + encodeURIComponent(id) + '?uploadType=media&fields=id',
+      const res = await requete(UPLOAD + '/files/' + encodeURIComponent(id) + '?uploadType=media&fields=id',
         { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': mime }, body: octets });
       if (!res.ok) await echecEnvoi(res);
     },
     async lire(id) {
       const token = await jetonAcces(oauth);
-      const res = await net.fetch(API + '/files/' + encodeURIComponent(id) + '?alt=media',
+      const res = await requete(API + '/files/' + encodeURIComponent(id) + '?alt=media',
         { headers: { Authorization: 'Bearer ' + token } });
       if (!res.ok) {
         const txt = await res.text();
@@ -439,18 +484,28 @@ async function avecReconnexion(op, surReconnexion) {
   if (!oauth) return { erreur: 'Google Drive non connecté.' };
   try { return await op(oauth); }
   catch (e) {
-    if (!e.jetonMort) return { erreur: e.message || String(e) };
+    if (!e.jetonMort) {
+      journal.erreur('drive', 'operation-echec', e);
+      return { erreur: e.message || String(e) };
+    }
+    journal.avertir('drive', 'reconnexion-necessaire', { raison: e.message });
   }
 
   deconnecter();
   if (surReconnexion) surReconnexion();
   const r = await connecter();
-  if (r.erreur) return { erreur: 'Session Google expirée — reconnexion échouée : ' + r.erreur };
+  if (r.erreur) {
+    journal.avertir('drive', 'reconnexion-echec', { erreur: r.erreur });
+    return { erreur: 'Session Google expirée — reconnexion échouée : ' + r.erreur };
+  }
 
   const neuf = clientCourant();
   if (!neuf) return { erreur: 'Google Drive non connecté.' };
   try { return { ...(await op(neuf)), reconnecte: true }; }
-  catch (e) { return { erreur: e.message || String(e), reconnecte: true }; }
+  catch (e) {
+    journal.erreur('drive', 'operation-echec-apres-reconnexion', e);
+    return { erreur: e.message || String(e), reconnecte: true };
+  }
 }
 
 function pousser({ forcer = false } = {}, surReconnexion) {
@@ -467,7 +522,12 @@ async function opPousser(oauth, forcer) {
   const revConnue = db.etatSync('drive_rev');
   const distantABouge = distant && distant.headRevisionId !== revConnue;
 
+  journal.evt('drive', 'sauvegarde:debut', {
+    dossierId, distant: distant ? { rev: distant.headRevisionId, modifie: distant.modifiedTime, octets: distant.size } : null,
+    revConnue, distantABouge: !!distantABouge, forcer
+  });
   if (distantABouge && !forcer) {
+    journal.avertir('drive', 'sauvegarde:conflit', { distantModifie: distant.modifiedTime });
     return { conflit: true, sens: 'pousser', distantModifie: distant.modifiedTime };
   }
   if (distantABouge) await copierVersHistorique(oauth, dossierId, distant);
@@ -484,12 +544,17 @@ async function opPousser(oauth, forcer) {
 
   db.definirEtatSync('drive_rev', maj.headRevisionId || '');
   db.definirEtatSync('drive_synchro_le', new Date().toISOString());
+  journal.evt('drive', 'sauvegarde:fin', { rev: maj.headRevisionId, historique: !!distantABouge });
   return { ok: true, synchroLe: db.etatSync('drive_synchro_le') };
 }
 
 async function opTirer(oauth, forcer) {
   const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
   const distant = await trouverFichier(oauth, dossierId);
+  journal.evt('drive', 'restauration:debut', {
+    dossierId, distant: distant ? { rev: distant.headRevisionId, modifie: distant.modifiedTime, octets: distant.size } : null,
+    revConnue: db.etatSync('drive_rev'), forcer
+  });
   if (!distant) return { erreur: 'Aucune sauvegarde sur Drive pour l’instant.' };
 
   if (!forcer && distant.headRevisionId === db.etatSync('drive_rev')) {
@@ -508,6 +573,7 @@ async function opTirer(oauth, forcer) {
 
   db.definirEtatSync('drive_rev', distant.headRevisionId || '');
   db.definirEtatSync('drive_synchro_le', new Date().toISOString());
+  journal.evt('drive', 'restauration:fin', { rev: distant.headRevisionId, manifest: r.manifest });
   return { ok: true, manifest: r.manifest };
 }
 

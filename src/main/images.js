@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Jimp = require('jimp');
+const journal = require('./journal');
 
 const COTE_MAX = 1400;
 const POIDS_MAX = 500 * 1024;
@@ -27,14 +28,54 @@ function aVraieTransparence(img) {
 
 function cote(img) { return Math.max(img.bitmap.width, img.bitmap.height); }
 
+// Type reel d'apres les premiers octets (un .jpg peut etre un HEIC, un WebP…).
+function signature(buf) {
+  const h = buf.subarray(0, 12);
+  const hex = h.toString('hex');
+  if (hex.startsWith('ffd8ff')) return 'jpeg';
+  if (hex.startsWith('89504e47')) return 'png';
+  if (hex.startsWith('47494638')) return 'gif';
+  if (hex.startsWith('424d')) return 'bmp';
+  if (hex.startsWith('49492a00') || hex.startsWith('4d4d002a')) return 'tiff';
+  if (h.toString('ascii', 0, 4) === 'RIFF' && h.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if (h.toString('ascii', 4, 8) === 'ftyp') return 'iso-bmff (heic/avif ?) ' + h.toString('ascii', 8, 12);
+  if (/^\s*</.test(buf.subarray(0, 64).toString('utf8'))) return 'texte/html (pas une image)';
+  return 'inconnu ' + hex;
+}
+
 /**
  * @param {string|Buffer} source  chemin de fichier ou octets bruts
  * @param {string} dossierCible   images-locales/
- * @returns {Promise<{nom, largeur, hauteur, octets, redimensionnee}>}
+ * @param {object} [contexte]     origine (selecteur, depot, url…) + nom/type
+ *   d'origine, pour le journal
+ * @returns {Promise<{nom, largeur, hauteur, octets, redimensionnee}|{erreur}>}
  */
-async function importer(source, dossierCible) {
-  const img = await Jimp.read(source);
+async function importer(source, dossierCible, contexte = {}) {
+  const t0 = Date.now();
+  const chemin = typeof source === 'string' ? source : null;
+  let brut;
+  try {
+    brut = chemin ? fs.readFileSync(chemin) : source;
+  } catch (e) {
+    journal.erreur('image', 'lecture-fichier', e, { ...contexte, chemin, cheminTexte: journal.decrireTexte(chemin) });
+    return { erreur: 'Fichier illisible : ' + e.message };
+  }
+  const entree = {
+    ...contexte, chemin, cheminTexte: chemin ? journal.decrireTexte(chemin) : undefined,
+    nomTexte: contexte.nom ? journal.decrireTexte(contexte.nom) : undefined,
+    octets: brut.length, signature: signature(brut)
+  };
+  journal.evt('image', 'import:debut', entree);
+
+  let img;
+  try {
+    img = await Jimp.read(brut);
+  } catch (e) {
+    journal.erreur('image', 'decodage', e, entree);
+    return { erreur: 'Format d’image non pris en charge (' + entree.signature + '). Essaie en JPEG ou PNG.' };
+  }
   const cote0 = cote(img);
+  const dims0 = img.bitmap.width + 'x' + img.bitmap.height;
 
   if (cote0 > COTE_MAX) {
     if (img.bitmap.width >= img.bitmap.height) img.resize(COTE_MAX, Jimp.AUTO);
@@ -67,17 +108,29 @@ async function importer(source, dossierCible) {
     }
   }
 
-  fs.mkdirSync(dossierCible, { recursive: true });
   const nom = crypto.randomUUID() + '.' + ext;
-  fs.writeFileSync(path.join(dossierCible, nom), buf);
+  try {
+    fs.mkdirSync(dossierCible, { recursive: true });
+    fs.writeFileSync(path.join(dossierCible, nom), buf);
+  } catch (e) {
+    journal.erreur('image', 'ecriture', e, { ...entree, dossierCible, nom });
+    return { erreur: 'Impossible d’enregistrer l’image : ' + e.message };
+  }
 
-  return {
+  const out = {
     nom,
     largeur: img.bitmap.width,
     hauteur: img.bitmap.height,
     octets: buf.length,
     redimensionnee: cote0 > COTE_MAX || cote(img) < cote0
   };
+  journal.evt('image', 'import:fin', {
+    origine: contexte.origine, nom, format: ext, avant: dims0, apres: out.largeur + 'x' + out.hauteur,
+    octetsAvant: brut.length, octetsApres: buf.length, redimensionnee: out.redimensionnee,
+    transparence: ext === 'png', ms: Date.now() - t0,
+    ...(buf.length > POIDS_MAX ? { auDessusDuPlafond: true } : {})
+  }, buf.length > POIDS_MAX ? 'WARN' : 'INFO');
+  return out;
 }
 
 module.exports = { importer, POIDS_MAX, COTE_MAX };

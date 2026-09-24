@@ -59,9 +59,10 @@ async function rejoindre(ctx, transport, { nom, enregistrerPrefixe }) {
   const fiches = await transport.lireFiches();
   const moi = fiches.find((f) => f.id === id);
 
+  const resume = (l) => l.map((f) => ({ id: f.id, nom: f.nom, prefixe: f.prefixe_ref, vu_le: f.vu_le }));
   if (moi) {
     await transport.ecrireFiche({ ...moi, nom, vu_le: maintenant });
-    return { premiereFois: false, prefixe: ctx.appareil.prefixe_ref, renumerotees: [] };
+    return { premiereFois: false, prefixe: ctx.appareil.prefixe_ref, renumerotees: [], appareils: resume(fiches) };
   }
 
   const renumerotees = [];
@@ -90,7 +91,10 @@ async function rejoindre(ctx, transport, { nom, enregistrerPrefixe }) {
     const deja = parCle.get(r.cle);
     parCle.set(r.cle, deja ? { ...deja, apres: r.apres } : r);
   }
-  return { premiereFois: true, prefixe: ctx.appareil.prefixe_ref, renumerotees: [...parCle.values()] };
+  return {
+    premiereFois: true, prefixe: ctx.appareil.prefixe_ref, renumerotees: [...parCle.values()],
+    appareils: resume(await transport.lireFiches())
+  };
 }
 
 module.exports = { rejoindre, renumeroter, prefixeLibre };

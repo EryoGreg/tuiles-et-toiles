@@ -15,6 +15,7 @@ const db = require('./db');
 const jeu = require('./jeu');
 const etat = require('./synchro/etat');
 const lisezmoi = require('./lisezmoi');
+const journal = require('./journal');
 
 const CHAMPS = etat.CHAMPS_LOCALE;
 
@@ -46,16 +47,51 @@ function imagesReferencees() {
 function nettoyerOrphelines() {
   if (!dossierImages || !fs.existsSync(dossierImages)) return;
   const utilises = imagesReferencees();
+  const supprimees = [];
   for (const f of fs.readdirSync(dossierImages)) {
     if (f === lisezmoi.NOM || utilises.has(f)) continue;
-    try { fs.rmSync(path.join(dossierImages, f)); } catch { /* verrou */ }
+    try { fs.rmSync(path.join(dossierImages, f)); supprimees.push(f); }
+    catch (e) { journal.erreur('image', 'menage-echec', e, { fichier: f }); }
   }
+  if (supprimees.length) journal.evt('image', 'menage', { supprimees });
 }
 
 /** Supprime une image tout juste importee si rien ne la reference (annulation). */
 function oublierImage(nom) {
   if (!dossierImages || !nom) return;
-  if (!imagesReferencees().has(nom)) { try { fs.rmSync(path.join(dossierImages, nom)); } catch { /* deja parti */ } }
+  if (imagesReferencees().has(nom)) { journal.debug('image', 'oublier-gardee', { nom }); return; }
+  try { fs.rmSync(path.join(dossierImages, nom)); journal.evt('image', 'oubliee', { nom }); }
+  catch (e) { journal.debug('image', 'oublier-absente', { nom, erreur: e.code }); }
+}
+
+/** Champs decrits pour le journal (longueur, alphabets, caracteres speciaux). */
+function decrireChamps(champs) {
+  const out = {};
+  for (const c of CHAMPS) {
+    const v = texte(champs, c);
+    if (v) out[c] = c === 'image' ? v : journal.decrireTexte(v);
+  }
+  return out;
+}
+
+/** Image referencee : existe-t-elle vraiment sur disque ? */
+function etatImage(nom) {
+  if (!nom) return null;
+  const p = dossierImages ? path.join(dossierImages, nom) : null;
+  return { nom, presente: !!(p && fs.existsSync(p)), octets: p && fs.existsSync(p) ? fs.statSync(p).size : null };
+}
+
+/** Bilan apres ecriture : 0 masque = la tuile ne sortira jamais au tirage. */
+function journaliser(quoi, id, extra) {
+  const o = db.oeuvre(id);
+  const masques = JSON.parse((o && o.masques) || '[]').length;
+  journal.evt('edition', quoi, { id, ref: o && o.ref, masques, ...extra }, masques === 0 && o ? 'WARN' : 'INFO');
+  if (o && masques === 0) {
+    journal.avertir('edition', 'tuile-sans-masque', {
+      id, ref: o.ref, raison: 'aucun jeu de champs visibles ne la distingue des autres (doublon ? champs vides ?)'
+    });
+  }
+  return masques;
 }
 
 /**
@@ -90,16 +126,23 @@ function creer(champs = {}) {
   const id = 'local:' + crypto.randomUUID();
   let ref = null;
 
-  etat.lot(() => {
-    ref = prochainRefLocal();
-    etat.ecrire('locale', id, '_existe', 1);
-    etat.ecrire('locale', id, 'ref_local', ref);
-    for (const c of CHAMPS) etat.ecrire('locale', id, c, texte(champs, c) || null);
+  const t0 = Date.now();
+  try {
+    etat.lot(() => {
+      ref = prochainRefLocal();
+      etat.ecrire('locale', id, '_existe', 1);
+      etat.ecrire('locale', id, 'ref_local', ref);
+      for (const c of CHAMPS) etat.ecrire('locale', id, c, texte(champs, c) || null);
+    });
+    appliquer();
+  } catch (e) {
+    journal.erreur('edition', 'creer-echec', e, { id, ref, champs: decrireChamps(champs) });
+    throw e;
+  }
+  const masques = journaliser('creer', id, {
+    champs: decrireChamps(champs), image: etatImage(texte(champs, 'image')), ms: Date.now() - t0
   });
-
-  appliquer();
-  const o = db.oeuvre(id);
-  return { id, ref, masques: JSON.parse((o && o.masques) || '[]').length };
+  return { id, ref, masques };
 }
 
 /** Valeurs effectives d'une tuile, pretes pour l'editeur (image = nom brut). */
@@ -121,15 +164,28 @@ function tuile(id) {
  */
 function modifier(id, champs = {}) {
   const d = db.instance();
+  const t0 = Date.now();
+  const avant = db.oeuvre(id) || {};
+  const changes = {};
+  for (const c of CHAMPS) {
+    const v = texte(champs, c);
+    if (v !== String(avant[c] || '')) changes[c] = { avant: journal.decrireTexte(avant[c] || ''), apres: journal.decrireTexte(v) };
+  }
 
   if (id.startsWith('local:')) {
-    if (!etat.existe(id)) return { erreur: 'oeuvre introuvable' };
+    if (!etat.existe(id)) {
+      journal.avertir('edition', 'modifier-introuvable', { id, local: true });
+      return { erreur: 'oeuvre introuvable' };
+    }
     etat.lot(() => {
       for (const c of CHAMPS) etat.ecrire('locale', id, c, texte(champs, c) || null);
     });
   } else {
     const pack = d.prepare('SELECT * FROM pack.oeuvres WHERE id = ?').get(id);
-    if (!pack) return { erreur: 'oeuvre introuvable' };
+    if (!pack) {
+      journal.avertir('edition', 'modifier-introuvable', { id, local: false });
+      return { erreur: 'oeuvre introuvable' };
+    }
     etat.lot(() => {
       for (const c of CHAMPS) {
         const nouv = texte(champs, c);
@@ -146,7 +202,11 @@ function modifier(id, champs = {}) {
 
   appliquer();
   const o = db.oeuvre(id);
-  return { id, ref: o && o.ref, masques: JSON.parse((o && o.masques) || '[]').length };
+  const masques = journaliser('modifier', id, {
+    local: id.startsWith('local:'), changes, image: changes.image ? etatImage(texte(champs, 'image')) : undefined,
+    ms: Date.now() - t0
+  });
+  return { id, ref: o && o.ref, masques };
 }
 
 /**
@@ -167,10 +227,12 @@ function supprimer(id) {
       // tuile est supprimee, de retour si elle est restauree.
     });
     appliquer();
+    journal.evt('edition', 'supprimer', { id, local: true });
     return { archivee: false };
   }
   etat.ecrire('archive', id, '_', 1);
   appliquer();
+  journal.evt('edition', 'archiver', { id, local: false });
   return { archivee: true };
 }
 

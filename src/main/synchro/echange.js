@@ -54,11 +54,19 @@ async function pousser(ctx, transport) {
 async function tirer(ctx, transport) {
   const recues = [];
   const curseurs = {};
+  const parAppareil = {};
   for (const app of await transport.listerAppareils()) {
     if (app === ctx.appareil.id) continue;
     const cur = curseur(ctx, app);
-    const noms = (await transport.listerSegments(app)).filter((n) => !cur || n > cur).sort();
-    for (const nom of noms) recues.push(...(await transport.lireSegment(app, nom)));
+    const tous = await transport.listerSegments(app);
+    const noms = tous.filter((n) => !cur || n > cur).sort();
+    let ops = 0;
+    for (const nom of noms) {
+      const l = await transport.lireSegment(app, nom);
+      ops += l.length;
+      recues.push(...l);
+    }
+    parAppareil[app] = { segments: tous.length, nouveaux: noms.length, ops, curseur: cur };
     if (noms.length) curseurs[app] = noms[noms.length - 1];
   }
 
@@ -78,7 +86,10 @@ async function tirer(ctx, transport) {
     appliquees,
     rejetees: bilan.rejetee || 0,
     conflits: ctx.d.prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
-    bilan
+    bilan,
+    parAppareil,
+    // Ops refusees (mal formees) : a examiner, elles viennent d'un autre appareil.
+    exemplesRejetes: recues.filter((op) => !moteur.valide(op)).slice(0, 5)
   };
 }
 

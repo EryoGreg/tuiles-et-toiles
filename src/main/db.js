@@ -21,6 +21,7 @@
 const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
+const journal = require('./journal');
 
 // --- schemas -------------------------------------------------------------
 
@@ -205,6 +206,7 @@ function surOuverture(fn) { apresOuverture.push(fn); }
  */
 function ouvrir(cheminUser, cheminPack) {
   if (db) return db;
+  const fin = journal.chrono('db', 'ouvrir', { user: cheminUser, pack: cheminPack });
   fs.mkdirSync(path.dirname(cheminUser), { recursive: true });
   db = new Database(cheminUser);
   db.pragma('journal_mode = WAL');
@@ -213,6 +215,7 @@ function ouvrir(cheminUser, cheminPack) {
   db.prepare('ATTACH DATABASE ? AS pack').run(cheminPack);
   for (const fn of apresOuverture) fn(db);
   reconstruireVue();   // au lancement : peut sauter si la couche user est vide
+  fin({ userOctets: fs.statSync(cheminUser).size, packVersion: (db.prepare("SELECT valeur FROM pack.pack_meta WHERE cle='version'").get() || {}).valeur });
   return db;
 }
 
@@ -223,7 +226,7 @@ function instance() {
 
 /** Ferme la connexion (avant de remplacer le fichier utilisateur.db). */
 function fermer() {
-  if (db) { db.close(); db = null; }
+  if (db) { db.close(); db = null; journal.debug('db', 'fermer'); }
 }
 
 /**
@@ -258,8 +261,12 @@ function reconstruireVue({ force = false } = {}) {
       d.prepare('SELECT COUNT(*) n FROM user_overrides').get().n === 0 &&
       d.prepare('SELECT COUNT(*) n FROM oeuvres_locales').get().n === 0;
     const dejaPeuplee = d.prepare('SELECT COUNT(*) n FROM oeuvres_effectives').get().n > 0;
-    if (vide && dejaPeuplee && reglage('vue_pack_hash') === hashPack) return;
+    if (vide && dejaPeuplee && reglage('vue_pack_hash') === hashPack) {
+      journal.debug('db', 'vue-a-jour', { raison: 'couche user vide, pack inchange' });
+      return;
+    }
   }
+  const t0 = Date.now();
 
   const archive = new Set(
     d.prepare('SELECT oeuvre_id FROM user_archive').all().map((r) => r.oeuvre_id)
@@ -306,6 +313,12 @@ function reconstruireVue({ force = false } = {}) {
   })();
 
   definirReglage('vue_pack_hash', hashPack);
+  const sansMasque = effectives.filter((e) => !(masques.get(e.id) || []).length).map((e) => e.ref);
+  journal.evt('db', 'vue-reconstruite', {
+    force, oeuvres: effectives.length, archivees: archive.size, overrides: Object.keys(overrides).length,
+    locales: effectives.filter((e) => e.est_locale).length, sansMasque: sansMasque.length ? sansMasque : undefined,
+    ms: Date.now() - t0
+  }, sansMasque.length ? 'WARN' : 'DEBUG');
 }
 
 /**

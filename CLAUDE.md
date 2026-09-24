@@ -228,7 +228,41 @@ conflit quand une MAJ de pack corrige un champ que l'utilisateur avait déjà
 surchargé (`user_overrides.valeur_source` = la valeur du pack au moment de la
 correction).
 
+## Journal et rapport d'erreur
+
+- **Journal** (`src/main/journal.js`) : `%APPDATA%\Tuiles et Toiles\logs\journal.log`
+  (`data/logs/` en dev), 5 fichiers × 5 Mo. Une ligne par événement :
+  `horodatage NIVEAU domaine évènement s=<session> {json}` — filtrer par niveau
+  (`DEBUG`/`INFO`/`WARN`/`ERREUR`), domaine (`app ipc ui db edition image jeu synchro drive
+  sauvegarde maj rapport`) ou session. API : `evt(domaine, quoi, données, niveau)`,
+  `avertir`, `erreur(domaine, quoi, e, contexte)` (message + code + pile), `chrono`,
+  `decrireTexte(s)` (longueur, alphabets — cyrillique, emoji… —, contrôles, invisibles,
+  caractères interdits dans un nom de fichier). Clés de type jeton → `***`. **Règle :
+  toute nouvelle action utilisateur ou étape système journalise ce qui permettrait de
+  comprendre un échec** (entrées décrites, durée, résultat, erreur avec contexte).
+- **Couverture automatique** : chaque canal IPC passe par `gerer()` (index.js) — args
+  résumés, durée, résultat, erreur ; lectures en boucle en DEBUG. Rendu (`main.jsx`) :
+  chaque clic (élément, libellé, zone), erreurs JS, promesses rejetées ;
+  `window.api.evt(domaine, quoi, données, niveau)` pour le reste. Drive : chaque requête
+  HTTP (méthode, chemin, `q`, statut, ms, octets), chaque étape OAuth. Synchro : une ligne
+  par étape + bilan par appareil + images une à une + conflits ouverts ; une image en
+  échec ne bloque plus la synchro. Démarrage : `depuisLancementMs` à l'ouverture de la base
+  et à l'affichage de la fenêtre (mesure du problème de lenteur).
+- **Rapport d'erreur** (`src/main/rapport.js`, Options → « Signaler un problème ») :
+  formulaire (sujet, depuis quand, reproductible, description, email de contact
+  facultatif) → zip dans `Documents\Tuiles et Toiles - rapports\` (LISEZMOI, `rapport.txt`,
+  `rapport.json`, `journaux/` **masqués** : utilisateur Windows, nom du poste, emails —
+  les textes des tuiles restent) → aperçu → messagerie par défaut via `mailto:` (objet +
+  corps pré-remplis) + dossier du zip ouvert, à glisser en pièce jointe (mailto ne joint
+  rien). Repli : « Copier le texte ». Destinataire `wn7pocu65@mozmail.com` (relais
+  Firefox Relay). Objet : `[T&T rapport] <sujet> — v<version> — <date heure>` (préfixe
+  fixe pour le filtre de messagerie).
+
 ## Pièges de l'environnement
+
+- **Séquences `\u` dans les outils d'écriture.** Les outils d'édition de Claude décodent
+  `\uXXXX` en caractère réel : une regex écrite ainsi devient illisible (voire cassée par
+  un U+2028). Générer ces lignes par script (`chr(92) + 'u200B'`).
 
 - **Ports réservés.** Vite tourne sur **5500** : cette machine réserve des
   plages (Hyper-V) dont 4173 et 5173. Un `listen EACCES` vient de là.

@@ -16,6 +16,7 @@
  */
 
 const fs = require('fs');
+const journal = require('./journal');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -62,17 +63,25 @@ async function verifier() {
       signal: ctl.signal
     });
     clearTimeout(minuteur);
-    if (!res.ok) return { erreur: 'GitHub a répondu ' + res.status + '.', actuelle };
+    if (!res.ok) {
+      journal.avertir('maj', 'github-refus', { status: res.status, limite: res.headers.get('x-ratelimit-remaining') });
+      return { erreur: 'GitHub a répondu ' + res.status + '.', actuelle };
+    }
     r = await res.json();
-  } catch {
+  } catch (e) {
+    journal.evt('maj', 'github-injoignable', { erreur: e.message, nom: e.name }, 'WARN');
     return { erreur: 'Impossible de joindre GitHub (hors ligne ?).', actuelle };
   }
+  journal.evt('maj', 'derniere-release', {
+    actuelle, tag: r.tag_name, publiee: r.published_at, assets: (r.assets || []).map((a) => ({ nom: a.name, octets: a.size, digest: !!a.digest }))
+  });
 
   const version = String(r.tag_name || '').replace(/^v/, '');
   if (!versionSuperieure(version, actuelle)) return { aJour: true, actuelle };
 
   const exe = (r.assets || []).find((a) => MOTIF_EXE.test(a.name));
   if (!exe || !String(exe.browser_download_url).startsWith(PREFIXE_URL)) {
+    journal.avertir('maj', 'exe-absent', { version, motif: String(MOTIF_EXE) });
     return { erreur: 'La version ' + version + ' ne contient pas d’exe téléchargeable.', actuelle };
   }
   const digest = String(exe.digest || '');
@@ -111,6 +120,8 @@ async function telecharger(surProgression) {
   const cible = path.join(dossierCible(), trouvee.nom);
   if (path.resolve(cible) === path.resolve(exeCourant())) return { erreur: 'Déjà sur cette version.' };
   const part = cible + '.part';
+  const t0 = Date.now();
+  journal.evt('maj', 'telechargement:debut', { version: trouvee.version, cible, octets: trouvee.taille, sha256: !!trouvee.sha256 });
 
   let fd = null;
   try {
@@ -140,8 +151,10 @@ async function telecharger(surProgression) {
     fs.renameSync(part, cible);
     pret = cible;
     if (surProgression) surProgression(recu, trouvee.taille);
+    journal.evt('maj', 'telechargement:fin', { cible, octets: recu, ms: Date.now() - t0, empreinteVerifiee: !!trouvee.sha256 });
     return { ok: true, chemin: cible };
   } catch (e) {
+    journal.erreur('maj', 'telechargement', e, { cible, ms: Date.now() - t0 });
     if (fd !== null) { try { fs.closeSync(fd); } catch { /* deja ferme */ } }
     try { fs.rmSync(part, { force: true }); } catch { /* deja parti */ }
     return { erreur: e.message || String(e) };
@@ -156,8 +169,10 @@ function installer() {
   try {
     fs.writeFileSync(marqueur, JSON.stringify({ ancien: exeCourant(), nouveau: pret }));
     spawn(pret, [], { detached: true, stdio: 'ignore', cwd: path.dirname(pret) }).unref();
+    journal.evt('maj', 'installation-lancee', { ancien: exeCourant(), nouveau: pret });
     return { ok: true };
   } catch (e) {
+    journal.erreur('maj', 'installation', e, { nouveau: pret });
     return { erreur: e.message || String(e) };
   }
 }
@@ -187,10 +202,10 @@ function nettoyerApresMaj(journal) {
     try {
       fs.rmSync(m.ancien, { force: true });
       fs.rmSync(marqueur, { force: true });
-      if (journal) journal.ligne('maj ancien exe supprime', { ancien: m.ancien });
+      if (journal) journal.evt('maj', 'ancien-exe-supprime', { ancien: m.ancien });
     } catch (e) {
       if (essais < 30) setTimeout(essayer, 2000);
-      else if (journal) journal.ligne('maj ancien exe non supprime', { ancien: m.ancien, erreur: e.message });
+      else if (journal) journal.avertir('maj', 'ancien-exe-non-supprime', { ancien: m.ancien, erreur: e.message });
     }
   };
   setTimeout(essayer, 3000);

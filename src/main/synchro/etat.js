@@ -28,6 +28,7 @@
 const db = require('../db');
 const moteur = require('./moteur');
 const { creerHorloge, formater } = require('./hlc');
+const journal = require('../journal');
 
 const { CHAMPS_LOCALE } = moteur;
 
@@ -74,6 +75,7 @@ function lot(fn) {
 function migrerStats(d) {
   const cols = d.prepare('PRAGMA table_info(user_stats)').all().map((c) => c.name);
   if (!cols.includes('appareil')) {
+    journal.evt('db', 'migration-stats-par-appareil', { lignes: d.prepare('SELECT COUNT(*) n FROM user_stats').get().n });
     d.exec(`
       ALTER TABLE user_stats RENAME TO user_stats_v1;
       CREATE TABLE user_stats (
@@ -166,10 +168,17 @@ function preparer(d) {
       const n = genese(d);
       d.prepare("INSERT OR REPLACE INTO sync (cle, valeur) VALUES ('genese_faite', ?)")
         .run(JSON.stringify({ le: new Date().toISOString(), appareil: appareil.id, ops: n }));
+      journal.evt('synchro', 'genese', { appareil: appareil.id, ops: n });
     }
   })();
   const max = d.prepare('SELECT MAX(hlc) h FROM changements').get().h;
   horloge.caler(max);
+  journal.evt('synchro', 'journal-local', {
+    appareil: appareil.id, prefixe: appareil.prefixe_ref, derniereHlc: max,
+    ops: d.prepare('SELECT COUNT(*) n FROM changements').get().n,
+    aPousser: d.prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
+    conflitsOuverts: d.prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n
+  });
 }
 
 module.exports = {

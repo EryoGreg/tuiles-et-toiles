@@ -1089,3 +1089,20 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   background: var(--trait);
 }
 .maj-jauge span { display: block; height: 100%; background: var(--valide); transition: width 0.2s; }
+
+/* --- rapport d'erreur -------------------------------------------------------- */
+
+.boite-rapport { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.rapport-champ { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; font-size: 13px; color: var(--attenue); }
+.rapport-champ em { font-style: normal; color: var(--discret); }
+.rapport-champ select.editeur-input { height: 36px; cursor: pointer; }
+.rapport-champ .rapport-description { min-height: 96px; resize: vertical; }
+.rapport-apercu { margin: 0 0 16px; font-size: 13px; color: var(--attenue); }
+.rapport-apercu summary { cursor: pointer; margin-bottom: 8px; }
+.rapport-apercu pre {
+  max-height: 220px; overflow: auto; margin: 0 0 10px; padding: 10px;
+  background: var(--surface-2); border: 1px solid var(--trait); border-radius: 7px;
+  font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word;
+  user-select: text;
+}
+.rapport-actions { flex-wrap: wrap; }
