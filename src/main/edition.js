@@ -111,8 +111,8 @@ function tuile(id) {
 
 /**
  * Applique des changements a une tuile.
- *  - tuile locale : UPDATE direct de oeuvres_locales
- *  - tuile du pack : ecrit/retire des lignes user_overrides (comparaison a la
+ *  - tuile locale : un champ journalise par champ modifie
+ *  - tuile du pack : ecrit/retire des overrides (comparaison a la
  *    valeur DU PACK, pas a la valeur effective). Remettre un champ a la valeur
  *    du pack retire l'override. Vider l'image d'une tuile du pack = revenir a
  *    l'image du pack.
@@ -121,7 +121,7 @@ function modifier(id, champs = {}) {
   const d = db.instance();
 
   if (id.startsWith('local:')) {
-    if (!etat.valeur('locale', id, '_existe')) return { erreur: 'oeuvre introuvable' };
+    if (!etat.existe(id)) return { erreur: 'oeuvre introuvable' };
     etat.lot(() => {
       for (const c of CHAMPS) etat.ecrire('locale', id, c, texte(champs, c) || null);
     });
@@ -149,7 +149,7 @@ function modifier(id, champs = {}) {
 
 /**
  * Supprime une tuile.
- *  - locale : pierre tombale _existe = NULL (la ligne quitte oeuvres_locales,
+ *  - locale : pierre tombale _existe = { vu } (la ligne quitte oeuvres_locales,
  *             ses champs restent dans le registre) + tags retires, stats effacees
  *  - pack   : archive (masquee, jamais vraiment supprimee)
  */
@@ -160,7 +160,7 @@ function supprimer(id) {
       for (const r of d.prepare("SELECT champ FROM etat WHERE entite='tag' AND cle=? AND valeur IS NOT NULL").all(id)) {
         etat.ecrire('tag', id, r.champ, null);
       }
-      etat.ecrire('locale', id, '_existe', null);
+      etat.supprimerLocale(id);
       d.prepare('DELETE FROM user_stats WHERE oeuvre_id=?').run(id);
     });
     appliquer();

@@ -50,11 +50,20 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     journal `changements` + `conflits`. **Toute écriture synchronisable passe par
     `etat.ecrire()`**, qui projette dans `user_tags` / `user_archive` / `user_overrides` /
     `oeuvres_locales` (le code de lecture ne change pas). Suppression locale = pierre tombale
-    `_existe = NULL`, champs gardés au registre. `user_stats` = un compteur **par appareil**
+    `_existe = {vu}` (É2b), champs gardés au registre. `user_stats` = un compteur **par appareil**
     (total = SUM), hors journal. Genèse à la première ouverture d'une base : une op par ligne
     existante, HLC = **date réelle** de la ligne. `npm test`.
-  - É2b moteur de fusion pur (`appliquer` / `tirer`, LWW par HLC, conflit si ni l'un ni
-    l'autre ne s'est vu) + test de propriété 3 appareils, transport mémoire.
+  - É2b ✅ moteur de fusion (`synchro/moteur.js`, instanciable : `ctx = {d, appareil,
+    horloge}` ; `etat.js` = l'appareil courant). `echange.js` pousse / tire via un transport
+    (`listerAppareils`, `listerSegments`, `lireSegment`, `ecrireSegment` sans écrasement).
+    Deux règles, fonctions de l'**ensemble** des ops (pas de leur ordre) : valeur = op de
+    plus grande HLC ; conflit = plusieurs **têtes** de valeurs différentes (tête = op que
+    personne ne cite dans `base` ni `vus`). Toute écriture locale cite toutes les têtes
+    (`changements.vus`) → éditer ou trancher ferme le conflit partout. Pierre tombale
+    `_existe = {vu}` : op de champ > `vu` = « supprimée ici, modifiée là-bas ». Conflits de
+    champ d'une tuile supprimée masqués (réapparaissent à la restauration). Ops jamais
+    regroupées à l'envoi. Test de propriété : 3 appareils, horloges décalées,
+    `tests/synchro-e2b.test.js [n] [graine]`.
   - É2c transport dossier local. É2d transport Drive : segments immuables
     `journaux/<id>/<hlc>.ndjson`, images nommées par sha256, `appareils/<id>.json`.
     Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).

@@ -9,12 +9,16 @@
  * (user_tags, user_archive, user_overrides, oeuvres_locales). Le code de
  * lecture ne change donc pas.
  *
+ * Ce module = l'appareil courant sur la base ouverte (db.instance()). La
+ * logique vit dans moteur.js, instanciable (plusieurs appareils en test).
+ *
  * Entites :
  *   locale    cle = local:<uuid>  champ = artiste…image | ref_local | _existe
  *   override  cle = p:…           champ = nom du champ   valeur = {valeur, valeur_source}
  *   archive   cle = p:…           champ = '_'            valeur = 1
  *   tag       cle = oeuvre_id     champ = livre | etoile | bad_smiley   valeur = 1
- * valeur NULL = absent (tag retire, override annule, tuile supprimee).
+ * valeur NULL = absent (tag retire, override annule).
+ * Tuile supprimee : _existe = { vu } (pierre tombale, voir moteur.js).
  *
  * Hors journal : user_stats (compteur par appareil, emis au push — E2d),
  * reglages (propres a chaque appareil), user_corrections (aucun ecrivain au
@@ -22,9 +26,10 @@
  */
 
 const db = require('../db');
-const { creerHorloge, formater, versIso } = require('./hlc');
+const moteur = require('./moteur');
+const { creerHorloge, formater } = require('./hlc');
 
-const CHAMPS_LOCALE = ['artiste', 'titre', 'date', 'lieu', 'description', 'tags', 'image'];
+const { CHAMPS_LOCALE } = moteur;
 
 let appareil = null;
 let horloge = null;
@@ -45,110 +50,20 @@ function lAppareil() {
   return appareil;
 }
 
-// --- lecture du registre ------------------------------------------------
-
-function parse(v) { return v == null ? null : JSON.parse(v); }
-
-/** Valeur courante d'un champ (null si absent). */
-function valeur(entite, cle, champ) {
-  const r = db.instance().prepare('SELECT valeur FROM etat WHERE entite=? AND cle=? AND champ=?')
-    .get(entite, cle, champ);
-  return r ? parse(r.valeur) : null;
+/** Contexte moteur de l'appareil courant sur la base ouverte. */
+function contexte() {
+  return { d: db.instance(), appareil: lAppareil(), horloge };
 }
 
-/** Tous les champs d'une cle : { champ: { valeur, hlc } }. */
-function lignes(entite, cle) {
-  const out = {};
-  for (const r of db.instance().prepare('SELECT champ, valeur, hlc FROM etat WHERE entite=? AND cle=?')
-    .all(entite, cle)) {
-    out[r.champ] = { valeur: parse(r.valeur), hlc: r.hlc };
-  }
-  return out;
-}
+const valeur = (entite, cle, champ) => moteur.valeur(contexte(), entite, cle, champ);
+const lignes = (entite, cle) => moteur.lignes(contexte(), entite, cle);
+const existe = (cle) => moteur.existe(contexte(), cle);
+const ecrire = (entite, cle, champ, val, opts) => moteur.ecrire(contexte(), entite, cle, champ, val, opts);
+const supprimerLocale = (cle) => moteur.supprimerLocale(contexte(), cle);
+const conflits = () => moteur.conflits(contexte());
+const resoudre = (id, choix) => moteur.resoudre(contexte(), id, choix);
 
-// --- projections ----------------------------------------------------------
-
-function projeterLocale(d, cle) {
-  const l = lignes('locale', cle);
-  if (!l._existe || l._existe.valeur == null) {
-    d.prepare('DELETE FROM oeuvres_locales WHERE id=?').run(cle);
-    return;
-  }
-  const row = { id: cle, ref_local: l.ref_local ? l.ref_local.valeur : null };
-  for (const c of CHAMPS_LOCALE) row[c] = l[c] && l[c].valeur != null ? String(l[c].valeur) : '';
-  // Dates derivees des HLC : creation = op _existe, modification = derniere op.
-  const derniere = Object.values(l).reduce((m, x) => (x.hlc > m ? x.hlc : m), '');
-  row.cree_le = versIso(l._existe.hlc);
-  row.modifie_le = versIso(derniere);
-  d.prepare(`INSERT INTO oeuvres_locales
-    (id, ref_local, artiste, titre, date, lieu, description, tags, image, cree_le, modifie_le)
-    VALUES (@id, @ref_local, @artiste, @titre, @date, @lieu, @description, @tags, @image, @cree_le, @modifie_le)
-    ON CONFLICT(id) DO UPDATE SET
-      ref_local=excluded.ref_local, artiste=excluded.artiste, titre=excluded.titre,
-      date=excluded.date, lieu=excluded.lieu, description=excluded.description,
-      tags=excluded.tags, image=excluded.image, cree_le=excluded.cree_le,
-      modifie_le=excluded.modifie_le`).run(row);
-}
-
-function projeter(d, entite, cle, champ, val, hlc) {
-  const t = versIso(hlc);
-  switch (entite) {
-    case 'locale':
-      return projeterLocale(d, cle);
-    case 'override':
-      if (val == null) {
-        d.prepare('DELETE FROM user_overrides WHERE oeuvre_id=? AND champ=?').run(cle, champ);
-      } else {
-        d.prepare(`INSERT INTO user_overrides (oeuvre_id, champ, valeur, valeur_source, cree_le, modifie_le)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(oeuvre_id, champ) DO UPDATE SET
-            valeur=excluded.valeur, valeur_source=excluded.valeur_source, modifie_le=excluded.modifie_le`)
-          .run(cle, champ, val.valeur, val.valeur_source, t, t);
-      }
-      return;
-    case 'archive':
-      if (val == null) d.prepare('DELETE FROM user_archive WHERE oeuvre_id=?').run(cle);
-      else d.prepare('INSERT OR IGNORE INTO user_archive (oeuvre_id, cree_le) VALUES (?, ?)').run(cle, t);
-      return;
-    case 'tag':
-      if (val == null) d.prepare('DELETE FROM user_tags WHERE oeuvre_id=? AND tag=?').run(cle, champ);
-      else d.prepare('INSERT OR REPLACE INTO user_tags (oeuvre_id, tag, cree_le) VALUES (?, ?, ?)').run(cle, champ, t);
-      return;
-    default:
-      throw new Error('synchro/etat : entite inconnue ' + entite);
-  }
-}
-
-// --- ecriture -------------------------------------------------------------
-
-/**
- * Ecrit un champ synchronise. No-op (null) si la valeur ne change pas : pas
- * d'op fantome dans le journal.
- * @param {*} val valeur JSON-serialisable, null/undefined = absent
- * @returns {string|null} HLC de l'op emise
- */
-function ecrire(entite, cle, champ, val) {
-  lAppareil();
-  const d = db.instance();
-  return d.transaction(() => {
-    const cour = d.prepare('SELECT hlc, valeur FROM etat WHERE entite=? AND cle=? AND champ=?')
-      .get(entite, cle, champ);
-    const v = val == null ? null : JSON.stringify(val);
-    if (cour ? cour.valeur === v : v == null) return null;
-    const h = horloge.tic();
-    const base = cour ? cour.hlc : null;
-    d.prepare(`INSERT INTO changements (hlc, appareil, entite, cle, champ, valeur, base, pousse)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0)`).run(h, appareil.id, entite, cle, champ, v, base);
-    d.prepare(`INSERT INTO etat (entite, cle, champ, valeur, hlc, base) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(entite, cle, champ) DO UPDATE SET
-        valeur=excluded.valeur, hlc=excluded.hlc, base=excluded.base`)
-      .run(entite, cle, champ, v, h, base);
-    projeter(d, entite, cle, champ, parse(v), h);
-    return h;
-  })();
-}
-
-/** Regroupe plusieurs ecrire() dans une seule transaction. */
+/** Regroupe plusieurs ecritures dans une seule transaction. */
 function lot(fn) {
   return db.instance().transaction(fn)();
 }
@@ -244,6 +159,8 @@ function preparer(d) {
   lAppareil();
   d.transaction(() => {
     migrerStats(d);
+    const cols = d.prepare('PRAGMA table_info(changements)').all().map((c) => c.name);
+    if (!cols.includes('vus')) d.exec('ALTER TABLE changements ADD COLUMN vus TEXT');
     const faite = d.prepare("SELECT valeur FROM sync WHERE cle = 'genese_faite'").get();
     if (!faite) {
       const n = genese(d);
@@ -256,5 +173,6 @@ function preparer(d) {
 }
 
 module.exports = {
-  configurer, appareil: lAppareil, valeur, lignes, ecrire, lot, CHAMPS_LOCALE
+  configurer, contexte, appareil: lAppareil, valeur, lignes, existe, ecrire, supprimerLocale,
+  lot, conflits, resoudre, CHAMPS_LOCALE
 };

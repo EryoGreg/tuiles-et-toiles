@@ -187,7 +187,8 @@ test('supprimer une tuile locale : pierre tombale, champs gardes au registre, ta
   edition.supprimer(idLocale);
   assert.equal(db.instance().prepare('SELECT COUNT(*) n FROM oeuvres_locales WHERE id=?').get(idLocale).n, 0);
   assert.equal(db.oeuvre(idLocale), undefined);
-  assert.equal(etat.valeur('locale', idLocale, '_existe'), null);
+  assert.equal(etat.existe(idLocale), false);
+  assert.ok(etat.valeur('locale', idLocale, '_existe').vu, 'pierre tombale { vu }');
   assert.equal(etat.valeur('locale', idLocale, 'titre'), 'Nympheas');
   assert.deepEqual(db.tagsDe(idLocale), []);
 });

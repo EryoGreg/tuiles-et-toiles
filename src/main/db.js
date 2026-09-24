@@ -142,7 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_effectives_recherche ON oeuvres_effectives(recher
 -- Synchro (synchro/etat.js). etat = derniere version connue de chaque champ
 -- synchronise : c'est la source de verite, user_tags / user_archive /
 -- user_overrides / oeuvres_locales en sont des projections. Garde aussi les
--- valeurs d'une tuile supprimee (pierre tombale _existe = NULL) pour pouvoir
+-- valeurs d'une tuile supprimee (pierre tombale _existe = {vu}) pour pouvoir
 -- la restaurer. valeur = JSON, NULL = absent.
 CREATE TABLE IF NOT EXISTS etat (
   entite  TEXT NOT NULL,   -- 'locale' | 'override' | 'archive' | 'tag'
@@ -164,13 +164,15 @@ CREATE TABLE IF NOT EXISTS changements (
   champ     TEXT NOT NULL,
   valeur    TEXT,
   base      TEXT,
+  vus       TEXT,              -- JSON : autres tetes du champ connues a l'ecriture
   pousse    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_chg_cle ON changements(entite, cle, champ);
 CREATE INDEX IF NOT EXISTS idx_chg_a_pousser ON changements(pousse) WHERE pousse = 0;
 
 -- Modifications concurrentes d'un meme champ (aucune n'a vu l'autre).
--- Remplie par la fusion (E2b), videe par l'utilisateur.
+-- Deduite du journal (synchro/moteur.js) : ouverte tant que le champ a
+-- plusieurs tetes de valeurs differentes, fermee par une ecriture qui les cite.
 CREATE TABLE IF NOT EXISTS conflits (
   id               INTEGER PRIMARY KEY,
   entite           TEXT NOT NULL,
@@ -183,6 +185,8 @@ CREATE TABLE IF NOT EXISTS conflits (
   detecte_le       TEXT NOT NULL,
   resolu           INTEGER NOT NULL DEFAULT 0
 );
+-- Au plus un conflit ouvert par champ (voir moteur.recalculerConflit).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conflit_ouvert ON conflits(entite, cle, champ) WHERE resolu = 0;
 `;
 
 const CHAMPS_TXT = ['artiste', 'titre', 'date', 'lieu', 'description', 'tags'];
