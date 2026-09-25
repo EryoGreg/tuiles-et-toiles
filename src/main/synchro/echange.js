@@ -22,6 +22,37 @@ const moteur = require('./moteur');
 
 const COLONNES = 'hlc, appareil, entite, cle, champ, valeur, base, vus';
 
+/**
+ * Resume d'un lot d'ops en termes utilisateur (le bilan affiche). Une tuile
+ * creee = une dizaine d'ops (existence, numero, titre…) : compter les ops
+ * donnerait « 10 modifications » pour une seule tuile. Les compteurs de vues
+ * (stat) ne sont pas des changements pour l'utilisateur.
+ * @param {Array} ops  ops appliquees (reception) ou envoyees
+ * @param {(op) => *} existaitAvant  pour une op _existe : valeur d'existence
+ *   precedente (1, pierre tombale, ou null si tuile inconnue)
+ */
+function resumer(ops, existaitAvant) {
+  const nouvelles = new Set(), modifiees = new Set(), supprimees = new Set(), restaurees = new Set();
+  const corrections = new Set();
+  let marques = 0, archives = 0;
+  for (const op of ops) {
+    const v = op.valeur == null ? null : JSON.parse(op.valeur);
+    if (op.entite === 'locale' && op.champ === '_existe') {
+      const avant = existaitAvant(op);
+      if (v === 1) (avant == null ? nouvelles : restaurees).add(op.cle);
+      else supprimees.add(op.cle);
+    } else if (op.entite === 'locale') modifiees.add(op.cle);
+    else if (op.entite === 'override') corrections.add(op.cle);
+    else if (op.entite === 'tag') marques++;
+    else if (op.entite === 'archive') archives++;
+  }
+  for (const c of [...nouvelles, ...supprimees, ...restaurees]) modifiees.delete(c);
+  return {
+    tuilesNouvelles: nouvelles.size, tuilesModifiees: modifiees.size, tuilesSupprimees: supprimees.size,
+    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives
+  };
+}
+
 function curseur(ctx, app) {
   const r = ctx.d.prepare('SELECT valeur FROM sync WHERE cle=?').get('curseur:' + app);
   return r ? r.valeur : null;
@@ -41,7 +72,9 @@ async function pousser(ctx, transport) {
   // Borne par `derniere` : une ecriture locale survenue pendant l'envoi
   // reste a pousser.
   ctx.d.prepare('UPDATE changements SET pousse=1 WHERE pousse=0 AND hlc <= ?').run(derniere);
-  return { poussees: ops.length, segment: nom };
+  // Envoi : une existence sans version precedente (base) = tuile creee ici.
+  const resume = resumer(ops, (op) => (op.base ? 1 : null));
+  return { poussees: ops.length, segment: nom, resume };
 }
 
 /**
@@ -71,19 +104,25 @@ async function tirer(ctx, transport) {
   }
 
   const bilan = {};
+  const appliquees = [];
+  const existenceAvant = new Map();
   ctx.d.transaction(() => {
     recues.sort((a, b) => (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
     for (const op of recues) {
+      if (op.entite === 'locale' && op.champ === '_existe' && !existenceAvant.has(op.cle)) {
+        existenceAvant.set(op.cle, moteur.valeur(ctx, 'locale', op.cle, '_existe'));
+      }
       const r = moteur.appliquer(ctx, op);
       bilan[r] = (bilan[r] || 0) + 1;
+      if (r === 'avance') appliquees.push(op);
     }
     const maj = ctx.d.prepare('INSERT OR REPLACE INTO sync (cle, valeur) VALUES (?, ?)');
     for (const [app, nom] of Object.entries(curseurs)) maj.run('curseur:' + app, nom);
   })();
 
-  const appliquees = bilan.avance || 0;
   return {
-    appliquees,
+    appliquees: bilan.avance || 0,
+    resume: resumer(appliquees, (op) => existenceAvant.get(op.cle)),
     rejetees: bilan.rejetee || 0,
     conflits: ctx.d.prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
     bilan,
@@ -93,4 +132,4 @@ async function tirer(ctx, transport) {
   };
 }
 
-module.exports = { pousser, tirer };
+module.exports = { pousser, tirer, resumer };

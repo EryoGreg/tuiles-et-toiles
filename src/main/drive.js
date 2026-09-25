@@ -127,7 +127,9 @@ async function serveurRedirection(attendu) {
     try { serveur.close(); } catch { /* deja ferme */ }
     rejeter(new Error('Délai dépassé — connexion abandonnée.'));
   }, 180000);
-  promesse.finally(() => clearTimeout(minuteur));
+  // .catch : la promesse derivee de finally rejetterait sinon sans gestionnaire
+  // (« unhandledRejection » au delai depasse) ; l'appelant gere l'erreur.
+  promesse.finally(() => clearTimeout(minuteur)).catch(() => {});
   return { port: serveur.address().port, promesse };
 }
 

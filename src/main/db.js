@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS oeuvres_effectives (
   hauteur     INTEGER,
   octets      INTEGER,
   recherche   TEXT,
-  masques     TEXT
+  masques     TEXT,
+  cree_le     TEXT                -- tuile locale : sa creation ; oeuvre du pack : NULL
 );
 CREATE INDEX IF NOT EXISTS idx_effectives_recherche ON oeuvres_effectives(recherche);
 
@@ -213,6 +214,12 @@ function ouvrir(cheminUser, cheminPack) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_USER);
+  // Vue d'avant la date d'ajout : colonne ajoutee (la vue est derivee, elle
+  // se remplit a la reconstruction).
+  if (!db.prepare('PRAGMA table_info(oeuvres_effectives)').all().some((c) => c.name === 'cree_le')) {
+    db.exec('ALTER TABLE oeuvres_effectives ADD COLUMN cree_le TEXT');
+    journal.evt('db', 'migration-vue-date-ajout');
+  }
   db.prepare('ATTACH DATABASE ? AS pack').run(cheminPack);
   for (const fn of apresOuverture) fn(db);
   reconstruireVue();   // au lancement : peut sauter si la couche user est vide
@@ -282,13 +289,13 @@ function reconstruireVue({ force = false } = {}) {
     if (archive.has(o.id)) continue;
     const ov = overrides[o.id] || {};
     const e = { id: o.id, ref: o.ref, est_locale: 0, image: ('image' in ov) ? ov.image : o.image,
-      largeur: o.largeur, hauteur: o.hauteur, octets: o.octets };
+      largeur: o.largeur, hauteur: o.hauteur, octets: o.octets, cree_le: null };
     for (const c of CHAMPS_TXT) e[c] = (c in ov) ? ov[c] : o[c];
     effectives.push(e);
   }
   for (const o of d.prepare('SELECT * FROM oeuvres_locales').all()) {
     const e = { id: o.id, ref: o.ref_local, est_locale: 1, image: o.image,
-      largeur: o.largeur, hauteur: o.hauteur, octets: o.octets };
+      largeur: o.largeur, hauteur: o.hauteur, octets: o.octets, cree_le: o.cree_le };
     for (const c of CHAMPS_TXT) e[c] = o[c];
     effectives.push(e);
   }
@@ -297,10 +304,10 @@ function reconstruireVue({ force = false } = {}) {
 
   const ins = d.prepare(`INSERT INTO oeuvres_effectives
     (id, ref, est_locale, artiste, titre, date, lieu, description, tags, image,
-     largeur, hauteur, octets, recherche, masques)
+     largeur, hauteur, octets, recherche, masques, cree_le)
     VALUES
     (@id, @ref, @est_locale, @artiste, @titre, @date, @lieu, @description, @tags, @image,
-     @largeur, @hauteur, @octets, @recherche, @masques)`);
+     @largeur, @hauteur, @octets, @recherche, @masques, @cree_le)`);
   d.transaction(() => {
     d.exec('DELETE FROM oeuvres_effectives');
     for (const e of effectives) {

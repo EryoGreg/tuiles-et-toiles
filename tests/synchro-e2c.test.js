@@ -252,6 +252,11 @@ async function boutEnBout() {
     assert.equal(db.oeuvre(idsPC[0]).ref, 'L1');
     const m1 = db.instance().prepare("SELECT * FROM oeuvres_effectives WHERE ref='M1'").get();
     assert.equal(m1.titre, 'Sculpture salle 12');
+    // Date d'ajout (tri de la Bibliotheque) : celle de la creation, sur le telephone.
+    assert.ok(m1.cree_le, 'tuile recue datee');
+    const l1 = db.instance().prepare("SELECT cree_le FROM oeuvres_effectives WHERE ref='L1'").get();
+    assert.ok(l1.cree_le < m1.cree_le, 'L1 (creee avant) plus ancienne que M1');
+    assert.equal(db.instance().prepare("SELECT COUNT(*) n FROM oeuvres_effectives WHERE est_locale=0 AND cree_le IS NOT NULL").get().n, 0);
     assert.equal(r.imagesRecues, 1);
     assert.equal(r.conflits, 1, 'titre corrige des deux cotes');
     assert.equal(service.etat().conflits, 1);

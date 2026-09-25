@@ -255,6 +255,49 @@ async function testA(nom, fn) {
     assert.ok(m.options.attachments.some((a) => a.nom === 'journal.log.txt'), 'le plus recent toujours joint');
   });
 
+  await testA('page 404 intermittente de Google : reessaie et passe au 3e essai', async () => {
+    const g = scriptGoogle();
+    rapport._pauses(async () => {});
+    let appels = 0;
+    const page404 = { ok: false, status: 404, headers: { get: () => 'text/html' },
+      text: async () => '<!DOCTYPE html><html lang="fa" dir="rtl"><head></head></html>' };
+    configurer(async (url, opts) => (++appels < 3 ? page404 : g.fetch(url, opts)));
+    const r = await rapport.envoyer(FORM);
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(appels, 3);
+    assert.equal(g.mails.length, 1);
+  });
+
+  await testA('404 persistante : en attente, message clair (VPN ?)', async () => {
+    rapport._pauses(async () => {});
+    const page404 = { ok: false, status: 404, headers: { get: () => 'text/html' },
+      text: async () => '<!DOCTYPE html><html lang="fa" dir="rtl"><head></head></html>' };
+    configurer(async () => page404);
+    const r = await rapport.envoyer(FORM);
+    assert.equal(r.enAttente, true);
+    assert.match(r.erreur, /Google a répondu 404/);
+    assert.match(r.erreur, /VPN/);
+    fs.rmSync(path.join(DOSSIER, 'en-attente'), { recursive: true, force: true });
+  });
+
+  await testA('reponse perdue apres envoi : le reessai n\'envoie pas de doublon', async () => {
+    const g = scriptGoogle();
+    rapport._pauses(async () => {});
+    let appels = 0;
+    const page404 = { ok: false, status: 404, headers: { get: () => 'text/html' },
+      text: async () => '<!DOCTYPE html><html lang="fa"></html>' };
+    // 1er appel : le script tourne (mail parti) mais la reponse se perd.
+    configurer(async (url, opts) => {
+      appels++;
+      const rep = await g.fetch(url, opts);
+      return appels === 1 ? page404 : rep;
+    });
+    const r = await rapport.envoyer(FORM);
+    assert.equal(r.ok, true);
+    assert.equal(appels, 2);
+    assert.equal(g.mails.length, 1, 'un seul mail malgre le reessai');
+  });
+
   await testA('cle refusee par le script -> rapport mis en attente', async () => {
     const g = scriptGoogle();
     g.proprietes.set('CLE', 'autre');

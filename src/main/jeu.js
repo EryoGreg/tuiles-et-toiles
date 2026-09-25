@@ -182,7 +182,10 @@ function completer(o) {
     tagsUtilisateur: db.tagsDe(o.id),
     // Present uniquement quand l'oeuvre vient d'une liste par tag : date
     // d'ajout du tag, cle du tri chronologique cote rendu.
-    creeLe: o.tag_cree_le || null
+    creeLe: o.tag_cree_le || null,
+    // Date d'ajout de la tuile (locale : sa creation, sur l'appareil ou elle
+    // a ete creee ; oeuvre du pack : null = plus ancienne que tout ajout).
+    ajouteLe: o.cree_le || null
   };
 }
 

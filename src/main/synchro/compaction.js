@@ -109,7 +109,10 @@ async function rattraper(ctx, t, fiches) {
   const { trous, premiere } = besoins(ctx, fiches);
   const aTrous = Object.keys(trous).length > 0;
   if (!premiere && !aTrous) return null;
+  const moiMeme = ctx.appareil.id;
   const candidats = snapshotsAnnonces(fiches)
+    // Premiere synchro sans trou : son propre snapshot n'apprend rien.
+    .filter((s) => aTrous || s.appareil !== moiMeme)
     .filter((s) => Object.entries(trous).every(([a, p]) => s.vecteur[a] && s.vecteur[a] >= p))
     .sort((a, b) => (a.nom < b.nom ? 1 : -1));
   if (!candidats.length) return aTrous ? { manque: trous } : null;

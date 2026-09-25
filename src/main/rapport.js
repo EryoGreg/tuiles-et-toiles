@@ -31,7 +31,13 @@ const lisezmoi = require('./lisezmoi');
 
 const DESTINATAIRE = 'wn7pocu65@mozmail.com';
 const PREFIXE_OBJET = '[T&T rapport]';
-const DELAI_ENVOI = 90000;
+const DELAI_ENVOI = 90000;       // par tentative
+// Google renvoie parfois, par intermittence, une page 404 au lieu de la
+// reponse du script (constate derriere un VPN dont la sortie est localisee
+// dans un pays ou Apps Script est bloque). On reessaie avant d'abandonner.
+const ESSAIS = 3;
+const PAUSES = [3000, 8000];
+let pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const MAX_MAILTO = 1900;   // au-dela, Windows / certains clients tronquent le lien
 
 const SUJETS = [
@@ -215,20 +221,55 @@ function charge(r) {
   };
 }
 
-async function poster(corpsJson) {
+/** Une tentative. err.reessayable : la meme requete peut passer au coup suivant. */
+async function tenter(corpsJson) {
   const ctl = new AbortController();
   const minuteur = setTimeout(() => ctl.abort(), DELAI_ENVOI);
+  let res;
+  let txt;
   try {
-    const res = await cfg.fetch(cfg.config.url, {
+    res = await cfg.fetch(cfg.config.url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corpsJson, signal: ctl.signal
     });
-    const txt = await res.text();
-    let rep = null;
-    try { rep = JSON.parse(txt); } catch { /* page HTML : mauvais deploiement */ }
-    if (!res.ok || !rep) throw new Error('Réception ' + res.status + (rep ? '' : ' (réponse inattendue : le script est-il déployé en « Tout le monde » ?)'));
-    if (!rep.ok) throw new Error('Refus du service : ' + rep.erreur);
-    return rep;
+    txt = await res.text();
+  } catch (e) {
+    const err = new Error(e.name === 'AbortError' ? 'délai dépassé' : e.message);
+    err.reessayable = true;
+    throw err;
   } finally { clearTimeout(minuteur); }
+  let rep = null;
+  try { rep = JSON.parse(txt); } catch { /* page HTML de Google, pas la reponse du script */ }
+  if (rep && rep.ok) return rep;
+  if (rep) {
+    const err = new Error('Refus du service : ' + rep.erreur);
+    err.reessayable = /trop de rapports/.test(String(rep.erreur));
+    throw err;
+  }
+  const langue = (/<html[^>]*\blang="([^"]+)"/i.exec(txt || '') || [])[1];
+  const err = new Error('Google a répondu ' + res.status + ' au lieu du script de réception'
+    + (langue && !/^fr|^en/i.test(langue) ? ' (page en langue « ' + langue + ' » : réseau ou VPN localisé à l’étranger ?)' : '')
+    + '. Le rapport repartira tout seul.');
+  err.reessayable = true;
+  err.detail = { status: res.status, type: res.headers && res.headers.get ? res.headers.get('content-type') : null, langue, debut: String(txt || '').slice(0, 120) };
+  throw err;
+}
+
+/** Envoi avec reessais (pannes intermittentes de Google, reseau instable). */
+async function poster(corpsJson) {
+  let derniere;
+  for (let i = 0; i < ESSAIS; i++) {
+    try {
+      const rep = await tenter(corpsJson);
+      if (i) journal.evt('rapport', 'envoi-reussi-apres-essais', { essais: i + 1 });
+      return rep;
+    } catch (e) {
+      derniere = e;
+      journal.avertir('rapport', 'essai-echoue', { essai: i + 1, sur: ESSAIS, erreur: e.message, detail: e.detail, reessayable: !!e.reessayable });
+      if (!e.reessayable || i === ESSAIS - 1) break;
+      await pause(PAUSES[i] || PAUSES[PAUSES.length - 1]);
+    }
+  }
+  throw derniere;
 }
 
 // --- rapports en attente (hors ligne) ------------------------------------------
@@ -318,7 +359,11 @@ function texteACopier(f) {
   return 'À : ' + DESTINATAIRE + '\nObjet : ' + r.objet + '\n\n' + r.corps;
 }
 
+/** Tests : pauses instantanees entre les essais. */
+function _pauses(fn) { pause = fn; }
+
 module.exports = {
+  _pauses, listerAttente,
   configurer, choix, apercu, envoyer, renvoyerEnAttente, texteACopier, masquer, resumeJournal, horodatage,
   construire, DESTINATAIRE, PREFIXE_OBJET, SUJETS, DEPUIS, REPRODUCTIBLE
 };

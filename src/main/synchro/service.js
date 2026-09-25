@@ -232,6 +232,7 @@ async function coeur(t, sorte) {
     const bilan = {
       le: new Date().toISOString(),
       poussees: c.pousse.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
+      envoye: c.pousse.resume || null, recu: r.resume || null,
       imagesEnvoyees: c.imagesEnvoyees, imagesRecues: c.imagesRecues,
       prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees,
       rattrapage: c.rattrapage ? (c.rattrapage.snapshot || 'impossible') : null,

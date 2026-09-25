@@ -25,6 +25,9 @@
  * Mettre a jour le code plus tard : Deployer -> Gerer les deploiements ->
  * crayon -> Version : « Nouvelle version » (l'URL ne change pas).
  *
+ * Doublons : un rapport deja recu (meme reference, 7 jours) n'est pas renvoye :
+ * l'application peut reessayer sans risque quand la reponse s'est perdue.
+ *
  * Garde-fous : cle partagee (arrete les envois au hasard ; elle est dans
  * l'exe, donc pas un vrai secret), 30 rapports par heure au plus, 45 Mo par
  * requete au plus, mail de 9 Mo au plus (limite du relais Firefox). Quota
@@ -51,6 +54,9 @@ function doPost(e) {
     var props = PropertiesService.getScriptProperties();
     var cle = props.getProperty('CLE');
     if (!cle || r.cle !== cle) return repondre({ ok: false, erreur: 'cle refusee' });
+    // Deja recu (reessai apres une reponse perdue en route) : ne pas renvoyer.
+    var cleRecu = r.id && r.id !== 'TEST' ? 'recu_' + String(r.id).slice(0, 60) : null;
+    if (cleRecu && props.getProperty(cleRecu)) return repondre({ ok: true, id: r.id, doublon: true });
     if (!quotaOk(props)) return repondre({ ok: false, erreur: 'trop de rapports, reessaie plus tard' });
 
     var objet = String(r.objet || '');
@@ -94,6 +100,7 @@ function doPost(e) {
     if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact)) options.replyTo = contact;
     var dest = props.getProperty('DESTINATAIRE') || DESTINATAIRE_DEFAUT;
     MailApp.sendEmail(dest, objet, corps, options);
+    if (cleRecu) props.setProperty(cleRecu, String(Date.now()));
 
     return repondre({ ok: true, id: r.id || null, pieces: pieces.length, compresses: compresses, ecartes: ecartes });
   } catch (err) {
@@ -112,10 +119,13 @@ function quotaOk(props) {
   var n = Number(props.getProperty(cleQuota) || 0);
   if (n >= MAX_PAR_HEURE) return false;
   props.setProperty(cleQuota, String(n + 1));
-  // Menage des compteurs des heures passees.
+  // Menage : compteurs des heures passees, accuses de reception de plus de 7 jours.
   var toutes = props.getKeys();
+  var limite = Date.now() - 7 * 86400000;
   for (var i = 0; i < toutes.length; i++) {
-    if (toutes[i].indexOf('quota_') === 0 && toutes[i] !== cleQuota) props.deleteProperty(toutes[i]);
+    var k = toutes[i];
+    if (k.indexOf('quota_') === 0 && k !== cleQuota) props.deleteProperty(k);
+    if (k.indexOf('recu_') === 0 && Number(props.getProperty(k)) < limite) props.deleteProperty(k);
   }
   return true;
 }

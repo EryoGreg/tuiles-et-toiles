@@ -229,12 +229,16 @@ app.whenReady().then(() => {
     infos: infosRapport,
     fetch: (url, opts) => net.fetch(url, opts)
   });
-  // Rapports restes en attente (envoi hors ligne) : renvoi discret.
-  setTimeout(() => {
+  // Rapports restes en attente (envoi hors ligne ou refuse) : renvoi discret
+  // 8 s apres le lancement, puis toutes les 10 min tant qu'il en reste.
+  const renvoyer = () => {
+    if (!rapport.listerAttente().length) return;
     rapport.renvoyerEnAttente()
-      .then((r) => { if (r.envoyes || r.restants) journal.evt('rapport', 'attente', r); })
+      .then((r) => journal.evt('rapport', 'attente', r))
       .catch((e) => journal.erreur('rapport', 'renvoi', e));
-  }, 8000);
+  };
+  setTimeout(renvoyer, 8000);
+  setInterval(renvoyer, 10 * 60e3);
   maj.configurer({ dossierUser: DOSSIER_USER });
   maj.nettoyerApresMaj(journal);   // premier lancement apres une MAJ : retire l'ancien exe
 

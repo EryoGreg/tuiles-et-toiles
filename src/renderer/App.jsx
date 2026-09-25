@@ -759,14 +759,23 @@ function RecouvrementApercu({ id, onFermer, onEtat }) {
 
 /* ------------------------------------------- barre de filtres commune */
 
-const TRI_LABEL = { ajout: 'Ordre d’ajout', numero: 'Numéro' };
+const TRI_LABEL = { ajout: 'Ordre d’ajout', numero: 'Numéro', date: 'Date d’ajout' };
 
-// Trie une liste de tuiles. En 'ajout', la liste arrive deja triee par
-// cree_le (cote base) : on ne fait qu'appliquer le sens.
+const parNumero = (a, b) => String(a.ref).localeCompare(String(b.ref), undefined, { numeric: true });
+
+// Trie une liste de tuiles.
+//   'ajout'  (galeries) : la liste arrive deja triee par date du tag, cote base
+//   'numero' : #002… puis L1, M1…
+//   'date'   (Bibliotheque) : date d'ajout de la tuile ; les oeuvres du pack
+//            (sans date) passent avant tout ajout, dans l'ordre des numeros
 function trier(tuiles, tri, sens) {
   const t = tuiles.slice();
-  if (tri === 'numero') {
-    t.sort((a, b) => String(a.ref).localeCompare(String(b.ref), undefined, { numeric: true }));
+  if (tri === 'numero') t.sort(parNumero);
+  if (tri === 'date') {
+    t.sort((a, b) => {
+      const da = a.ajouteLe || '', db = b.ajouteLe || '';
+      return da < db ? -1 : da > db ? 1 : parNumero(a, b);
+    });
   }
   if (sens === 'desc') t.reverse();
   return t;
@@ -1008,6 +1017,7 @@ function PageRevoir({ onEtat }) {
 // rail de marquage comme partout.
 function PageBibliotheque({ onEtat, onChoisirTuile }) {
   const [q, setQ] = useSession('bibliotheque:recherche', '');
+  const [tri, setTri] = usePref('bibliotheque:tri', 'date');
   const [sens, setSens] = usePref('bibliotheque:sens', 'asc');
   const [catsFiltre, setCatsFiltre] = usePref('bibliotheque:categories', []);       // tags selectionnes
   const [soustractif, setSoustractif] = usePref('bibliotheque:soustractif', false);
@@ -1044,8 +1054,8 @@ function PageBibliotheque({ onEtat, onChoisirTuile }) {
 
   const filtre = q.trim().length > 0 || catsFiltre.length > 0;
   const affichees = useMemo(
-    () => (resultats ? trier(resultats, 'numero', sens) : null),
-    [resultats, sens]
+    () => (resultats ? trier(resultats, tri, sens) : null),
+    [resultats, tri, sens]
   );
 
   return (
@@ -1063,8 +1073,8 @@ function PageBibliotheque({ onEtat, onChoisirTuile }) {
       </div>
 
       <BarreFiltres
-        triModes={['numero']}
-        tri="numero" onTri={() => {}}
+        triModes={['date', 'numero']}
+        tri={tri} onTri={setTri}
         sens={sens} onSens={setSens}
         q={q} onQ={setQ}
         tags={{
@@ -1625,8 +1635,23 @@ function Options({ etat, onEtat, aller }) {
       morceaux.push('Cet appareil numérote désormais ses tuiles « ' + r.prefixe + ' » : '
         + r.renumerotees.map((x) => x.avant + ' → ' + x.apres).join(', ') + '.');
     }
-    morceaux.push(r.poussees + ' modification(s) envoyée(s), ' + r.appliquees + ' reçue(s)'
-      + (r.imagesEnvoyees + r.imagesRecues ? ', ' + (r.imagesEnvoyees + r.imagesRecues) + ' image(s)' : '') + '.');
+    const dire = (s, images) => {
+      const l = [];
+      const n = (k, un, plusieurs) => { if (s && s[k]) l.push(s[k] + ' ' + (s[k] > 1 ? plusieurs : un)); };
+      n('tuilesNouvelles', 'nouvelle tuile', 'nouvelles tuiles');
+      n('tuilesModifiees', 'tuile modifiée', 'tuiles modifiées');
+      n('tuilesSupprimees', 'tuile supprimée', 'tuiles supprimées');
+      n('tuilesRestaurees', 'tuile restaurée', 'tuiles restaurées');
+      n('oeuvresCorrigees', 'œuvre corrigée', 'œuvres corrigées');
+      n('marques', 'marque', 'marques');
+      n('archives', 'archivage', 'archivages');
+      if (images) l.push(images + ' image' + (images > 1 ? 's' : ''));
+      return l.join(', ');
+    };
+    const envoye = dire(r.envoye, r.imagesEnvoyees);
+    const recu = dire(r.recu, r.imagesRecues);
+    morceaux.push(!envoye && !recu ? 'Tout était déjà à jour.'
+      : [envoye && 'Envoyé : ' + envoye + '.', recu && 'Reçu : ' + recu + '.'].filter(Boolean).join(' '));
     if (r.conflits) morceaux.push(r.conflits + ' conflit(s) à trancher — la valeur la plus récente est affichée en attendant.');
     if (r.rattrapage) morceaux.push('Rattrapage depuis un snapshot.');
     if (r.tuilesOubliees) morceaux.push(r.tuilesOubliees + ' tuile(s) supprimée(s) depuis plus de 90 jours vidée(s).');

@@ -64,7 +64,17 @@ async function verifier() {
     });
     clearTimeout(minuteur);
     if (!res.ok) {
-      journal.avertir('maj', 'github-refus', { status: res.status, limite: res.headers.get('x-ratelimit-remaining') });
+      const reste = res.headers.get('x-ratelimit-remaining');
+      const reprise = res.headers.get('x-ratelimit-reset');
+      journal.avertir('maj', 'github-refus', { status: res.status, limite: reste, reprise });
+      if ((res.status === 403 || res.status === 429) && reste === '0') {
+        const quand = reprise ? new Date(Number(reprise) * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null;
+        return {
+          erreur: 'GitHub limite les vérifications depuis ton réseau (trop de requêtes, fréquent derrière un VPN). '
+            + (quand ? 'Réessaie après ' + quand + '.' : 'Réessaie dans une heure.'),
+          actuelle
+        };
+      }
       return { erreur: 'GitHub a répondu ' + res.status + '.', actuelle };
     }
     r = await res.json();
