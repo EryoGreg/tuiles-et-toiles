@@ -1977,6 +1977,8 @@ function Options({ etat, onEtat, aller }) {
         )}
       </section>
 
+      {syn && drv && (drv.connecte || syn.dossier) && <SectionAppareils syn={syn} drv={drv} />}
+
       {syn && drv && (drv.connecte || syn.dossier) && (
         <>
           <div className="filet" />
@@ -2171,6 +2173,69 @@ function Options({ etat, onEtat, aller }) {
         </BoiteConfirmation>
       )}
     </div>
+  );
+}
+
+/* --------------------------------------------------------------- appareils */
+
+// Appareils vus a la derniere synchro. Retirer un appareil perdu : il ne
+// bloque plus le menage du dossier de synchro (ses tuiles restent).
+function SectionAppareils({ syn, drv }) {
+  const [liste, setListe] = useState(null);
+  const [demande, setDemande] = useState(null);
+  useEffect(() => { window.api.appareils.liste().then(setListe); }, [syn.derniere, syn.derniereDrive]);
+  if (!liste) return null;
+  const basculer = async (a, retirer) => {
+    setDemande(null);
+    const r = await window.api.appareils.retirer(a.id, retirer);
+    if (r.appareils) setListe(r.appareils);
+  };
+  const jour = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : 'jamais');
+  return (
+    <>
+      <div className="filet" />
+      <section>
+        <div className="etiquette">Appareils</div>
+        <div className="appareils">
+          {liste.map((a) => (
+            <div key={a.id} className={'appareil' + (a.retire ? ' retire' : '')}>
+              <span className="appareil-prefixe">{a.prefixe || '?'}</span>
+              <span className="appareil-nom">{a.nom || a.id}{a.moi ? ' (cet appareil)' : ''}</span>
+              <span className="appareil-vu">
+                {a.retire ? (a.retireIci ? 'retiré' : 'retiré par un autre appareil') : 'dernière synchro : ' + jour(a.vu_le)}
+              </span>
+              {!a.moi && (a.retire
+                ? (a.retireIci ? <button className="bouton-neutre" onClick={() => basculer(a, false)}>Remettre</button> : <span />)
+                : <button className="bouton-neutre" onClick={() => setDemande(a)}>Retirer</button>)}
+            </div>
+          ))}
+        </div>
+        <div className="options-note">
+          Chaque appareil numérote ses tuiles avec sa lettre. {drv.connecte ? 'Compte Google de cet appareil : '
+            + (drv.email || 'inconnu') + ' — un appareil connecté avec un autre compte n’apparaît pas ici et ne '
+            + 'reçoit rien.' : ''}
+        </div>
+      </section>
+      {demande && (
+        <BoiteConfirmation
+          titre={'Retirer « ' + (demande.nom || demande.id) + ' » ?'}
+          texteConfirmer="Retirer"
+          onAnnuler={() => setDemande(null)}
+          onConfirmer={() => basculer(demande, true)}
+        >
+          <p>
+            Pour un appareil perdu, vendu ou réinstallé : il ne retient plus le ménage du dossier de
+            synchro. Ses tuiles (« {demande.prefixe} ») restent, et sa lettre reste réservée. S’il
+            revient, il se remet à jour tout seul.
+          </p>
+          <p>
+            Cela ne lui coupe pas l’accès à ton Google Drive. Pour ça : compte Google → Sécurité →
+            Applications tierces → Tuiles et Toiles → Supprimer l’accès (tous tes appareils devront
+            se reconnecter).
+          </p>
+        </BoiteConfirmation>
+      )}
+    </>
   );
 }
 

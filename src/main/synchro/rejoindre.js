@@ -13,6 +13,7 @@
  */
 
 const moteur = require('./moteur');
+const { retiresEnVigueur } = require('./compaction');
 
 // Sans I ni O (confondus avec 1 et 0). 'L' d'abord : le prefixe historique.
 const LETTRES = 'LMNPQRSTUVWXYZABCDEFGHJK'.split('');
@@ -59,7 +60,10 @@ async function rejoindre(ctx, transport, { nom, enregistrerPrefixe }) {
   const fiches = await transport.lireFiches();
   const moi = fiches.find((f) => f.id === id);
 
-  const resume = (l) => l.map((f) => ({ id: f.id, nom: f.nom, prefixe: f.prefixe_ref, vu_le: f.vu_le }));
+  const resume = (l) => {
+    const r = retiresEnVigueur(l.flatMap((f) => (Array.isArray(f.retires) ? f.retires : [])), l, id);
+    return l.map((f) => ({ id: f.id, nom: f.nom, prefixe: f.prefixe_ref, vu_le: f.vu_le, retire: r.has(f.id) }));
+  };
   if (moi) {
     await transport.ecrireFiche({ ...moi, nom, vu_le: maintenant });
     return {

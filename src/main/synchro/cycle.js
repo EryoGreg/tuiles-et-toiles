@@ -46,7 +46,8 @@ async function executer(ctx, t, o) {
   await pas('fiche', () => t.ecrireFiche({
     ...maFiche, id: moi, nom: o.nom, prefixe_ref: ctx.appareil.prefixe_ref,
     vu_le: new Date(maintenant()).toISOString(),
-    lu: compaction.curseurs(ctx), purge: purge.purge, snapshot: monSnapshot
+    lu: compaction.curseurs(ctx), purge: purge.purge, snapshot: monSnapshot,
+    retires: JSON.parse((ctx.d.prepare("SELECT valeur FROM sync WHERE cle='appareils_retires'").get() || {}).valeur || '[]')
   }));
 
   return { rejoindre: rj, rattrapage, stats, imagesEnvoyees, pousse, tire, imagesRecues, snapshot, purge, tombes };

@@ -78,6 +78,30 @@ function tetes(ctx) {
 }
 
 /** Snapshots annonces dans les fiches : [{ appareil, nom, vecteur }]. */
+/**
+ * Appareils retires (perdus, vendus…) : [{ id, le }] retires par CET appareil
+ * (sync.appareils_retires, publie dans sa fiche) ou annonces par une autre
+ * fiche. Un appareil retire ne bloque plus la purge. Le retrait s'eteint de
+ * lui-meme si l'appareil se resynchronise apres coup (fiche vue apres `le`) :
+ * il repart alors d'un snapshot (rattrapage), comme apres 90 jours.
+ * @returns {Set<string>} ids retires en vigueur
+ */
+function retires(ctx, fiches = []) {
+  const entrees = [...JSON.parse(sync(ctx, 'appareils_retires') || '[]')];
+  for (const f of fiches) if (Array.isArray(f.retires)) entrees.push(...f.retires);
+  return retiresEnVigueur(entrees, fiches, ctx.appareil.id);
+}
+
+function retiresEnVigueur(entrees, fiches, moi) {
+  const vuLe = new Map(fiches.map((f) => [f.id, f.vu_le || '']));
+  const out = new Set();
+  for (const r of entrees) {
+    if (!r || typeof r.id !== 'string' || r.id === moi) continue;
+    if ((vuLe.get(r.id) || '') <= String(r.le || '')) out.add(r.id);
+  }
+  return out;
+}
+
 function snapshotsAnnonces(fiches) {
   return fiches.filter((f) => f.snapshot && f.snapshot.nom && f.snapshot.vecteur)
     .map((f) => ({ appareil: f.id, nom: f.snapshot.nom, vecteur: f.snapshot.vecteur }));
@@ -196,7 +220,8 @@ async function purgerSegments(ctx, t, fiches, monSnapshot, purgeAvant, opts = {}
   const S = seuils(opts);
   const maintenant = (opts.maintenant || Date.now)();
   const moi = ctx.appareil.id;
-  const actifs = fiches.filter((f) => f.id !== moi && f.vu_le && maintenant - Date.parse(f.vu_le) < S.inactif);
+  const exclus = retires(ctx, fiches);
+  const actifs = fiches.filter((f) => f.id !== moi && !exclus.has(f.id) && f.vu_le && maintenant - Date.parse(f.vu_le) < S.inactif);
   let limite = FIN;
   const bloquants = [];
   for (const f of actifs) {
@@ -252,6 +277,7 @@ function purgeeLe(hlcPierreTombale, opts = {}) {
 }
 
 module.exports = {
-  SEUILS, curseurs, tetes, besoins, rattraper, snapshotSiUtile, purgerSegments, purgerTombes, purgeeLe,
+  SEUILS, curseurs, tetes, besoins, rattraper, snapshotSiUtile, purgerSegments, purgerTombes, purgeeLe, retires,
+  retiresEnVigueur,
   noterSegmentEnvoye, snapshotsAnnonces
 };

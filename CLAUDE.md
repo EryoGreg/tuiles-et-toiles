@@ -144,10 +144,16 @@ Electron + React + SQLite. Windows, mono-utilisateur.
       (bandeau rouge dans Options) jusqu'à une synchro manuelle réussie. Une synchro auto ne
       recharge pas la page (`resultat.auto`) : bandeau « Du nouveau… Actualiser » sur les
       pages de liste (pas l'éditeur), et « N conflit(s) à trancher — Voir ».
+    - **Pastille « conflit »** sur les cartes (Bibliothèque, galeries, Corbeille) et dans
+      l'éditeur (`db.oeuvresEnConflit`, champ `conflit` de `jeu.completer`).
+    - **Appareils** (Options, `service.listeAppareils` / `retirerAppareil`) : retirer un appareil
+      perdu = `{ id, le }` dans `sync.appareils_retires`, publié dans `retires` de SA fiche (une
+      fiche garde un seul écrivain) ; la purge l'ignore (`compaction.retires`). Le retrait
+      **s'éteint tout seul** si l'appareil se resynchronise après `le` (il repart d'un snapshot).
+      La fiche reste : sa lettre de ref reste réservée. Ne coupe pas l'accès Drive (compte
+      Google → Applications tierces). Un appareil sur un autre compte Google est invisible (autre
+      espace Drive) : on affiche le compte de cet appareil, pas de détection possible.
   - **À faire, PC et mobile :**
-    - **Conflits** : marque sur les tuiles concernées (galeries, éditeur).
-    - Retirer un appareil perdu de la liste (il bloque la purge 90 jours) ; afficher le compte
-      Google connecté et prévenir s'il diffère de celui des autres appareils.
     - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
       première mise à jour de pack.
   Décisions actées : préfixe de ref par appareil (`L`, puis `M`, `N`, `P`…) attribué en

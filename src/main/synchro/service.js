@@ -21,6 +21,7 @@ const edition = require('../edition');
 const drive = require('../drive');
 const etat = require('./etat');
 const cycle = require('./cycle');
+const compaction = require('./compaction');
 const appareilFichier = require('./appareil');
 const { NOM_RACINE } = require('./format');
 const { creerTransportDossier } = require('./transport-dossier');
@@ -358,6 +359,38 @@ function listeConflits() {
 }
 
 /**
+ * Appareils inscrits a la synchro (vus a la derniere synchro), celui-ci en
+ * premier. `retire` : retire par cet appareil (en attente de synchro) ou par
+ * un autre.
+ */
+function listeAppareils() {
+  const a = etat.appareil();
+  const connus = lire('appareils_connus') || [];
+  const locaux = compaction.retiresEnVigueur(lire('appareils_retires') || [],
+    connus.map((f) => ({ id: f.id, vu_le: f.vu_le })), a.id);
+  const out = connus.map((f) => ({
+    ...f, moi: f.id === a.id, retireIci: locaux.has(f.id), retire: f.id !== a.id && (locaux.has(f.id) || !!f.retire)
+  }));
+  if (!out.some((f) => f.moi)) out.push({ id: a.id, nom: a.nom, prefixe: a.prefixe_ref, vu_le: null, moi: true, retire: false });
+  return out.sort((x, y) => (x.moi ? -1 : y.moi ? 1 : String(y.vu_le || '').localeCompare(String(x.vu_le || ''))));
+}
+
+/**
+ * Retire (ou remet) un appareil : il ne bloque plus le menage du dossier de
+ * synchro. Publie a la prochaine synchro, dans la fiche de cet appareil. Ne
+ * coupe pas son acces a Google Drive (a faire dans le compte Google).
+ */
+function retirerAppareil(id, retirer = true) {
+  const a = etat.appareil();
+  if (!id || id === a.id) return { erreur: 'Impossible de retirer cet appareil-ci.' };
+  const l = (lire('appareils_retires') || []).filter((r) => r && r.id !== id);
+  if (retirer) l.push({ id, le: new Date().toISOString() });
+  db.definirEtatSync('appareils_retires', JSON.stringify(l));
+  journal.evt('synchro', retirer ? 'appareil-retire' : 'appareil-remis', { id, retires: l });
+  return { ok: true, appareils: listeAppareils() };
+}
+
+/**
  * Tranche un conflit (choix = 'gagnant' | 'perdant') et remet la vue a jour.
  * L'op emise partira a la prochaine synchro et fermera le conflit ailleurs.
  */
@@ -374,5 +407,5 @@ function resoudre(id, choix) {
 
 module.exports = {
   configurer, etat: etatSynchro, definirDossier, oublierDossier,
-  synchroniser, synchroniserDrive, resoudre, listeConflits, SOUS_DOSSIER
+  synchroniser, synchroniserDrive, resoudre, listeConflits, listeAppareils, retirerAppareil, SOUS_DOSSIER
 };

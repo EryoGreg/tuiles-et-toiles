@@ -143,6 +143,32 @@ async function scenarios() {
     assert.equal(A.val('tag', 'p:9', 'livre'), 1, 'la modif de C est arrivee');
   });
 
+  await test('appareil retire : ne bloque plus la purge ; s\'il revient, retrait eteint et rattrapage', async () => {
+    const m = creerMonde();
+    const A = m.appareil('aaaa0001'), B = m.appareil('bbbb0002'), C = m.appareil('cccc0003');
+    await m.converger();
+    C.ecrire('tag', 'p:8', 'etoile', 1);          // en attente : C est « perdu »
+    const cycle3 = async () => {
+      for (let k = 0; k < 3; k++) { editer(A, 8, 'r' + k); editer(B, 3, 'r' + k); m.avancer(2 * JOUR); await m.converger([A, B]); }
+    };
+    await cycle3();
+    assert.ok(!(await fiche(m, 'aaaa0001')).purge, 'C (muet depuis 6 jours) bloque encore');
+    A.d.prepare("INSERT OR REPLACE INTO sync (cle, valeur) VALUES ('appareils_retires', ?)")
+      .run(JSON.stringify([{ id: 'cccc0003', le: new Date(m.t).toISOString() }]));
+    await cycle3();
+    assert.ok((await fiche(m, 'aaaa0001')).purge, 'A purge sans attendre C');
+    assert.ok((await fiche(m, 'bbbb0002')).purge, 'B aussi : le retrait est publie dans la fiche de A');
+    // C revient : il se remet a jour, et le retrait ne vaut plus.
+    m.avancer(JOUR);
+    const r = await C.synchro();
+    assert.ok(r.rattrapage && r.rattrapage.snapshot, 'C repart du snapshot');
+    await m.converger();
+    memeEtat([A, B, C]);
+    assert.equal(A.val('tag', 'p:8', 'etoile'), 1, 'la modif de C est arrivee');
+    const fiches = await m.transport.lireFiches();
+    assert.equal(compaction.retires(A, fiches).has('cccc0003'), false, 'retrait eteint');
+  });
+
   await test('pierre tombale : contenu oublie apres 90 jours partout (la pierre reste) ; avant, restaurable', async () => {
     const m = creerMonde();
     const A = m.appareil('aaaa0001'), B = m.appareil('bbbb0002');

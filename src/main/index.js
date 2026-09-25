@@ -627,6 +627,8 @@ gerer('reglages:definir', (_e, { cle, valeur }) => {
 });
 
 // Conflits de synchro : liste lisible et choix de l'utilisateur.
+gerer('appareils:liste', () => synchro.listeAppareils());
+gerer('appareils:retirer', (_e, { id, retirer }) => synchro.retirerAppareil(id, retirer !== false));
 gerer('conflits:liste', () => synchro.listeConflits());
 gerer('conflits:trancher', (_e, { id, choix }) => {
   synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant');

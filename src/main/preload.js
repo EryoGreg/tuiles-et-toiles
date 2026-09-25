@@ -74,6 +74,11 @@ contextBridge.exposeInMainWorld('api', {
     deconnecter: () => ipcRenderer.invoke('drive:deconnecter')
   },
 
+  appareils: {
+    liste: () => ipcRenderer.invoke('appareils:liste'),
+    retirer: (id, retirer = true) => ipcRenderer.invoke('appareils:retirer', { id, retirer })
+  },
+
   synchro: {
     etat: () => ipcRenderer.invoke('synchro:etat'),
     choisirDossier: () => ipcRenderer.invoke('synchro:choisirDossier'),
