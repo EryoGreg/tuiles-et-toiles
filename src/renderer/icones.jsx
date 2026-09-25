@@ -125,6 +125,15 @@ export const Echange = ({ t = 18 }) => (
   </svg>
 );
 
+export const Corbeille = ({ t = 19 }) => (
+  <svg {...base(t)}>
+    <path d="M4 7h16" />
+    <path d="M9 7V4.5h6V7" />
+    <path d="M6 7l1 13h10l1-13" />
+    <path d="M10 11v5.5M14 11v5.5" />
+  </svg>
+);
+
 export const Nuage = ({ t = 19 }) => (
   <svg {...base(t)}>
     <path d="M7 18h9.5a3.5 3.5 0 0 0 .4-6.98 5 5 0 0 0-9.6-1.3A3.85 3.85 0 0 0 7 18Z" />

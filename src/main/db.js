@@ -512,17 +512,23 @@ function parTagUtilisateur(tag, texte = '') {
   return instance().prepare(sql).all(tag, ...cp);
 }
 
-/** Retire toutes les marques livre / etoile / bad_smiley. @returns {number} lignes supprimees. */
+/**
+ * Retire toutes les marques livre / etoile / bad_smiley des tuiles visibles
+ * (celles d'une tuile en Corbeille reviennent avec elle). @returns {number}
+ */
 function effacerTousLesTags() {
   const etat = require('./synchro/etat');
-  const lignes = instance().prepare('SELECT oeuvre_id, tag FROM user_tags').all();
+  const lignes = instance().prepare(
+    'SELECT t.oeuvre_id, t.tag FROM user_tags t JOIN oeuvres_effectives o ON o.id = t.oeuvre_id'
+  ).all();
   etat.lot(() => { for (const r of lignes) etat.ecrire('tag', r.oeuvre_id, r.tag, null); });
   return lignes.length;
 }
 
 function comptesTags() {
+  // Tuiles visibles seulement : une tuile en Corbeille garde ses marques.
   const lignes = instance().prepare(
-    'SELECT tag, COUNT(*) n FROM user_tags GROUP BY tag'
+    'SELECT t.tag, COUNT(*) n FROM user_tags t JOIN oeuvres_effectives o ON o.id = t.oeuvre_id GROUP BY t.tag'
   ).all();
   const out = { livre: 0, etoile: 0, bad_smiley: 0 };
   for (const l of lignes) out[l.tag] = l.n;

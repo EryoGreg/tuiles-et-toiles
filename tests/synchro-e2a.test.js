@@ -182,15 +182,18 @@ test('override : valeur_source figee a la premiere correction, retour au pack = 
   assert.equal(db.oeuvre(p.id).titre, p.titre);
 });
 
-test('supprimer une tuile locale : pierre tombale, champs gardes au registre, tags retires', () => {
+test('supprimer une tuile locale : pierre tombale, champs et marques gardes, marques invisibles', () => {
   db.basculerTag(idLocale, 'livre');
+  const livres = db.comptesTags().livre;
   edition.supprimer(idLocale);
   assert.equal(db.instance().prepare('SELECT COUNT(*) n FROM oeuvres_locales WHERE id=?').get(idLocale).n, 0);
   assert.equal(db.oeuvre(idLocale), undefined);
   assert.equal(etat.existe(idLocale), false);
   assert.ok(etat.valeur('locale', idLocale, '_existe').vu, 'pierre tombale { vu }');
   assert.equal(etat.valeur('locale', idLocale, 'titre'), 'Nympheas');
-  assert.deepEqual(db.tagsDe(idLocale), []);
+  assert.deepEqual(db.tagsDe(idLocale), ['livre'], 'marque gardee pour la restauration');
+  assert.equal(db.comptesTags().livre, livres - 1, 'plus comptee');
+  assert.equal(db.parTagUtilisateur('livre').some((o) => o.id === idLocale), false);
 });
 
 test('la ref d\'une tuile supprimee n\'est jamais reutilisee', () => {
@@ -206,14 +209,45 @@ test('archiver une oeuvre du pack', () => {
   assert.equal(etat.valeur('archive', p2.id, '_'), 1);
 });
 
-test('effacer tous les tags : une op par tag', () => {
+test('corbeille : tuile locale (avec date d’effacement) et oeuvre du pack archivee', () => {
+  const [, p2] = unePack();
+  const c = edition.corbeille();
+  const loc = c.find((o) => o.id === idLocale), pk = c.find((o) => o.id === p2.id);
+  assert.ok(loc && pk, 'les deux dans la corbeille');
+  assert.equal(loc.titre, 'Nympheas');
+  assert.equal(loc.ref, 'L1');
+  const jours = (Date.parse(loc.effaceeLe) - Date.parse(loc.supprimeeLe)) / 86400e3;
+  assert.equal(Math.round(jours), 90);
+  assert.equal(pk.estLocale, false);
+  assert.equal(pk.effaceeLe, null);
+  assert.equal(pk.titre, p2.titre);
+});
+
+test('restaurer depuis la corbeille : tuile et marques reviennent, une op', () => {
+  const [, p2] = unePack();
+  const avant = nChg();
+  const r = edition.restaurer(idLocale);
+  assert.equal(r.ok, true);
+  assert.equal(nChg(), avant + 1);
+  assert.equal(db.oeuvre(idLocale).titre, 'Nympheas');
+  assert.equal(db.parTagUtilisateur('livre').some((o) => o.id === idLocale), true);
+  assert.equal(edition.restaurer(p2.id).ok, true);
+  assert.ok(db.oeuvre(p2.id), 'oeuvre du pack desarchivee');
+  assert.equal(edition.corbeille().length, 0);
+  assert.ok(edition.restaurer(idLocale).erreur, 'deja restauree');
+  edition.supprimer(idLocale);
+  edition.supprimer(p2.id);
+});
+
+test('effacer tous les tags : une op par marque visible', () => {
   const [p] = unePack();
   db.basculerTag(p.id, 'livre');
   db.basculerTag(p.id, 'bad_smiley');
   const avant = nChg();
   assert.equal(db.effacerTousLesTags(), 2);
   assert.equal(nChg(), avant + 2);
-  assert.equal(db.instance().prepare('SELECT COUNT(*) n FROM user_tags').get().n, 0);
+  assert.deepEqual(db.comptesTags(), { livre: 0, etoile: 0, bad_smiley: 0 });
+  assert.deepEqual(db.tagsDe(idLocale), ['livre'], 'celle de la tuile en corbeille reste');
 });
 
 test('tirage : stats comptees pour cet appareil, hors journal', () => {

@@ -617,7 +617,8 @@ function Barre({ page, aller, etat, repliee, basculer, onQuitter, synchro }) {
     ['etoile', I.Etoile, 'Étoile', etat.tags.etoile],
     ['revoir', I.Revoir, 'À revoir', etat.tags.bad_smiley],
     ['edition', I.Crayon, 'Édition', null],
-    // N'apparait que s'il y a des conflits de synchro a trancher.
+    // N'apparaissent que s'il y a quelque chose dedans.
+    ...(etat.corbeille ? [['corbeille', I.Corbeille, 'Corbeille', etat.corbeille]] : []),
     ...(etat.conflits ? [['conflits', I.Echange, 'Conflits', etat.conflits]] : [])
   ];
   return (
@@ -1384,7 +1385,7 @@ function PageEdition({ onEtat }) {
     const r = await window.api.edition.supprimer(t.id);
     setMode(null);
     if (onEtat) onEtat();
-    notifier(`#${t.ref} supprimée.`);
+    notifier(`#${t.ref} mise à la corbeille.`);
   };
 
   if (mode === 'creer') {
@@ -1419,12 +1420,15 @@ function PageEdition({ onEtat }) {
           >
             {!demandeSuppr.estLocale && (
               <p>
-                Cette tuile fait partie d’un pack. Vous vous apprêtez à la supprimer.
-                Cette action n’est pas conseillée.
+                Cette tuile fait partie d’un pack : elle disparaîtra du jeu et de la
+                Bibliothèque. Cette action n’est pas conseillée.
               </p>
             )}
-            <p style={{ fontWeight: 700, color: 'var(--revoir)' }}>
-              IL N’EST PAS POSSIBLE DE REVENIR EN ARRIÈRE UNE FOIS LA SUPPRESSION EFFECTUÉE&nbsp;!
+            <p>
+              Elle part dans la <strong>Corbeille</strong>, avec ses marques
+              {demandeSuppr.estLocale
+                ? ' : tu pourras la restaurer pendant 90 jours, ensuite son contenu est effacé définitivement.'
+                : ' : tu pourras la restaurer à tout moment.'}
             </p>
           </BoiteConfirmation>
         )}
@@ -2133,6 +2137,75 @@ function Version({ titre, date, texte, bouton, actuelle, occupe, onChoisir }) {
   );
 }
 
+/* --------------------------------------------------------------- corbeille */
+
+// Tuiles supprimees (encore restaurables) et oeuvres du pack archivees.
+// Restaurer = une modification ordinaire : elle part a la prochaine synchro.
+function PageCorbeille({ onEtat }) {
+  const [liste, setListe] = useState(null);
+  const [enCours, setEnCours] = useState(null);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => { window.api.corbeille.liste().then(setListe); }, []);
+
+  const restaurer = async (o) => {
+    setEnCours(o.id); setMsg(null);
+    const r = await window.api.corbeille.restaurer(o.id);
+    setEnCours(null);
+    if (r.erreur) { setMsg({ erreur: r.erreur }); setListe(await window.api.corbeille.liste()); return; }
+    setListe(r.liste);
+    setMsg({ ok: '#' + (r.ref || o.ref) + ' restaurée.' });
+    onEtat();
+  };
+  const jour = (iso) => new Date(iso).toLocaleDateString('fr-FR', { dateStyle: 'long' });
+
+  return (
+    <div className="galerie" style={{ '--accent': 'var(--discret)' }}>
+      <div className="galerie-tete">
+        <span className="galerie-icone"><I.Corbeille t={22} /></span>
+        <div>
+          <h2>Corbeille</h2>
+          <div className="soustitre">
+            Tuiles supprimées, avec leurs marques. Une tuile que tu as créée reste restaurable
+            90 jours ; une œuvre du pack, toujours. La restauration part vers tes autres appareils
+            à la prochaine synchro.
+          </div>
+        </div>
+        <span className="galerie-compte">{liste ? liste.length : '…'}</span>
+      </div>
+
+      {msg && msg.ok && <div className="options-confirmation"><I.Coche t={14} /> {msg.ok}</div>}
+      {msg && msg.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{msg.erreur}</div>}
+
+      {!liste ? <div className="chargement">chargement…</div> : !liste.length ? (
+        <div className="galerie-vide">La corbeille est vide.</div>
+      ) : (
+        <div className="galerie-grille">
+          {liste.map((o) => (
+            <div key={o.id} className="carte-galerie carte-corbeille">
+              {o.image
+                ? <img className="carte-galerie-image" src={o.image} alt="" loading="lazy" />
+                : <div className="carte-galerie-image carte-galerie-image-vide" />}
+              <div className="carte-galerie-corps">
+                <span className="numero">#{o.ref}{o.estLocale ? '' : ' · pack'}</span>
+                <div className="carte-galerie-titre">{o.titre || '—'}</div>
+                <div className="carte-galerie-artiste">{o.artiste || '—'}{o.date ? ' · ' + o.date : ''}</div>
+                <div className="corbeille-dates">
+                  Supprimée le {jour(o.supprimeeLe)}
+                  {o.effaceeLe && <><br />Effacée définitivement le {jour(o.effaceeLe)}</>}
+                </div>
+                <button className="bouton-neutre corbeille-restaurer" onClick={() => restaurer(o)} disabled={enCours === o.id}>
+                  <I.Rafraichir t={14} /> {enCours === o.id ? 'Restauration…' : 'Restaurer'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------- rapport d'erreur */
 
 // Un clic : le rapport (formulaire + journaux masques) part directement au
@@ -2765,6 +2838,7 @@ export default function App() {
             {page === 'jeu' ? <Jeu onEtat={charger} />
               : page === 'options' ? <Options etat={etat} onEtat={charger} aller={naviguer} />
               : page === 'conflits' ? <PageConflits onEtat={charger} />
+              : page === 'corbeille' ? <PageCorbeille onEtat={charger} />
               : page === 'bibliotheque' ? <PageBibliotheque onEtat={charger} />
               : page === 'edition' ? <PageEdition onEtat={charger} />
               : page === 'livre' ? <PageLivre onEtat={charger} />

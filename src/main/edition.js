@@ -14,6 +14,8 @@ const crypto = require('crypto');
 const db = require('./db');
 const jeu = require('./jeu');
 const etat = require('./synchro/etat');
+const compaction = require('./synchro/compaction');
+const { versIso } = require('./synchro/hlc');
 const lisezmoi = require('./lisezmoi');
 const journal = require('./journal');
 
@@ -210,22 +212,16 @@ function modifier(id, champs = {}) {
 }
 
 /**
- * Supprime une tuile.
+ * Supprime une tuile : elle part dans la Corbeille.
  *  - locale : pierre tombale _existe = { vu } (la ligne quitte oeuvres_locales,
- *             ses champs restent dans le registre) + tags retires
+ *             ses champs restent dans le registre)
  *  - pack   : archive (masquee, jamais vraiment supprimee)
+ * Marques et vues sont gardees : invisibles tant que la tuile est absente
+ * (les listes joignent oeuvres_effectives), de retour si elle est restauree.
  */
 function supprimer(id) {
-  const d = db.instance();
   if (id.startsWith('local:')) {
-    etat.lot(() => {
-      for (const r of d.prepare("SELECT champ FROM etat WHERE entite='tag' AND cle=? AND valeur IS NOT NULL").all(id)) {
-        etat.ecrire('tag', id, r.champ, null);
-      }
-      etat.supprimerLocale(id);
-      // Stats gardees (synchronisees, par appareil) : invisibles tant que la
-      // tuile est supprimee, de retour si elle est restauree.
-    });
+    etat.supprimerLocale(id);
     appliquer();
     journal.evt('edition', 'supprimer', { id, local: true });
     return { archivee: false };
@@ -234,6 +230,60 @@ function supprimer(id) {
   appliquer();
   journal.evt('edition', 'archiver', { id, local: false });
   return { archivee: true };
+}
+
+/**
+ * Contenu de la Corbeille, plus recent d'abord :
+ *  - tuiles locales supprimees dont le contenu est encore au registre ; il est
+ *    oublie 90 jours apres la suppression (compaction.purgerTombes) -> effaceeLe
+ *  - oeuvres du pack archivees (jamais oubliees, effaceeLe = null)
+ */
+function corbeille() {
+  const d = db.instance();
+  const out = [];
+  for (const r of d.prepare("SELECT cle, valeur, hlc FROM etat WHERE entite='locale' AND champ='_existe'").all()) {
+    if (JSON.parse(r.valeur) === 1) continue;
+    const l = etat.lignes('locale', r.cle);
+    const v = (c) => (l[c] && l[c].valeur != null ? String(l[c].valeur) : '');
+    if (!CHAMPS.some((c) => v(c))) continue;   // contenu deja oublie : plus rien a rendre
+    out.push({
+      id: r.cle, estLocale: true, ref: v('ref_local'), titre: v('titre'), artiste: v('artiste'), date: v('date'),
+      image: v('image') ? 'tuile://' + v('image') : null,
+      supprimeeLe: versIso(r.hlc), effaceeLe: compaction.purgeeLe(r.hlc)
+    });
+  }
+  const pack = d.prepare('SELECT id, ref, titre, artiste, date, image FROM pack.oeuvres WHERE id = ?');
+  for (const r of d.prepare("SELECT cle, hlc FROM etat WHERE entite='archive' AND champ='_' AND valeur IS NOT NULL").all()) {
+    const o = pack.get(r.cle);
+    if (!o) continue;   // retiree du pack par une mise a jour
+    const corrige = (c) => { const x = etat.valeur('override', r.cle, c); return x && x.valeur ? x.valeur : o[c]; };
+    out.push({
+      id: r.cle, estLocale: false, ref: o.ref, titre: corrige('titre'), artiste: corrige('artiste'), date: corrige('date'),
+      image: corrige('image') ? 'tuile://' + corrige('image') : null,
+      supprimeeLe: versIso(r.hlc), effaceeLe: null
+    });
+  }
+  return out.sort((a, b) => (a.supprimeeLe < b.supprimeeLe ? 1 : a.supprimeeLe > b.supprimeeLe ? -1 : 0));
+}
+
+/**
+ * Sort une tuile de la Corbeille : ecriture ordinaire, propagee par la synchro
+ * (et qui ferme un eventuel conflit « supprimee ici, modifiee la-bas »).
+ * @returns {{ ok, ref, liste } | { erreur }}
+ */
+function restaurer(id) {
+  const local = String(id).startsWith('local:');
+  const avant = local ? etat.valeur('locale', id, '_existe') : etat.valeur('archive', id, '_');
+  if (local ? avant == null || avant === 1 : avant == null) {
+    journal.avertir('edition', 'restaurer-introuvable', { id, local, avant });
+    return { erreur: 'Cette tuile n’est plus dans la corbeille.' };
+  }
+  if (local) etat.ecrire('locale', id, '_existe', 1);
+  else etat.ecrire('archive', id, '_', null);
+  appliquer();
+  const o = db.oeuvre(id);
+  journal.evt('edition', 'restaurer', { id, local, ref: o && o.ref, masques: o ? JSON.parse(o.masques || '[]').length : null });
+  return { ok: true, ref: o && o.ref, liste: corbeille() };
 }
 
 /** Champ texte d'un formulaire, nettoye ('' si absent). */
@@ -248,5 +298,6 @@ function appliquer() {
 }
 
 module.exports = {
-  configurer, creer, tuile, modifier, supprimer, nettoyerOrphelines, oublierImage, imagesReferencees
+  configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, nettoyerOrphelines, oublierImage,
+  imagesReferencees
 };

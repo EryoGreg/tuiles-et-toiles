@@ -51,6 +51,11 @@ contextBridge.exposeInMainWorld('api', {
     oublierImage: (nom) => ipcRenderer.invoke('edition:oublierImage', nom)
   },
 
+  corbeille: {
+    liste: () => ipcRenderer.invoke('corbeille:liste'),
+    restaurer: (id) => ipcRenderer.invoke('corbeille:restaurer', id)
+  },
+
   sauvegarde: {
     exporter: () => ipcRenderer.invoke('sauvegarde:exporter'),
     choisir: () => ipcRenderer.invoke('sauvegarde:choisir'),

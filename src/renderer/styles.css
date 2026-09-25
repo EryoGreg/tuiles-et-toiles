@@ -1107,6 +1107,13 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .rapport-actions { flex-wrap: wrap; }
 
+/* --- corbeille ---------------------------------------------------------------- */
+.carte-corbeille { cursor: default; }
+.carte-corbeille:hover { transform: none; }
+.carte-corbeille .carte-galerie-image { opacity: 0.72; filter: grayscale(0.35); }
+.corbeille-dates { font-size: 11px; color: var(--discret); margin-top: 4px; line-height: 1.45; }
+.corbeille-restaurer { margin-top: 8px; align-self: flex-start; font-size: 12.5px; padding: 6px 11px; }
+
 /* --- conflits de synchro ------------------------------------------------------ */
 
 .entree .compte.alerte { color: var(--revoir); font-weight: 600; }

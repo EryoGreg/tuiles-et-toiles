@@ -356,7 +356,8 @@ gerer('etat', () => ({
   majAuto: db.reglage('maj_auto', '1') === '1',
   version: app.getVersion(),
   derniereSynchro: db.etatSync('derniere_synchro'),
-  conflits: etat.conflits().length
+  conflits: etat.conflits().length,
+  corbeille: edition.corbeille().length
 }));
 
 ipcMain.on('journal', (_e, msg, extra) => journal.ligne('[ui] ' + msg, extra));
@@ -368,6 +369,8 @@ gerer('edition:creer', (_e, champs) => edition.creer(champs || {}));
 gerer('edition:tuile', (_e, id) => edition.tuile(id));
 gerer('edition:modifier', (_e, { id, champs }) => edition.modifier(id, champs || {}));
 gerer('edition:supprimer', (_e, id) => edition.supprimer(id));
+gerer('corbeille:liste', () => edition.corbeille());
+gerer('corbeille:restaurer', (_e, id) => edition.restaurer(id));
 
 gerer('edition:importerImageUrl', async (_e, url) => {
   const refus = (erreur, detail) => {
