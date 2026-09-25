@@ -369,6 +369,7 @@ gerer('edition:creer', (_e, champs) => edition.creer(champs || {}));
 gerer('edition:tuile', (_e, id) => edition.tuile(id));
 gerer('edition:modifier', (_e, { id, champs }) => edition.modifier(id, champs || {}));
 gerer('edition:supprimer', (_e, id) => edition.supprimer(id));
+gerer('edition:versions', (_e, id) => edition.versions(id));
 gerer('corbeille:liste', () => edition.corbeille());
 gerer('corbeille:restaurer', (_e, id) => edition.restaurer(id));
 

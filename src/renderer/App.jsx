@@ -1164,6 +1164,25 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const [imgEnCours, setImgEnCours] = useState(false);
   const [survol, setSurvol] = useState(false);
   const [enCours, setEnCours] = useState(false);
+  const [historique, setHistorique] = useState(null);   // null | 'chargement' | [{ champ, versions }]
+  const [aVersions, setAVersions] = useState(false);
+
+  // Le bouton n'apparait que s'il y a un historique a montrer.
+  useEffect(() => {
+    if (mode !== 'modifier') return;
+    window.api.edition.versions(tuile.id).then((v) => setAVersions(v.length > 0));
+  }, [mode, tuile && tuile.id]);
+  const ouvrirHistorique = async () => {
+    setHistorique('chargement');
+    setHistorique(await window.api.edition.versions(tuile.id));
+  };
+  // Reprendre une version = la remettre dans le champ ; elle ne s'applique
+  // qu'a « Valider les changements », comme toute modification.
+  const reprendre = (champ, valeur) => {
+    window.api.evt('edition', 'reprendre-version', { id: tuile.id, champ });
+    setChamps((x) => ({ ...x, [champ]: valeur }));
+    setHistorique(null);
+  };
 
   const set = (c) => (e) => setChamps((x) => ({ ...x, [c]: e.target.value }));
 
@@ -1320,6 +1339,11 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
               <I.Croix t={14} /> Supprimer la tuile
             </button>
           )}
+          {mode === 'modifier' && aVersions && (
+            <button className="bouton-neutre" onClick={ouvrirHistorique}>
+              <I.Rafraichir t={14} /> Versions précédentes
+            </button>
+          )}
           <span className="compteur-sac">
             {mode === 'modifier' && !tuile.estLocale
               ? 'Correction locale — la source reste intacte'
@@ -1338,6 +1362,66 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
           >
             <I.Coche /> {mode === 'modifier' ? 'Valider les changements' : 'Valider la création'}
           </button>
+        </div>
+      </div>
+
+      {historique && (
+        <BoiteVersions
+          historique={historique} actuels={champs}
+          onReprendre={reprendre} onFermer={() => setHistorique(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const LIBELLES_CHAMPS = {
+  titre: 'Titre', artiste: 'Artiste', date: 'Année / période', lieu: 'Conservation',
+  description: 'Description', tags: 'Tags'
+};
+
+// Toutes les valeurs qu'ont eues les champs de la tuile, tous appareils
+// confondus (journal de synchro). « Reprendre » remet la valeur dans
+// l'editeur, sans rien enregistrer.
+function BoiteVersions({ historique, actuels, onReprendre, onFermer }) {
+  useEffect(() => {
+    const clavier = (e) => { if (e.key === 'Escape') onFermer(); };
+    window.addEventListener('keydown', clavier);
+    return () => window.removeEventListener('keydown', clavier);
+  }, [onFermer]);
+
+  return (
+    <div className="recouvrement" onClick={onFermer}>
+      <div className="boite-dialogue boite-versions" onClick={(e) => e.stopPropagation()}>
+        <h3>Versions précédentes</h3>
+        <p>
+          Toutes les valeurs qu’ont eues les champs de cette tuile, sur tous tes appareils. « Reprendre »
+          remet la valeur dans l’éditeur : rien n’est enregistré avant « Valider les changements ».
+        </p>
+        {historique === 'chargement' ? <div className="chargement">chargement…</div> : (
+          historique.map(({ champ, versions }) => (
+            <div key={champ} className="versions-champ">
+              <div className="etiquette">{LIBELLES_CHAMPS[champ] || champ}</div>
+              {versions.map((v, i) => {
+                const enCours = String(actuels[champ] || '') === v.valeur;
+                return (
+                  <div key={i} className={'version' + (i === 0 ? ' actuelle' : '')}>
+                    <div className="version-qui">
+                      {v.duPack ? 'Valeur du pack' : dateCourte(v.le) + ' · ' + v.appareil}
+                      {i === 0 && <span className="conflit-badge">enregistrée</span>}
+                    </div>
+                    <div className="version-valeur">{v.valeur === '' ? '(vide)' : v.valeur}</div>
+                    {enCours
+                      ? <span className="version-dans">dans l’éditeur</span>
+                      : <button className="bouton-neutre" onClick={() => onReprendre(champ, v.valeur)}>Reprendre</button>}
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+        <div className="actions">
+          <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
         </div>
       </div>
     </div>

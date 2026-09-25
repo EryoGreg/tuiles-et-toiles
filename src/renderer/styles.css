@@ -1107,6 +1107,20 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .rapport-actions { flex-wrap: wrap; }
 
+/* --- versions precedentes ---------------------------------------------------- */
+.boite-versions { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.versions-champ { margin-bottom: 18px; }
+.versions-champ .etiquette { margin-bottom: 6px; }
+.version { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+  padding: 9px 11px; border-radius: 8px; border: 1px solid var(--trait); margin-bottom: 6px; }
+.version.actuelle { border-color: var(--laiton); }
+.version-qui { grid-column: 1; font-size: 11.5px; color: var(--discret); font-family: var(--mono); display: flex; gap: 8px; align-items: center; }
+.version-valeur { grid-column: 1; font-size: 13.5px; color: var(--encre-vive); white-space: pre-wrap; word-break: break-word;
+  max-height: 9em; overflow-y: auto; }
+.version > .bouton-neutre, .version-dans { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; }
+.version > .bouton-neutre { padding: 5px 11px; }
+.version-dans { color: var(--discret); font-style: italic; }
+
 /* --- corbeille ---------------------------------------------------------------- */
 .carte-corbeille { cursor: default; }
 .carte-corbeille:hover { transform: none; }

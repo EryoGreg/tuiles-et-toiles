@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
     tuile: (id) => ipcRenderer.invoke('edition:tuile', id),
     modifier: (id, champs) => ipcRenderer.invoke('edition:modifier', { id, champs }),
     supprimer: (id) => ipcRenderer.invoke('edition:supprimer', id),
+    versions: (id) => ipcRenderer.invoke('edition:versions', id),
     choisirImage: () => ipcRenderer.invoke('edition:choisirImage'),
     importerImage: (octets, meta) => ipcRenderer.invoke('edition:importerImage', octets, meta),
     importerImageUrl: (url) => ipcRenderer.invoke('edition:importerImageUrl', url),

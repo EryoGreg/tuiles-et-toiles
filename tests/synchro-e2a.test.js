@@ -165,6 +165,14 @@ test('tag : bascule on/off, deux ops, projection user_tags', () => {
   assert.equal(db.instance().prepare("SELECT COUNT(*) n FROM changements WHERE entite='tag'").get().n, 2);
 });
 
+test('versions : tuile locale, plus recente d’abord, doublons successifs fusionnes', () => {
+  const v = edition.versions(idLocale);
+  const titre = v.find((x) => x.champ === 'titre');
+  assert.deepEqual(titre.versions.map((x) => x.valeur), ['Nympheas', 'Nympheas, salle 3']);
+  assert.ok(titre.versions[0].appareil.includes('cet appareil'));
+  assert.equal(v.some((x) => x.champ === 'artiste'), false, 'une seule version : absent');
+});
+
 test('override : valeur_source figee a la premiere correction, retour au pack = suppression', () => {
   const [p] = unePack();
   const base = edition.tuile(p.id);
@@ -176,7 +184,11 @@ test('override : valeur_source figee a la premiere correction, retour au pack = 
   ov = db.instance().prepare("SELECT * FROM user_overrides WHERE oeuvre_id=? AND champ='titre'").get(p.id);
   assert.equal(ov.valeur_source, p.titre);
   assert.equal(db.oeuvre(p.id).titre, 'Titre corrige 2');
+  const vt = edition.versions(p.id).find((x) => x.champ === 'titre').versions;
+  assert.deepEqual(vt.map((x) => x.valeur), ['Titre corrige 2', 'Titre corrige', p.titre]);
+  assert.equal(vt[2].duPack, true);
   edition.modifier(p.id, base);
+  assert.equal(edition.versions(p.id).find((x) => x.champ === 'titre').versions[0].duPack, true);
   assert.equal(db.instance().prepare('SELECT COUNT(*) n FROM user_overrides WHERE oeuvre_id=?').get(p.id).n, 0);
   assert.equal(etat.valeur('override', p.id, 'titre'), null);
   assert.equal(db.oeuvre(p.id).titre, p.titre);

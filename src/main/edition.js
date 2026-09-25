@@ -286,6 +286,48 @@ function restaurer(id) {
   return { ok: true, ref: o && o.ref, liste: corbeille() };
 }
 
+/**
+ * Versions precedentes des champs d'une tuile, tirees du journal de synchro
+ * (toutes les valeurs qu'un champ a eues, sur tous les appareils). Plus
+ * recente d'abord : la premiere est la valeur affichee. Deux versions
+ * successives identiques n'en font qu'une. Oeuvre du pack : « valeur du
+ * pack » en dernier. L'image n'y figure pas : une image remplacee est effacee
+ * du disque (menage des images).
+ * @returns {Array<{ champ, versions: Array<{ valeur, le, appareil, duPack }> }>}
+ *   seulement les champs qui ont au moins deux versions
+ */
+function versions(id) {
+  const d = db.instance();
+  const local = String(id).startsWith('local:');
+  const pack = local ? null : d.prepare('SELECT * FROM pack.oeuvres WHERE id = ?').get(id);
+  if (!local && !pack) return [];
+  const moi = etat.appareil();
+  const noms = new Map([[moi.id, moi.nom + ' (cet appareil)']]);
+  try {
+    for (const f of JSON.parse(db.etatSync('appareils_connus') || '[]')) if (f.id !== moi.id) noms.set(f.id, f.nom || f.id);
+  } catch { /* liste illisible : identifiants bruts */ }
+  const ops = d.prepare('SELECT hlc, appareil, valeur FROM changements WHERE entite = ? AND cle = ? AND champ = ? ORDER BY hlc DESC');
+  const out = [];
+  for (const c of CHAMPS) {
+    if (c === 'image') continue;
+    const valeurPack = pack ? String(pack[c] == null ? '' : pack[c]) : '';
+    const liste = [];
+    for (const op of ops.all(local ? 'locale' : 'override', id, c)) {
+      let v = op.valeur == null ? null : JSON.parse(op.valeur);
+      if (!local) v = v ? v.valeur : null;   // override retire = valeur du pack
+      const valeur = v == null ? valeurPack : String(v);
+      if (liste.length && liste[liste.length - 1].valeur === valeur) continue;
+      liste.push({ valeur, le: versIso(op.hlc), appareil: noms.get(op.appareil) || op.appareil, duPack: !local && v == null });
+    }
+    if (!local && liste.length && liste[liste.length - 1].valeur !== valeurPack) {
+      liste.push({ valeur: valeurPack, le: null, appareil: null, duPack: true });
+    }
+    if (liste.length > 1) out.push({ champ: c, versions: liste });
+  }
+  journal.debug('edition', 'versions', { id, champs: out.map((x) => x.champ + ':' + x.versions.length) });
+  return out;
+}
+
 /** Champ texte d'un formulaire, nettoye ('' si absent). */
 function texte(champs, c) {
   return String(champs[c] == null ? '' : champs[c]).trim();
@@ -298,6 +340,6 @@ function appliquer() {
 }
 
 module.exports = {
-  configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, nettoyerOrphelines, oublierImage,
+  configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, nettoyerOrphelines, oublierImage,
   imagesReferencees
 };
