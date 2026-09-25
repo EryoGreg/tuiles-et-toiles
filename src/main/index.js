@@ -341,7 +341,8 @@ gerer('etat', () => ({
   raccourcisProposes: db.reglage('raccourcis_proposes', '0') === '1',
   majAuto: db.reglage('maj_auto', '1') === '1',
   version: app.getVersion(),
-  derniereSynchro: db.etatSync('derniere_synchro')
+  derniereSynchro: db.etatSync('derniere_synchro'),
+  conflits: etat.conflits().length
 }));
 
 ipcMain.on('journal', (_e, msg, extra) => journal.ligne('[ui] ' + msg, extra));
@@ -555,6 +556,13 @@ gerer('reglages:definir', (_e, { cle, valeur }) => {
       : (THEMES_CLAIRS.has(valeur) ? 'light' : 'dark');
   }
   return true;
+});
+
+// Conflits de synchro : liste lisible et choix de l'utilisateur.
+gerer('conflits:liste', () => synchro.listeConflits());
+gerer('conflits:trancher', (_e, { id, choix }) => {
+  synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant');
+  return synchro.listeConflits();
 });
 
 // Rapport d'erreur : envoi direct au script de reception (un clic) ; repli

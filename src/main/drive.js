@@ -460,6 +460,18 @@ function api(oauth) {
         { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': mime }, body: octets });
       if (!res.ok) await echecEnvoi(res);
     },
+    // Suppression definitive d'un fichier cree par l'app (segment purge, vieux
+    // snapshot). Uniquement nos propres fichiers : drive.file n'en voit pas d'autres.
+    async supprimer(id) {
+      const token = await jetonAcces(oauth);
+      const res = await requete(API + '/files/' + encodeURIComponent(id),
+        { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok && res.status !== 404) {
+        const txt = await res.text();
+        verifierAcces(res.status, txt);
+        throw new Error('Suppression Drive ' + res.status + ' : ' + txt.slice(0, 200));
+      }
+    },
     async lire(id) {
       const token = await jetonAcces(oauth);
       const res = await requete(API + '/files/' + encodeURIComponent(id) + '?alt=media',

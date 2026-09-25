@@ -1106,3 +1106,23 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   user-select: text;
 }
 .rapport-actions { flex-wrap: wrap; }
+
+/* --- conflits de synchro ------------------------------------------------------ */
+
+.entree .compte.alerte { color: var(--revoir); font-weight: 600; }
+.conflits { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.conflits-vide { display: flex; align-items: center; gap: 8px; color: var(--valide); font-size: 14px; }
+.conflit { padding: 16px 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--trait); }
+.conflit-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.conflit-oeuvre { font-family: var(--serif); font-size: 18px; color: var(--encre-vive); }
+.conflit-champ { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--revoir); }
+.conflit-versions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .conflit-versions { grid-template-columns: 1fr; } }
+.conflit-version { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 12px; border-radius: 9px;
+  background: var(--surface-2); border: 1px solid var(--trait); }
+.conflit-version.actuelle { border-color: var(--laiton); }
+.conflit-qui { font-size: 13px; color: var(--encre); display: flex; gap: 8px; align-items: center; }
+.conflit-badge { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: var(--laiton); color: var(--fond); }
+.conflit-quand { font-size: 11.5px; color: var(--discret); font-family: var(--mono); }
+.conflit-valeur { font-size: 14px; color: var(--encre-vive); white-space: pre-wrap; word-break: break-word; margin: 4px 0 6px;
+  user-select: text; }

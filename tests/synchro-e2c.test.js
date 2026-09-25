@@ -262,6 +262,14 @@ async function boutEnBout() {
     await service.synchroniser();
     const cs = etat.conflits();
     assert.equal(cs.length, 1);
+    // Ecran des conflits : oeuvre, champ, deux versions avec appareil et date.
+    const [lc] = service.listeConflits();
+    assert.equal(lc.type, 'valeur');
+    assert.equal(lc.libelle, 'Titre');
+    assert.ok(lc.oeuvre.ref && lc.oeuvre.titre);
+    assert.deepEqual([lc.gagnant.valeur, lc.perdant.valeur].sort(), ['Titre PC bis', 'Titre telephone']);
+    assert.ok(lc.gagnant.nomAppareil && lc.perdant.nomAppareil && lc.gagnant.le);
+    assert.ok([lc.gagnant.nomAppareil, lc.perdant.nomAppareil].some((n) => /cet appareil/.test(n)));
     service.resoudre(cs[0].id, 'perdant');
     assert.equal(db.oeuvre(packIds[1].id).titre, 'Titre telephone', 'vue a jour tout de suite');
     await service.synchroniser();

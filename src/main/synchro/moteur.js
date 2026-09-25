@@ -133,14 +133,16 @@ function projeter(ctx, entite, cle, champ, val, hlc) {
 /** Tetes du champ (ops que personne n'a vues), plus grande HLC d'abord. */
 function tetes(ctx, entite, cle, champ) {
   const ops = ctx.d.prepare(
-    'SELECT hlc, valeur, base, vus FROM changements WHERE entite=? AND cle=? AND champ=?'
+    'SELECT hlc, valeur, base, vus, remplace FROM changements WHERE entite=? AND cle=? AND champ=?'
   ).all(entite, cle, champ);
   const vues = new Set();
   for (const o of ops) {
     if (o.base) vues.add(o.base);
     if (o.vus) for (const h of JSON.parse(o.vus)) vues.add(h);
   }
-  return ops.filter((o) => !vues.has(o.hlc)).sort((a, b) => (a.hlc < b.hlc ? 1 : -1));
+  // remplace = 1 : op dont on sait (par un snapshot) qu'elle a ete remplacee,
+  // meme si le maillon qui la cite nous manque (compaction.rattraper).
+  return ops.filter((o) => !vues.has(o.hlc) && !o.remplace).sort((a, b) => (a.hlc < b.hlc ? 1 : -1));
 }
 
 function estVisible(entite) {
@@ -164,9 +166,17 @@ function conflitSuppression(ctx, cle) {
   const tv = parse(t.valeur);
   if (tv === 1) return null;
   const vu = (tv && tv.vu) || t.hlc;
-  const m = ctx.d.prepare(`SELECT hlc, valeur FROM changements
-    WHERE entite='locale' AND cle=? AND champ<>'_existe' AND hlc > ?
-    ORDER BY hlc DESC LIMIT 1`).get(cle, vu);
+  // Parmi les TETES des champs de la tuile (identiques sur tous les appareils,
+  // meme ceux repartis d'un snapshot), la plus recente posterieure a `vu`.
+  // Un champ vide ecrit apres la suppression n'est pas une « modification » :
+  // c'est l'oubli du contenu (compaction.purgerTombes), ou un effacement sans
+  // enjeu. Seules les vraies valeurs ouvrent le conflit.
+  let m = null;
+  for (const r of ctx.d.prepare("SELECT DISTINCT champ FROM changements WHERE entite='locale' AND cle=? AND champ<>'_existe'").all(cle)) {
+    for (const h of tetes(ctx, 'locale', cle, r.champ)) {
+      if (h.valeur != null && h.hlc > vu && (!m || h.hlc > m.hlc)) m = { hlc: h.hlc, valeur: h.valeur };
+    }
+  }
   return m ? { g: { hlc: t.hlc, valeur: t.valeur }, p: m } : null;
 }
 
@@ -360,5 +370,5 @@ function resoudre(ctx, id, choix) {
 module.exports = {
   CHAMPS_LOCALE, TAGS, ENTITES,
   lire, valeur, lignes, existe, ecrire, supprimerLocale, pierreTombale, emettreStats,
-  appliquer, tetes, conflits, resoudre, valide
+  appliquer, tetes, conflits, resoudre, valide, recalculer: apres
 };

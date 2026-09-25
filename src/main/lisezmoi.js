@@ -90,6 +90,25 @@ const TEXTES = {
     'Ne modifie, ne renomme et ne supprime aucun fichier.'
   ],
 
+  snapshots: [
+    ...titre('snapshots/'),
+    'Photos compactes de tes données, écrites de temps en temps par un de',
+    'tes appareils (après 1 000 modifications ou 7 jours). Un appareil qui',
+    'rejoint la synchro, ou qui revient après une longue absence, repart',
+    'de la plus récente au lieu de relire tout l\'historique ; les anciens',
+    'fichiers de journaux/ peuvent alors être supprimés par l\'application.',
+    '',
+    'Ne modifie ni ne supprime rien ici : l\'application garde elle-même',
+    'les deux plus récentes de chaque appareil.'
+  ],
+
+  snapshots_appareil: [
+    ...titre('Snapshots d\'un appareil'),
+    'Photos compactes écrites par UN appareil Tuiles et Toiles (son',
+    'identifiant est le nom de ce dossier). Seul cet appareil écrit et fait',
+    'le ménage ici. Ne modifie ni ne supprime aucun fichier.'
+  ],
+
   appareils: [
     ...titre('appareils/'),
     'Une fiche par appareil inscrit à la synchro Tuiles et Toiles : son',

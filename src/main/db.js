@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS changements (
   valeur    TEXT,
   base      TEXT,
   vus       TEXT,              -- JSON : autres tetes du champ connues a l'ecriture
+  remplace  INTEGER NOT NULL DEFAULT 0,  -- 1 : remplacee (su par un snapshot), jamais une tete
   pousse    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_chg_cle ON changements(entite, cle, champ);

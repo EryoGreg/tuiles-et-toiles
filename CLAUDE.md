@@ -94,8 +94,27 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     **Pas encore testé contre le vrai Drive** (pas de compte dans les tests) : premier
     essai réel à faire depuis l'app.
     Push = toutes les ops `pousse = 0` (quel que soit l'appareil d'origine).
-  - É2e snapshots (1 000 ops ou 7 jours), segments purgés par **accusé de lecture** de
-    tous les appareils actifs (inactif après 90 j), rebase, UI conflits.
+  - É2e ✅ compaction (`synchro/compaction.js`) + cycle complet (`synchro/cycle.js`, utilisé
+    par `service.js` et les tests). Fiche d'appareil : `lu` (accusé de lecture = curseurs),
+    `purge` (dernier de SES segments supprimé), `snapshot` ({nom, vecteur}), `vu_le`.
+    **Snapshot** (`snapshots/<id>/<hlc>.json.gz`, après 1 000 ops ou 7 jours, 2 gardés par
+    appareil) = les **têtes** de tous les champs + vecteur des segments résumés — garder les
+    têtes (pas seulement les gagnants) préserve la détection des conflits. **Purge** : chaque
+    appareil ne supprime que ses segments lus par tous les appareils actifs (muet > 90 j =
+    inactif) et couverts par un snapshot. **Rattrapage** : appareil nouveau, ou dont des
+    segments non lus ont été purgés → repart du snapshot ; ses ops locales couvertes par le
+    vecteur mais absentes des têtes sont marquées `changements.remplace = 1` (sinon un
+    ancêtre dont le maillon manque passerait pour une tête → faux conflit). **Tuile supprimée
+    depuis 90 j** : contenu remis à vide **par des ops ordinaires** (un effacement local ne
+    convergerait pas face à une restauration concurrente) ; la pierre tombale reste à vie ;
+    pas d'oubli tant qu'un conflit de suppression est ouvert. Le conflit « supprimée ici,
+    modifiée là-bas » se calcule sur les **têtes** (valeurs non vides > `vu`). Pas de
+    compaction du journal local (risque de fausses têtes, gain faible). **Écran Conflits** :
+    entrée de barre latérale avec compteur, visible seulement s'il y en a ; deux versions
+    côte à côte (appareil, date), « Garder celle-ci » / « Garder supprimée » / « Restaurer » ;
+    lien « Voir les conflits » dans le bilan de synchro. Noms d'appareils retenus dans
+    `sync.appareils_connus`. Test de propriété : `tests/synchro-e2e.test.js [n] [graine]`
+    (2 à 4 appareils, arrivées, absences de plusieurs semaines, horloge contrôlée).
   - **À faire, PC et mobile :**
     - **Corbeille** (entrée de menu + compteur) : tuiles locales supprimées (pierre tombale,
       encore au registre) **et** œuvres du pack archivées — aujourd'hui aucune UI ne
@@ -104,12 +123,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
       compaction, É2e ; les archives du pack ne sont jamais purgées). Ne plus retirer les
       marques à la suppression d'une tuile locale : elles sont déjà invisibles (jointure sur
       `oeuvres_effectives`) et reviendraient ainsi avec la tuile.
-    - **Conflits : jamais de modale au lancement** (règle 1 — la synchro tourne en fond, et au
-      musée on ne veut pas être bloqué). La valeur gagnante s'affiche, rien n'attend de
-      réponse. Signalement discret : toast à la fin d'une synchro qui en trouve (« 2 conflits
-      à trancher — Voir »), pastille sur une entrée de menu « Conflits », marque sur les
-      tuiles concernées (galeries, éditeur). Écran « Conflits » : les deux valeurs côte à
-      côte, appareil + date de chacune, boutons « garder celle-ci ».
+    - **Conflits : jamais de modale au lancement** (règle 1). Fait en É2e : écran, pastille,
+      lien dans le bilan. Reste : **marque sur les tuiles concernées** (galeries, éditeur) et
+      toast global quand la synchro deviendra automatique.
   Décisions actées : préfixe de ref par appareil (`L`, puis `M`, `N`, `P`…) attribué en
   rejoignant ; les tuiles d'un appareil **jamais partagées** sont renumérotées une fois en
   rejoignant (« ref figée » vaut à partir du partage).

@@ -80,6 +80,11 @@ contextBridge.exposeInMainWorld('api', {
     drive: () => ipcRenderer.invoke('synchro:drive')
   },
 
+  conflits: {
+    liste: () => ipcRenderer.invoke('conflits:liste'),
+    trancher: (id, choix) => ipcRenderer.invoke('conflits:trancher', { id, choix })
+  },
+
   rapport: {
     choix: () => ipcRenderer.invoke('rapport:choix'),
     apercu: (formulaire) => ipcRenderer.invoke('rapport:apercu', formulaire),

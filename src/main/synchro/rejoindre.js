@@ -51,7 +51,7 @@ function renumeroter(ctx, ancien, nouveau) {
  * Publie / met a jour la fiche de cet appareil ; a la premiere entree, regle
  * le prefixe. Modifie ctx.appareil.prefixe_ref si besoin.
  * @param {{ nom: string, enregistrerPrefixe: (p: string) => void }} opts
- * @returns {Promise<{ premiereFois, prefixe, renumerotees: Array }>}
+ * @returns {Promise<{ premiereFois, prefixe, renumerotees: Array, appareils, fiches }>}
  */
 async function rejoindre(ctx, transport, { nom, enregistrerPrefixe }) {
   const id = ctx.appareil.id;
@@ -62,7 +62,9 @@ async function rejoindre(ctx, transport, { nom, enregistrerPrefixe }) {
   const resume = (l) => l.map((f) => ({ id: f.id, nom: f.nom, prefixe: f.prefixe_ref, vu_le: f.vu_le }));
   if (moi) {
     await transport.ecrireFiche({ ...moi, nom, vu_le: maintenant });
-    return { premiereFois: false, prefixe: ctx.appareil.prefixe_ref, renumerotees: [], appareils: resume(fiches) };
+    return {
+      premiereFois: false, prefixe: ctx.appareil.prefixe_ref, renumerotees: [], appareils: resume(fiches), fiches
+    };
   }
 
   const renumerotees = [];
@@ -91,9 +93,10 @@ async function rejoindre(ctx, transport, { nom, enregistrerPrefixe }) {
     const deja = parCle.get(r.cle);
     parCle.set(r.cle, deja ? { ...deja, apres: r.apres } : r);
   }
+  const toutes = await transport.lireFiches();
   return {
     premiereFois: true, prefixe: ctx.appareil.prefixe_ref, renumerotees: [...parCle.values()],
-    appareils: resume(await transport.lireFiches())
+    appareils: resume(toutes), fiches: toutes
   };
 }
 

@@ -4,10 +4,10 @@
  * ou par Google Drive (E2d). Meme cœur, meme arborescence « Tuiles et
  * Toiles/ » (format.js) ; seul le transport change.
  *
- * Une synchro : arborescence + LISEZMOI -> fiche d'appareil (prefixe a la
- * premiere fois) -> compteurs de vues -> envoi des images puis des ops ->
- * reception des ops puis des images manquantes -> reconstruction de la vue
- * si quelque chose a change.
+ * Une synchro = un cycle (cycle.js) : fiche d'appareil, rattrapage par
+ * snapshot si besoin, envoi des images puis des ops, reception des ops puis
+ * des images, snapshot et purge (compaction.js), puis reconstruction de la
+ * vue si quelque chose a change.
  *
  * Toujours optionnelle et non bloquante (regle 1) : dossier absent, pas de
  * reseau, compte deconnecte = message, rien d'autre ne change.
@@ -20,11 +20,9 @@ const jeu = require('../jeu');
 const edition = require('../edition');
 const drive = require('../drive');
 const etat = require('./etat');
-const moteur = require('./moteur');
-const echange = require('./echange');
+const cycle = require('./cycle');
 const appareilFichier = require('./appareil');
 const { NOM_RACINE } = require('./format');
-const { rejoindre } = require('./rejoindre');
 const { creerTransportDossier } = require('./transport-dossier');
 const { creerTransportDrive } = require('./transport-drive');
 const journal = require('../journal');
@@ -135,8 +133,9 @@ async function transfererImages(t, sens) {
 }
 
 /**
- * Cœur commun. Leve en cas d'echec (le jeton Drive mort doit remonter) ;
- * l'etape en cours est ajoutee au message et journalisee.
+ * Cœur commun : un cycle complet (cycle.js) avec les images et le journal.
+ * Leve en cas d'echec (le jeton Drive mort doit remonter) ; l'etape en cours
+ * est ajoutee au message et journalisee.
  */
 async function coeur(t, sorte) {
   const a = etat.appareil();
@@ -159,36 +158,49 @@ async function coeur(t, sorte) {
   });
 
   try {
-    await pas('preparer', () => t.preparer(a.id));
-    const rj = await pas('rejoindre', () => rejoindre(ctx, t, { nom: a.nom, enregistrerPrefixe: () => sauverAppareil() }));
+    const c = await cycle.executer(ctx, t, {
+      nom: a.nom, enregistrerPrefixe: () => sauverAppareil(), pas,
+      crochets: {
+        imagesEnvoi: () => transfererImages(t, 'envoi'),
+        imagesReception: () => transfererImages(t, 'reception')
+      }
+    });
+    const rj = c.rejoindre;
+    const r = c.tire;
+    // Noms des appareils, pour l'ecran des conflits (« modifie sur Telephone »).
+    db.definirEtatSync('appareils_connus', JSON.stringify(rj.appareils || []));
     journal.evt('synchro', 'appareils', {
       premiereFois: rj.premiereFois, prefixe: rj.prefixe, renumerotees: rj.renumerotees, appareils: rj.appareils
     });
-    const stats = await pas('stats', () => moteur.emettreStats(ctx));
-    const imagesEnvoyees = await pas('images-envoi', () => transfererImages(t, 'envoi'));
-    const p = await pas('pousser', () => echange.pousser(ctx, t));
-    journal.evt('synchro', 'pousse', { ops: p.poussees, segment: p.segment, stats });
-    const r = await pas('tirer', () => echange.tirer(ctx, t));
+    if (c.rattrapage) {
+      journal.evt('synchro', 'rattrapage', c.rattrapage, c.rattrapage.manque ? 'ERREUR' : 'INFO');
+    }
+    if (c.tombes.length) journal.evt('synchro', 'tuiles-oubliees', { cles: c.tombes, raison: 'supprimees depuis plus de 90 jours' });
+    journal.evt('synchro', 'pousse', { ops: c.pousse.poussees, segment: c.pousse.segment, stats: c.stats });
     journal.evt('synchro', 'tire', {
       appliquees: r.appliquees, bilan: r.bilan, parAppareil: r.parAppareil, conflits: r.conflits
     }, r.rejetees ? 'WARN' : 'INFO');
     if (r.rejetees) journal.avertir('synchro', 'ops-rejetees', { n: r.rejetees, exemples: r.exemplesRejetes });
-    const imagesRecues = await pas('images-reception', () => transfererImages(t, 'reception'));
+    if (c.snapshot) journal.evt('synchro', 'snapshot-ecrit', { nom: c.snapshot.nom, tetes: c.snapshot.ops, nouvelles: c.snapshot.nouvelles, vecteur: c.snapshot.vecteur });
+    journal.evt('synchro', 'purge-segments', c.purge, c.purge.supprimes.length ? 'INFO' : 'DEBUG');
 
-    if (r.appliquees || rj.renumerotees.length || imagesRecues) {
-      await pas('vue', () => { db.reconstruireVue({ force: true }); jeu.reinitialiserSac(); });
-    }
+    const change = r.appliquees || rj.renumerotees.length || c.imagesRecues || c.tombes.length
+      || (c.rattrapage && c.rattrapage.bilan && c.rattrapage.bilan.avance);
+    if (change) await pas('vue', () => { db.reconstruireVue({ force: true }); jeu.reinitialiserSac(); });
     const ouverts = etat.conflits();
     if (ouverts.length) {
-      journal.avertir('synchro', 'conflits-ouverts', ouverts.map((c) => ({
-        entite: c.entite, cle: c.cle, champ: c.champ, gagnant: c.hlc_gagnant, perdant: c.hlc_perdant
+      journal.avertir('synchro', 'conflits-ouverts', ouverts.map((x) => ({
+        entite: x.entite, cle: x.cle, champ: x.champ, gagnant: x.hlc_gagnant, perdant: x.hlc_perdant
       })));
     }
     const bilan = {
       le: new Date().toISOString(),
-      poussees: p.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
-      imagesEnvoyees, imagesRecues,
-      prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees
+      poussees: c.pousse.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
+      imagesEnvoyees: c.imagesEnvoyees, imagesRecues: c.imagesRecues,
+      prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees,
+      rattrapage: c.rattrapage ? (c.rattrapage.snapshot || 'impossible') : null,
+      snapshot: c.snapshot ? c.snapshot.nom : null, segmentsPurges: c.purge.supprimes.length,
+      tuilesOubliees: c.tombes.length, change: !!change
     };
     journal.evt('synchro', 'fin', { par: sorte, ...bilan, ms: Date.now() - t0 });
     return bilan;
@@ -244,6 +256,53 @@ function synchroniserDrive(surReconnexion, apiTest) {
   });
 }
 
+const LIBELLES = {
+  titre: 'Titre', artiste: 'Artiste', date: 'Année / période', lieu: 'Conservation',
+  description: 'Description', tags: 'Tags', image: 'Image', ref_local: 'Numéro', _existe: 'Existence'
+};
+
+/**
+ * Conflits ouverts, prets a afficher : oeuvre concernee, champ, et pour
+ * chaque version sa valeur, l'appareil et la date.
+ */
+function listeConflits() {
+  const d = db.instance();
+  const a = etat.appareil();
+  const noms = new Map([[a.id, a.nom + ' (cet appareil)']]);
+  for (const f of lire('appareils_connus') || []) if (f.id !== a.id) noms.set(f.id, f.nom || f.id);
+  const { lire: lireHlc } = require('./hlc');
+  const version = (hlc, valeurJson, entite) => {
+    const h = lireHlc(hlc);
+    let v = valeurJson;
+    if (entite === 'override' && v && typeof v === 'object') v = v.valeur;
+    return { hlc, valeur: v, appareil: h.appareil, nomAppareil: noms.get(h.appareil) || h.appareil, le: new Date(h.ms).toISOString() };
+  };
+  return etat.conflits().map((c) => {
+    const o = db.oeuvre(c.cle);
+    const l = c.entite === 'locale' ? etat.lignes('locale', c.cle) : {};
+    const titre = (o && o.titre) || (l.titre && l.titre.valeur) || '(sans titre)';
+    const ref = (o && o.ref) || (l.ref_local && l.ref_local.valeur) || null;
+    const base = {
+      id: c.id, entite: c.entite, cle: c.cle, champ: c.champ, libelle: LIBELLES[c.champ] || c.champ,
+      oeuvre: { titre, ref, locale: c.entite === 'locale' }, detecteLe: c.detecte_le
+    };
+    if (c.entite === 'locale' && c.champ === '_existe') {
+      const m = d.prepare('SELECT champ FROM changements WHERE hlc=?').get(c.hlc_perdant);
+      const supprimee = c.valeur_gagnante !== 1;
+      return {
+        ...base, type: 'suppression', supprimee,
+        gagnant: version(c.hlc_gagnant, c.valeur_gagnante, c.entite),
+        perdant: { ...version(c.hlc_perdant, c.valeur_perdante, c.entite), champ: m && m.champ, libelleChamp: m && (LIBELLES[m.champ] || m.champ) }
+      };
+    }
+    return {
+      ...base, type: 'valeur',
+      gagnant: version(c.hlc_gagnant, c.valeur_gagnante, c.entite),
+      perdant: version(c.hlc_perdant, c.valeur_perdante, c.entite)
+    };
+  });
+}
+
 /**
  * Tranche un conflit (choix = 'gagnant' | 'perdant') et remet la vue a jour.
  * L'op emise partira a la prochaine synchro et fermera le conflit ailleurs.
@@ -261,5 +320,5 @@ function resoudre(id, choix) {
 
 module.exports = {
   configurer, etat: etatSynchro, definirDossier, oublierDossier,
-  synchroniser, synchroniserDrive, resoudre, SOUS_DOSSIER
+  synchroniser, synchroniserDrive, resoudre, listeConflits, SOUS_DOSSIER
 };

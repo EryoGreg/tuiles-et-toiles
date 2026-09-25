@@ -11,6 +11,7 @@
  *   creerFichier(nom, parent, octets, mime) -> id
  *   majFichier(id, octets, mime)
  *   lire(id)                           -> Buffer
+ *   supprimer(id)                      (purge : uniquement nos propres fichiers)
  *
  * Particularite Drive : deux dossiers peuvent porter le meme nom. Si deux
  * appareils creent « journaux » au meme instant, il y en a deux. Parade : on
@@ -32,6 +33,7 @@ const { ecrireAtomique } = require('./transport-dossier');
 const MIME_NDJSON = 'application/x-ndjson';
 const MIME_JSON = 'application/json';
 const MIME_TXT = 'text/plain; charset=UTF-8';
+const MIME_GZ = 'application/gzip';
 const mimeImage = (nom) => (nom.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
 // LISEZMOI deja verifies pendant cette session de l'app. Cle : api.memoCle
@@ -109,6 +111,7 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
       await deposerLisezmoi((await dossiersAppareil(idAppareil, true))[0], 'journal_appareil');
       await deposerLisezmoi((await sous('appareils'))[0], 'appareils');
       await deposerLisezmoi((await sous('images'))[0], 'images');
+      await deposerLisezmoi((await sous('snapshots'))[0], 'snapshots');
     },
 
     async listerAppareils() {
@@ -142,6 +145,50 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
       const deja = await api.lister(dossier, { nom: nom + '.ndjson', dossier: false });
       if (deja.length) return;
       await api.creerFichier(nom + '.ndjson', dossier, Buffer.from(F.ecrireNdjson(ops), 'utf8'), MIME_NDJSON);
+    },
+
+    async supprimerSegment(app, nom) {
+      for (const d of await dossiersAppareil(app)) {
+        for (const f of await api.lister(d, { nom: nom + '.ndjson', dossier: false })) await api.supprimer(f.id);
+      }
+      if (segments.has(app)) segments.get(app).delete(nom);
+    },
+
+    // --- snapshots ---
+
+    async listerSnapshots() {
+      const out = [];
+      const vus = new Set();
+      for (const s of await sous('snapshots')) {
+        for (const d of await api.lister(s, { dossier: true })) {
+          if (!F.RE_APPAREIL.test(d.name)) continue;
+          for (const f of await api.lister(d.id, { dossier: false })) {
+            const nom = F.snapshot(f.name);
+            if (nom && !vus.has(d.name + '/' + nom)) { vus.add(d.name + '/' + nom); out.push({ appareil: d.name, nom, id: f.id }); }
+          }
+        }
+      }
+      return out;
+    },
+    async lireSnapshot(app, nom) {
+      const s = (await this.listerSnapshots()).find((x) => x.appareil === app && x.nom === nom);
+      if (!s) throw new Error('Snapshot introuvable ' + app + '/' + nom);
+      return F.decoderSnapshot(await api.lire(s.id));
+    },
+    async ecrireSnapshot(app, nom, obj) {
+      const racineS = (await sous('snapshots'))[0];
+      let d = (await dossiers(app, racineS, false))[0];
+      if (!d) {
+        d = await api.creerDossier(app, racineS);
+        memo.set(racineS + '/' + app, [d]);
+        await deposerLisezmoi(d, 'snapshots_appareil');
+      }
+      await api.creerFichier(nom + '.json.gz', d, F.encoderSnapshot(obj), MIME_GZ);
+    },
+    async supprimerSnapshot(app, nom) {
+      for (const s of (await this.listerSnapshots()).filter((x) => x.appareil === app && x.nom === nom)) {
+        await api.supprimer(s.id);
+      }
     },
 
     // --- fiches d'appareil ---

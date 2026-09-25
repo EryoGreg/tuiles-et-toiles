@@ -561,7 +561,9 @@ function Barre({ page, aller, etat, repliee, basculer, onQuitter }) {
     ['livre', I.Livre, 'Livre', etat.tags.livre],
     ['etoile', I.Etoile, 'Étoile', etat.tags.etoile],
     ['revoir', I.Revoir, 'À revoir', etat.tags.bad_smiley],
-    ['edition', I.Crayon, 'Édition', null]
+    ['edition', I.Crayon, 'Édition', null],
+    // N'apparait que s'il y a des conflits de synchro a trancher.
+    ...(etat.conflits ? [['conflits', I.Echange, 'Conflits', etat.conflits]] : [])
   ];
   return (
     <aside className={'barre' + (repliee ? ' repliee' : '')}>
@@ -573,7 +575,7 @@ function Barre({ page, aller, etat, repliee, basculer, onQuitter }) {
         <button key={cle} className={'entree' + (page === cle ? ' active' : '')} onClick={() => aller(cle)}>
           <Icone />
           <span className="libelle">{nom}</span>
-          {n != null && <span className="compte">{n}</span>}
+          {n != null && <span className={'compte' + (cle === 'conflits' ? ' alerte' : '')}>{n}</span>}
         </button>
       ))}
       <span style={{ flexGrow: 1 }} />
@@ -1409,7 +1411,7 @@ const RACCOURCIS = [
   ['taskbar', 'Épingler à la barre des tâches', 'Épinglé à la barre — détacher']
 ];
 
-function Options({ etat, onEtat }) {
+function Options({ etat, onEtat, aller }) {
   const [confirmation, setConfirmation] = useState(false);
   const [demandeEffacement, setDemandeEffacement] = useState(false);
   const [effacementFait, setEffacementFait] = useState(null);
@@ -1525,7 +1527,7 @@ function Options({ etat, onEtat }) {
     morceaux.push(r.poussees + ' modification(s) envoyée(s), ' + r.appliquees + ' reçue(s)'
       + (r.imagesEnvoyees + r.imagesRecues ? ', ' + (r.imagesEnvoyees + r.imagesRecues) + ' image(s)' : '') + '.');
     if (r.conflits) morceaux.push(r.conflits + ' conflit(s) à trancher — la valeur la plus récente est affichée en attendant.');
-    const msg = { ok: morceaux.join(' ') };
+    const msg = { ok: morceaux.join(' '), conflits: r.conflits };
     if (r.appliquees || r.renumerotees.length || r.imagesRecues) {
       try { sessionStorage.setItem('synchro-msg', JSON.stringify({ ou, msg })); } catch { /* tant pis */ }
       window.location.reload();   // la base a change — repartir propre
@@ -1740,6 +1742,9 @@ function Options({ etat, onEtat }) {
           </div>
         )}
         {drvMsg && drvMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {drvMsg.ok}</div>}
+        {drvMsg && drvMsg.conflits > 0 && aller && (
+          <button className="bouton-neutre" onClick={() => aller('conflits')}><I.Echange t={16} /> Voir les conflits</button>
+        )}
         {drvMsg && drvMsg.erreur && (
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{drvMsg.erreur}</div>
         )}
@@ -1817,6 +1822,9 @@ function Options({ etat, onEtat }) {
           </>
         )}
         {synMsg && synMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {synMsg.ok}</div>}
+        {synMsg && synMsg.conflits > 0 && aller && (
+          <button className="bouton-neutre" onClick={() => aller('conflits')}><I.Echange t={16} /> Voir les conflits</button>
+        )}
         {synMsg && synMsg.erreur && (
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{synMsg.erreur}</div>
         )}
@@ -1910,6 +1918,99 @@ function Options({ etat, onEtat }) {
           </p>
         </BoiteConfirmation>
       )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- conflits */
+
+const dateCourte = (iso) => new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const texteValeur = (v, champ) => (v == null || v === '' ? '(vide)' : champ === 'image' ? 'une image' : String(v));
+
+// Conflits de synchro : le meme champ modifie sur deux appareils sans que
+// l'un ait vu l'autre, ou une tuile supprimee ici et modifiee la-bas. La
+// valeur la plus recente est affichee en attendant ; rien ne bloque.
+function PageConflits({ onEtat }) {
+  const [liste, setListe] = useState(null);
+  const [enCours, setEnCours] = useState(null);
+
+  useEffect(() => { window.api.conflits.liste().then(setListe); }, []);
+
+  const trancher = async (id, choix) => {
+    setEnCours(id);
+    setListe(await window.api.conflits.trancher(id, choix));
+    setEnCours(null);
+    onEtat();
+  };
+
+  return (
+    <div className="galerie" style={{ '--accent': 'var(--revoir)' }}>
+      <div className="galerie-tete">
+        <span className="galerie-icone"><I.Echange t={22} /></span>
+        <div>
+          <h2>Conflits</h2>
+          <div className="soustitre">
+            Modifications faites sur deux appareils sans qu’ils se soient vus. En attendant ton choix,
+            la plus récente est affichée — ton choix partira à la prochaine synchro.
+          </div>
+        </div>
+      </div>
+
+      {!liste ? <div className="chargement">chargement…</div> : !liste.length ? (
+        <div className="conflits-vide"><I.Coche t={18} /> Aucun conflit : tous tes appareils sont d’accord.</div>
+      ) : (
+        <div className="conflits">
+          {liste.map((c) => (
+            <div key={c.id} className="conflit">
+              <div className="conflit-tete">
+                <span className="conflit-oeuvre">{c.oeuvre.ref ? '#' + c.oeuvre.ref + ' ' : ''}« {c.oeuvre.titre} »</span>
+                <span className="conflit-champ">{c.type === 'suppression' ? 'supprimée ici, modifiée là-bas' : c.libelle}</span>
+              </div>
+              {c.type === 'suppression' ? (
+                <div className="conflit-versions">
+                  <Version
+                    titre={(c.supprimee ? 'Supprimée' : 'Restaurée') + ' sur ' + c.gagnant.nomAppareil}
+                    date={c.gagnant.le} actuelle
+                    texte={c.supprimee ? 'La tuile n’apparaît plus.' : 'La tuile est visible.'}
+                    bouton={c.supprimee ? 'Garder supprimée' : 'Garder la tuile'}
+                    occupe={enCours === c.id} onChoisir={() => trancher(c.id, 'gagnant')}
+                  />
+                  <Version
+                    titre={(c.perdant.champ === '_existe' ? (c.supprimee ? 'Restaurée' : 'Supprimée') : 'Modifiée')
+                      + ' sur ' + c.perdant.nomAppareil}
+                    date={c.perdant.le}
+                    texte={c.perdant.champ === '_existe'
+                      ? (c.supprimee ? 'La tuile est visible.' : 'La tuile n’apparaît plus.')
+                      : (c.perdant.libelleChamp || 'Champ') + ' : ' + texteValeur(c.perdant.valeur, c.perdant.champ)}
+                    bouton={c.supprimee ? 'Restaurer la tuile' : 'Supprimer la tuile'}
+                    occupe={enCours === c.id} onChoisir={() => trancher(c.id, 'perdant')}
+                  />
+                </div>
+              ) : (
+                <div className="conflit-versions">
+                  <Version titre={c.gagnant.nomAppareil} date={c.gagnant.le} actuelle
+                    texte={texteValeur(c.gagnant.valeur, c.champ)} bouton="Garder celle-ci"
+                    occupe={enCours === c.id} onChoisir={() => trancher(c.id, 'gagnant')} />
+                  <Version titre={c.perdant.nomAppareil} date={c.perdant.le}
+                    texte={texteValeur(c.perdant.valeur, c.champ)} bouton="Garder celle-ci"
+                    occupe={enCours === c.id} onChoisir={() => trancher(c.id, 'perdant')} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Version({ titre, date, texte, bouton, actuelle, occupe, onChoisir }) {
+  return (
+    <div className={'conflit-version' + (actuelle ? ' actuelle' : '')}>
+      <div className="conflit-qui">{titre}{actuelle && <span className="conflit-badge">affichée</span>}</div>
+      <div className="conflit-quand">{dateCourte(date)}</div>
+      <div className="conflit-valeur">{texte}</div>
+      <button className="bouton-neutre" onClick={onChoisir} disabled={occupe}><I.Coche t={14} /> {bouton}</button>
     </div>
   );
 }
@@ -2530,7 +2631,8 @@ export default function App() {
               souris4/5) remonte la page et repart de son etat initial. */}
           <Fragment key={page + '#' + navNonce}>
             {page === 'jeu' ? <Jeu onEtat={charger} />
-              : page === 'options' ? <Options etat={etat} onEtat={charger} />
+              : page === 'options' ? <Options etat={etat} onEtat={charger} aller={naviguer} />
+              : page === 'conflits' ? <PageConflits onEtat={charger} />
               : page === 'bibliotheque' ? <PageBibliotheque onEtat={charger} />
               : page === 'edition' ? <PageEdition onEtat={charger} />
               : page === 'livre' ? <PageLivre onEtat={charger} />

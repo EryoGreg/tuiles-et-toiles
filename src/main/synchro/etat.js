@@ -163,6 +163,7 @@ function preparer(d) {
     migrerStats(d);
     const cols = d.prepare('PRAGMA table_info(changements)').all().map((c) => c.name);
     if (!cols.includes('vus')) d.exec('ALTER TABLE changements ADD COLUMN vus TEXT');
+    if (!cols.includes('remplace')) d.exec('ALTER TABLE changements ADD COLUMN remplace INTEGER NOT NULL DEFAULT 0');
     const faite = d.prepare("SELECT valeur FROM sync WHERE cle = 'genese_faite'").get();
     if (!faite) {
       const n = genese(d);

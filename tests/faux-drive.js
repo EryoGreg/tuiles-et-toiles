@@ -13,7 +13,7 @@ let horloge = Date.parse('2026-01-01T00:00:00Z');
 function creerFauxDrive() {
   const elements = new Map();   // id -> { id, name, parent, dossier, createdTime, octets }
   let n = 0;
-  const appels = { lister: 0, creer: 0, maj: 0, lire: 0 };
+  const appels = { lister: 0, creer: 0, maj: 0, lire: 0, supprimer: 0 };
 
   const nouveau = (name, parent, dossier, octets) => {
     const id = 'f' + (++n);
@@ -40,6 +40,7 @@ function creerFauxDrive() {
       if (!e || e.dossier) throw new Error('Drive 404 ' + id);
       return Buffer.from(e.octets);
     },
+    async supprimer(id) { appels.supprimer++; elements.delete(id); },
     /** Chemin -> element (tests). */
     trouver(...noms) {
       let parent = 'root';
