@@ -38,7 +38,37 @@ const RE_MIROIR_DRIVE = /(^|[\\/])(Mon Drive|My Drive|Google Drive|Drive partag�
 let cfg = null;
 let enCours = false;
 
-/** @param {{ dossierUser, imagesLocales }} c */
+// Progression de la synchro en cours, diffusee a l'interface (surProgression)
+// et relue par toute page qui s'ouvre (etatSynchro) : l'utilisateur voit en
+// permanence ce qui se passe, meme s'il change d'onglet.
+let progression = { enCours: false };
+let nCycles = 0;
+const LIBELLES_ETAPES = {
+  depart: 'Démarrage…',
+  preparer: 'Préparation du dossier de synchro',
+  rejoindre: 'Inscription de cet appareil',
+  rattrapage: 'Rattrapage depuis un snapshot',
+  tombes: 'Nettoyage des tuiles supprimées',
+  stats: 'Compteurs de vues',
+  'images-envoi': 'Envoi des images',
+  pousser: 'Envoi des modifications',
+  tirer: 'Réception des modifications',
+  'images-reception': 'Réception des images',
+  snapshot: 'Écriture d’un snapshot',
+  purge: 'Ménage des anciens journaux',
+  fiche: 'Mise à jour de la fiche de l’appareil',
+  vue: 'Mise à jour de l’affichage',
+  reconnexion: 'Session Google expirée — autorise de nouveau l’accès dans le navigateur…',
+  reprise: 'Reconnecté à Google — reprise de la synchro'
+};
+
+function signaler(p) {
+  progression = { ...progression, ...p, maj: Date.now() };
+  if (p.etape && !p.libelle) progression.libelle = LIBELLES_ETAPES[p.etape] || p.etape;
+  if (cfg && cfg.surProgression) { try { cfg.surProgression(progression); } catch { /* fenetre fermee */ } }
+}
+
+/** @param {{ dossierUser, imagesLocales, surProgression? }} c */
 function configurer(c) { cfg = c; }
 
 function racine(dossier) {
@@ -68,6 +98,7 @@ function etatSynchro() {
     appareil: { id: a.id, nom: a.nom, prefixe: a.prefixe_ref },
     derniere: lire('dossier_derniere'),
     derniereDrive: lire('drive_fusion_derniere'),
+    progression,
     conflits: etat.conflits().length,
     avertissement: avertissement(a.dossier_synchro),
     enCours
@@ -107,7 +138,11 @@ function oublierDossier() {
 async function transfererImages(t, sens) {
   let n = 0;
   const faites = [], manquantes = [], echecs = [], invalides = [];
-  for (const nom of edition.imagesReferencees()) {
+  const toutes = [...edition.imagesReferencees()];
+  let i = 0;
+  for (const nom of toutes) {
+    i++;
+    if (toutes.length > 3) signaler({ faits: i, total: toutes.length });
     if (!t.imageValide(nom)) { invalides.push(nom); continue; }
     const local = path.join(cfg.imagesLocales, nom);
     try {
@@ -145,6 +180,7 @@ async function coeur(t, sorte) {
   let etape = 'depart';
   const pas = async (nom, fn) => {
     etape = nom;
+    signaler({ etape: nom, libelle: null, faits: null, total: null });
     const t1 = Date.now();
     const r = await fn();
     journal.debug('synchro', 'etape:' + nom, { ms: Date.now() - t1 });
@@ -211,10 +247,18 @@ async function coeur(t, sorte) {
   }
 }
 
-async function exclusif(fn) {
-  if (enCours) return { erreur: 'Une synchro est déjà en cours.' };
+async function exclusif(par, fn) {
+  if (enCours) return { erreur: 'Une synchro est déjà en cours.', enCoursPar: progression.par, cycle: progression.cycle };
   enCours = true;
-  try { return await fn(); } finally { enCours = false; }
+  const cycle = ++nCycles;
+  signaler({ enCours: true, par, cycle, debut: Date.now(), etape: 'depart', libelle: null, faits: null, total: null, resultat: null });
+  let r;
+  try { r = await fn(); }
+  catch (e) { r = { erreur: 'Synchro interrompue : ' + e.message }; }
+  finally { enCours = false; }
+  r = { ...r, cycle };
+  signaler({ enCours: false, etape: 'fin', libelle: r.erreur ? 'Échec' : 'Terminé', faits: null, total: null, resultat: r });
+  return r;
 }
 
 /** Synchro par le dossier partage choisi dans Options. */
@@ -225,7 +269,7 @@ function synchroniser() {
     journal.avertir('synchro', 'dossier-introuvable', { dossier: a.dossier_synchro });
     return Promise.resolve({ erreur: 'Dossier de synchro introuvable (clé USB débranchée, lecteur réseau absent ?).' });
   }
-  return exclusif(async () => {
+  return exclusif('dossier', async () => {
     try {
       const bilan = await coeur(creerTransportDossier(racine(a.dossier_synchro)), 'dossier');
       db.definirEtatSync('dossier_derniere', JSON.stringify(bilan));
@@ -243,7 +287,7 @@ function synchroniser() {
  * @param {object} [apiTest] api Drive de substitution (tests : faux Drive)
  */
 function synchroniserDrive(surReconnexion, apiTest) {
-  return exclusif(async () => {
+  return exclusif('drive', async () => {
     const op = async (oauth) => {
       const bilan = await coeur(creerTransportDrive(apiTest || drive.api(oauth)), 'drive');
       db.definirEtatSync('drive_fusion_derniere', JSON.stringify(bilan));
@@ -252,7 +296,9 @@ function synchroniserDrive(surReconnexion, apiTest) {
     if (apiTest) {
       try { return await op(null); } catch (e) { return { erreur: 'Synchro interrompue : ' + e.message }; }
     }
-    return drive.avecReconnexion(op, surReconnexion);
+    return drive.avecReconnexion(op,
+      () => { signaler({ etape: 'reconnexion' }); if (surReconnexion) surReconnexion(); },
+      () => signaler({ etape: 'reprise' }));
   });
 }
 

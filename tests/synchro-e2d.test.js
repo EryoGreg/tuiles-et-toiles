@@ -221,6 +221,29 @@ async function boutEnBout() {
     console.log('      (synchro a vide : ' + n + ' appels API)');
   });
 
+  await test('progression diffusee : etapes, bilan final, etat relisible, second clic refuse', async () => {
+    ouvrirAppareil(PC);
+    const vus = [];
+    service.configurer({ dossierUser: PC, imagesLocales: path.join(PC, 'images-locales'), surProgression: (p) => vus.push({ ...p }) });
+    edition.creer({ titre: 'Pour la progression', artiste: 'X' });
+    const enCours = service.synchroniserDrive(null, faux);
+    const pendant = service.etat().progression;
+    assert.equal(pendant.enCours, true, 'etat relisible pendant la synchro (page rouverte)');
+    assert.equal(pendant.par, 'drive');
+    const second = await service.synchroniserDrive(null, faux);
+    assert.match(second.erreur, /déjà en cours/);
+    assert.equal(second.cycle, pendant.cycle, 'meme cycle : le rendu ne l annonce pas deux fois');
+    const r = await enCours;
+    assert.ok(!r.erreur, r.erreur);
+    const etapes = vus.map((p) => p.etape);
+    for (const e of ['depart', 'preparer', 'rejoindre', 'pousser', 'tirer', 'fin']) assert.ok(etapes.includes(e), e + ' dans ' + etapes.join(','));
+    assert.ok(vus.every((p) => p.libelle), 'chaque etape a un libelle lisible');
+    const fin = vus[vus.length - 1];
+    assert.equal(fin.enCours, false);
+    assert.equal(fin.resultat.cycle, r.cycle);
+    assert.equal(service.etat().progression.enCours, false);
+  });
+
   await test('Drive injoignable : message, donnees locales intactes', async () => {
     const panne = { ...faux, lister: async () => { throw new Error('ENOTFOUND www.googleapis.com'); } };
     const r = await service.synchroniserDrive(null, panne);

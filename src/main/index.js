@@ -217,7 +217,12 @@ app.whenReady().then(() => {
     user: USER, imagesLocales: DOSSIER_IMAGES_LOCALES, pack: PACK, versionApp: app.getVersion()
   });
   drive.configurer({ dossierUser: DOSSIER_USER });
-  synchro.configurer({ dossierUser: DOSSIER_USER, imagesLocales: DOSSIER_IMAGES_LOCALES });
+  synchro.configurer({
+    dossierUser: DOSSIER_USER, imagesLocales: DOSSIER_IMAGES_LOCALES,
+    surProgression: (p) => {
+      for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('synchro:progression', p);
+    }
+  });
   rapport.configurer({
     dossier: path.join(app.getPath('documents'), 'Tuiles et Toiles - rapports'),
     version: app.getVersion(),
@@ -456,13 +461,15 @@ const surReconnexionDrive = (e) => () => {
   journal.evt('drive', 'reconnexion-auto');
   if (!e.sender.isDestroyed()) e.sender.send('drive:reconnexion');
 };
+// Reconnexion reussie : l'interface remet le message de l'operation en cours.
+const surReconnecteDrive = (e) => () => { if (!e.sender.isDestroyed()) e.sender.send('drive:reconnecte'); };
 gerer('drive:pousser', async (e, opts) => {
-  const r = await drive.pousser(opts || {}, surReconnexionDrive(e));
+  const r = await drive.pousser(opts || {}, surReconnexionDrive(e), surReconnecteDrive(e));
   journal.evt('drive', 'pousser', { ok: !!r.ok, conflit: !!r.conflit, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
   return r;
 });
 gerer('drive:tirer', async (e, opts) => {
-  const r = await drive.tirer(opts || {}, surReconnexionDrive(e));
+  const r = await drive.tirer(opts || {}, surReconnexionDrive(e), surReconnecteDrive(e));
   journal.evt('drive', 'tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
   return r;
 });

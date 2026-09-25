@@ -69,6 +69,12 @@ contextBridge.exposeInMainWorld('api', {
       const ecouteur = () => fn();
       ipcRenderer.on('drive:reconnexion', ecouteur);
       return () => ipcRenderer.removeListener('drive:reconnexion', ecouteur);
+    },
+    // Reconnexion reussie, l'operation reprend.
+    onReconnecte: (fn) => {
+      const ecouteur = () => fn();
+      ipcRenderer.on('drive:reconnecte', ecouteur);
+      return () => ipcRenderer.removeListener('drive:reconnecte', ecouteur);
     }
   },
 
@@ -77,7 +83,14 @@ contextBridge.exposeInMainWorld('api', {
     choisirDossier: () => ipcRenderer.invoke('synchro:choisirDossier'),
     oublier: () => ipcRenderer.invoke('synchro:oublier'),
     synchroniser: () => ipcRenderer.invoke('synchro:synchroniser'),
-    drive: () => ipcRenderer.invoke('synchro:drive')
+    drive: () => ipcRenderer.invoke('synchro:drive'),
+    // Progression de la synchro en cours : { enCours, par, cycle, etape,
+    // libelle, faits, total, debut, resultat } — a chaque etape et a la fin.
+    onProgression: (fn) => {
+      const ecouteur = (_e, p) => fn(p);
+      ipcRenderer.on('synchro:progression', ecouteur);
+      return () => ipcRenderer.removeListener('synchro:progression', ecouteur);
+    }
   },
 
   conflits: {

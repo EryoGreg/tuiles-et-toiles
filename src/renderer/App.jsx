@@ -553,7 +553,7 @@ function Partie({ filtre, onChanger, onEtat }) {
 
 /* ---------------------------------------------------------------- coquille */
 
-function Barre({ page, aller, etat, repliee, basculer, onQuitter }) {
+function Barre({ page, aller, etat, repliee, basculer, onQuitter, synchro }) {
   const items = [
     ['menu', I.Maison, 'Accueil', null],
     ['jeu', I.Manette, 'Jouer', null],
@@ -579,6 +579,15 @@ function Barre({ page, aller, etat, repliee, basculer, onQuitter }) {
         </button>
       ))}
       <span style={{ flexGrow: 1 }} />
+      {synchro && (
+        <button className="entree synchro-en-cours" onClick={() => aller('options')}
+          title={'Synchro en cours — ' + (synchro.libelle || '')} role="status" aria-live="polite">
+          <span className="drive-pastille" />
+          <span className="libelle">
+            Synchro…{synchro.total ? ' ' + synchro.faits + '/' + synchro.total : ''}
+          </span>
+        </button>
+      )}
       <button className="entree" onClick={() => aller('options')}><I.Rouage /><span className="libelle">Options</span></button>
       <button className="entree" onClick={onQuitter} style={{ color: 'var(--revoir)' }}>
         <I.Croix /><span className="libelle">Quitter</span>
@@ -1435,7 +1444,6 @@ function Options({ etat, onEtat, aller }) {
   const [drvConflit, setDrvConflit] = useState(null);    // { sens: 'pousser'|'tirer', distantModifie? }
   const [drvAction, setDrvAction] = useState(null);      // 'connexion' | 'envoi' | 'recuperation' | 'fusion'
   const [syn, setSyn] = useState(null);                  // etat synchro (dossier + Drive)
-  const [synOccupe, setSynOccupe] = useState(false);
   const [synMsg, setSynMsg] = useState(msgRecharge && msgRecharge.ou === 'dossier' ? msgRecharge.msg : null);
 
   const [rapportOuvert, setRapportOuvert] = useState(false);
@@ -1472,7 +1480,16 @@ function Options({ etat, onEtat, aller }) {
   useEffect(() => { window.api.drive.etat().then(setDrv); }, []);
   // Session Google expiree en cours d'envoi : le navigateur s'ouvre pour
   // reconnecter, puis l'operation reprend toute seule.
-  useEffect(() => window.api.drive.onReconnexion(() => setDrvAction('reconnexion')), []);
+  // (La synchro, elle, affiche sa reconnexion via sa progression.)
+  const actionAvantReconnexion = useRef(null);
+  useEffect(() => window.api.drive.onReconnexion(() => setDrvAction((a) => {
+    if (!a || a === 'reconnexion') return a;
+    actionAvantReconnexion.current = a;
+    return 'reconnexion';
+  })), []);
+  useEffect(() => window.api.drive.onReconnecte(() => setDrvAction((a) => (
+    a === 'reconnexion' ? actionAvantReconnexion.current : a
+  ))), []);
   const drvFlash = (m) => { setDrvMsg(m); setTimeout(() => setDrvMsg(null), 8000); };
 
   const drvConnecter = async () => {
@@ -1503,7 +1520,25 @@ function Options({ etat, onEtat, aller }) {
     window.location.reload();
   };
 
-  useEffect(() => { window.api.synchro.etat().then(setSyn); }, []);
+  // Progression de la synchro, tenue par le processus principal : une page
+  // (re)ouverte pendant une synchro l'affiche aussitot, et le bilan arrive
+  // meme si la synchro a ete lancee depuis une page quittee entre-temps.
+  const [prog, setProg] = useState({ enCours: false });
+  const annonces = useRef(new Set());   // cycles deja annonces
+  const [, setTic] = useState(0);
+  useEffect(() => {
+    window.api.synchro.etat().then((s) => { setSyn(s); if (s.progression) setProg(s.progression); });
+    return window.api.synchro.onProgression((p) => {
+      setProg(p);
+      if (p.etape === 'fin' && p.resultat) annoncer(p.resultat, p.par);
+    });
+  }, []);
+  // Chronometre visible : la synchro vit, meme sur une etape longue.
+  useEffect(() => {
+    if (!prog.enCours) return undefined;
+    const id = setInterval(() => setTic((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [prog.enCours]);
 
   const synChoisir = async () => {
     setSynMsg(null);
@@ -1514,9 +1549,20 @@ function Options({ etat, onEtat, aller }) {
   };
   const synOublier = async () => { setSyn(await window.api.synchro.oublier()); setSynMsg(null); };
 
-  // Bilan d'une synchro (dossier ou Drive). Si des donnees sont arrivees, la
-  // page se recharge ; le message passe le rechargement via sessionStorage.
+  // Bilan d'une synchro (dossier ou Drive), une seule fois par cycle : il
+  // arrive par la progression (etape « fin ») et/ou par le retour de l'appel.
+  function annoncer(r, ou) {
+    if (r.cycle) {
+      if (annonces.current.has(r.cycle)) return;
+      annonces.current.add(r.cycle);
+    }
+    annoncerSynchro(r, ou, ou === 'drive' ? setDrvMsg : setSynMsg);
+  }
+
+  // Si des donnees sont arrivees, la page se recharge ; le message passe le
+  // rechargement via sessionStorage.
   const annoncerSynchro = async (r, ou, setMsg) => {
+    onEtat();   // compteurs de la barre (conflits…)
     if (r.erreur) { setMsg({ erreur: r.erreur }); return; }
     const morceaux = [];
     if (r.reconnecte) morceaux.push('Reconnecté à Google.');
@@ -1527,8 +1573,10 @@ function Options({ etat, onEtat, aller }) {
     morceaux.push(r.poussees + ' modification(s) envoyée(s), ' + r.appliquees + ' reçue(s)'
       + (r.imagesEnvoyees + r.imagesRecues ? ', ' + (r.imagesEnvoyees + r.imagesRecues) + ' image(s)' : '') + '.');
     if (r.conflits) morceaux.push(r.conflits + ' conflit(s) à trancher — la valeur la plus récente est affichée en attendant.');
+    if (r.rattrapage) morceaux.push('Rattrapage depuis un snapshot.');
+    if (r.tuilesOubliees) morceaux.push(r.tuilesOubliees + ' tuile(s) supprimée(s) depuis plus de 90 jours vidée(s).');
     const msg = { ok: morceaux.join(' '), conflits: r.conflits };
-    if (r.appliquees || r.renumerotees.length || r.imagesRecues) {
+    if (r.change || r.appliquees || r.renumerotees.length || r.imagesRecues) {
       try { sessionStorage.setItem('synchro-msg', JSON.stringify({ ou, msg })); } catch { /* tant pis */ }
       window.location.reload();   // la base a change — repartir propre
       return;
@@ -1538,19 +1586,19 @@ function Options({ etat, onEtat, aller }) {
   };
 
   const synLancer = async () => {
-    setSynOccupe(true); setSynMsg(null);
+    setSynMsg(null);
     const r = await window.api.synchro.synchroniser();
-    setSynOccupe(false);
-    await annoncerSynchro(r, 'dossier', setSynMsg);
+    annoncer(r, 'dossier');
   };
 
   const drvSynchroniser = async () => {
-    setDrvOccupe(true); setDrvMsg(null); setDrvAction('fusion');
+    setDrvMsg(null);
     const r = await window.api.synchro.drive();
-    setDrvOccupe(false); setDrvAction(null);
     setDrv(await window.api.drive.etat());
-    await annoncerSynchro(r, 'drive', setDrvMsg);
+    annoncer(r, 'drive');
   };
+  const syncDrive = prog.enCours && prog.par === 'drive';
+  const syncDossier = prog.enCours && prog.par === 'dossier';
 
   useEffect(() => { window.api.raccourcis.etat().then(setRaccourcis); }, []);
 
@@ -1701,16 +1749,16 @@ function Options({ etat, onEtat, aller }) {
         ) : (
           <>
             <div className="choix-raccourcis">
-              <button className="bouton-neutre" onClick={drvSynchroniser} disabled={drvOccupe}>
-                <I.Echange t={16} /> Synchroniser
+              <button className="bouton-neutre" onClick={drvSynchroniser} disabled={drvOccupe || prog.enCours}>
+                <I.Echange t={16} /> {syncDrive ? 'Synchro en cours…' : 'Synchroniser'}
               </button>
-              <button className="bouton-neutre" onClick={() => drvPousser(false)} disabled={drvOccupe}>
+              <button className="bouton-neutre" onClick={() => drvPousser(false)} disabled={drvOccupe || prog.enCours}>
                 <I.FlecheVert t={16} /> Sauvegarder sur Drive
               </button>
-              <button className="bouton-neutre" onClick={() => setDrvConflit({ sens: 'tirer' })} disabled={drvOccupe}>
+              <button className="bouton-neutre" onClick={() => setDrvConflit({ sens: 'tirer' })} disabled={drvOccupe || prog.enCours}>
                 <I.FlecheVert t={16} bas /> Restaurer depuis Drive
               </button>
-              <button className="bouton-neutre" onClick={drvDeconnecter} disabled={drvOccupe}>
+              <button className="bouton-neutre" onClick={drvDeconnecter} disabled={drvOccupe || prog.enCours}>
                 <I.Croix t={14} /> Déconnecter
               </button>
             </div>
@@ -1741,6 +1789,7 @@ function Options({ etat, onEtat, aller }) {
               : 'Connexion à Google Drive — autorise l’accès dans le navigateur…'}
           </div>
         )}
+        {syncDrive && <ProgressionSynchro p={prog} titre="Synchro avec Google Drive" />}
         {drvMsg && drvMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {drvMsg.ok}</div>}
         {drvMsg && drvMsg.conflits > 0 && aller && (
           <button className="bouton-neutre" onClick={() => aller('conflits')}><I.Echange t={16} /> Voir les conflits</button>
@@ -1799,13 +1848,13 @@ function Options({ etat, onEtat, aller }) {
         ) : (
           <>
             <div className="choix-raccourcis">
-              <button className="bouton-neutre" onClick={synLancer} disabled={synOccupe}>
-                <I.Echange t={16} /> {synOccupe ? 'Synchro…' : 'Synchroniser maintenant'}
+              <button className="bouton-neutre" onClick={synLancer} disabled={prog.enCours}>
+                <I.Echange t={16} /> {syncDossier ? 'Synchro en cours…' : 'Synchroniser maintenant'}
               </button>
-              <button className="bouton-neutre" onClick={synChoisir} disabled={synOccupe}>
+              <button className="bouton-neutre" onClick={synChoisir} disabled={prog.enCours}>
                 Changer de dossier…
               </button>
-              <button className="bouton-neutre" onClick={synOublier} disabled={synOccupe}>
+              <button className="bouton-neutre" onClick={synOublier} disabled={prog.enCours}>
                 Oublier ce dossier
               </button>
             </div>
@@ -1820,6 +1869,10 @@ function Options({ etat, onEtat, aller }) {
               <div className="options-note" style={{ color: 'var(--revoir)' }}>{syn.avertissement}</div>
             )}
           </>
+        )}
+        {syncDossier && <ProgressionSynchro p={prog} titre="Synchro avec le dossier partagé" />}
+        {prog.enCours && !syncDossier && syn && syn.dossier && (
+          <div className="options-note">Une synchro Google Drive est en cours : celle-ci attendra qu’elle se termine.</div>
         )}
         {synMsg && synMsg.ok && <div className="options-confirmation"><I.Coche t={14} /> {synMsg.ok}</div>}
         {synMsg && synMsg.conflits > 0 && aller && (
@@ -1918,6 +1971,26 @@ function Options({ etat, onEtat, aller }) {
           </p>
         </BoiteConfirmation>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------ progression synchro */
+
+// Etape en cours, compteur (images), temps ecoule : l'utilisateur voit que
+// sa demande avance, sans avoir a changer d'onglet ni recliquer.
+function ProgressionSynchro({ p, titre }) {
+  const s = Math.max(0, Math.round((Date.now() - (p.debut || Date.now())) / 1000));
+  const duree = s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s';
+  const reconnexion = p.etape === 'reconnexion';
+  return (
+    <div className={'drive-encours' + (reconnexion ? ' attente' : '')} role="status" aria-live="polite">
+      <span className="drive-pastille" />
+      <span>
+        <strong>{titre}</strong> — {p.libelle || 'en cours…'}
+        {p.total ? ' (' + p.faits + ' / ' + p.total + ')' : ''}
+        <span className="progression-duree"> · {duree}</span>
+      </span>
     </div>
   );
 }
@@ -2414,6 +2487,16 @@ export default function App() {
   const navValue = useMemo(() => ({ setRetour }), [setRetour]);
 
   const charger = useCallback(async () => setEtat(await window.api.etat()), []);
+
+  // Synchro en cours, visible depuis toutes les pages (barre laterale).
+  const [synchroEnCours, setSynchroEnCours] = useState(null);
+  useEffect(() => {
+    window.api.synchro.etat().then((s) => { if (s.progression && s.progression.enCours) setSynchroEnCours(s.progression); });
+    return window.api.synchro.onProgression((p) => {
+      setSynchroEnCours(p.enCours ? p : null);
+      if (!p.enCours) charger();   // compteurs (conflits…) a jour sans changer d'onglet
+    });
+  }, [charger]);
   useEffect(() => { charger(); }, [charger]);
 
   // Mise a jour : verification discrete peu apres le lancement (reglage
@@ -2624,7 +2707,7 @@ export default function App() {
       <div className="appli">
         <Barre
           page={page} aller={naviguer} etat={etat} repliee={repliee} basculer={basculer}
-          onQuitter={tenterFermeture}
+          onQuitter={tenterFermeture} synchro={synchroEnCours}
         />
         <div className="contenu">
           {/* cle = page + nonce : recliquer l'onglet courant (ou revenir via

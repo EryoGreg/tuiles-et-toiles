@@ -491,7 +491,7 @@ function api(oauth) {
 // Execute op(oauth). Si Google refuse le jeton, on l'oublie, on relance le
 // flux OAuth (navigateur) et on retente une seule fois. surReconnexion()
 // previent l'interface que le navigateur va s'ouvrir.
-async function avecReconnexion(op, surReconnexion) {
+async function avecReconnexion(op, surReconnexion, surReconnecte) {
   const oauth = clientCourant();
   if (!oauth) return { erreur: 'Google Drive non connecté.' };
   try { return await op(oauth); }
@@ -513,6 +513,8 @@ async function avecReconnexion(op, surReconnexion) {
 
   const neuf = clientCourant();
   if (!neuf) return { erreur: 'Google Drive non connecté.' };
+  journal.evt('drive', 'reconnecte-reprise');
+  if (surReconnecte) surReconnecte();
   try { return { ...(await op(neuf)), reconnecte: true }; }
   catch (e) {
     journal.erreur('drive', 'operation-echec-apres-reconnexion', e);
@@ -520,12 +522,12 @@ async function avecReconnexion(op, surReconnexion) {
   }
 }
 
-function pousser({ forcer = false } = {}, surReconnexion) {
-  return avecReconnexion((oauth) => opPousser(oauth, forcer), surReconnexion);
+function pousser({ forcer = false } = {}, surReconnexion, surReconnecte) {
+  return avecReconnexion((oauth) => opPousser(oauth, forcer), surReconnexion, surReconnecte);
 }
 
-function tirer({ forcer = false } = {}, surReconnexion) {
-  return avecReconnexion((oauth) => opTirer(oauth, forcer), surReconnexion);
+function tirer({ forcer = false } = {}, surReconnexion, surReconnecte) {
+  return avecReconnexion((oauth) => opTirer(oauth, forcer), surReconnexion, surReconnecte);
 }
 
 async function opPousser(oauth, forcer) {
