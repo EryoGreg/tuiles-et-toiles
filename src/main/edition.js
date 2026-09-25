@@ -151,7 +151,7 @@ function creer(champs = {}) {
 function tuile(id) {
   const o = db.oeuvre(id);
   if (!o) return null;
-  const out = { id, ref: o.ref, estLocale: !!o.est_locale };
+  const out = { id, ref: o.ref, estLocale: !!o.est_locale, conflit: db.oeuvresEnConflit().has(id) };
   for (const c of CHAMPS) out[c] = o[c] || '';
   return out;
 }
@@ -241,6 +241,7 @@ function supprimer(id) {
 function corbeille() {
   const d = db.instance();
   const out = [];
+  const enConflit = db.oeuvresEnConflit();
   for (const r of d.prepare("SELECT cle, valeur, hlc FROM etat WHERE entite='locale' AND champ='_existe'").all()) {
     if (JSON.parse(r.valeur) === 1) continue;
     const l = etat.lignes('locale', r.cle);
@@ -249,7 +250,7 @@ function corbeille() {
     out.push({
       id: r.cle, estLocale: true, ref: v('ref_local'), titre: v('titre'), artiste: v('artiste'), date: v('date'),
       image: v('image') ? 'tuile://' + v('image') : null,
-      supprimeeLe: versIso(r.hlc), effaceeLe: compaction.purgeeLe(r.hlc)
+      supprimeeLe: versIso(r.hlc), effaceeLe: compaction.purgeeLe(r.hlc), conflit: enConflit.has(r.cle)
     });
   }
   const pack = d.prepare('SELECT id, ref, titre, artiste, date, image FROM pack.oeuvres WHERE id = ?');

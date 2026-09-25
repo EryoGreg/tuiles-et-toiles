@@ -262,6 +262,18 @@ test('effacer tous les tags : une op par marque visible', () => {
   assert.deepEqual(db.tagsDe(idLocale), ['livre'], 'celle de la tuile en corbeille reste');
 });
 
+test('pastille conflit : listes, editeur, disparait une fois tranche', () => {
+  const [p] = unePack();
+  const d = db.instance();
+  d.prepare(`INSERT INTO conflits (entite, cle, champ, hlc_gagnant, valeur_gagnante, hlc_perdant, valeur_perdante, detecte_le)
+    VALUES ('override', ?, 'titre', 'a', 'null', 'b', 'null', '2026-01-01')`).run(p.id);
+  assert.equal(jeu.listerToutes({}).find((o) => o.id === p.id).conflit, true);
+  assert.equal(jeu.listerToutes({}).filter((o) => o.conflit).length, 1);
+  assert.equal(edition.tuile(p.id).conflit, true);
+  d.prepare('UPDATE conflits SET resolu = 1 WHERE cle = ?').run(p.id);
+  assert.equal(edition.tuile(p.id).conflit, false);
+});
+
 test('tirage : stats comptees pour cet appareil, hors journal', () => {
   const avant = nChg();
   const t = jeu.tirer(null);

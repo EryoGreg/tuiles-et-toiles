@@ -666,6 +666,15 @@ const PIPS = [
   ['bad_smiley', 'var(--revoir)']
 ];
 
+// Tuile concernee par un conflit de synchro (a trancher dans « Conflits »).
+function PastilleConflit() {
+  return (
+    <span className="pastille-conflit" title="Modifiée sur deux appareils : à trancher dans « Conflits »">
+      <I.Echange t={10} /> conflit
+    </span>
+  );
+}
+
 // Carte commune a la Bibliotheque et aux galeries. Clic n'importe ou =
 // agrandir ; la croix (galeries seulement) retire le tag sans agrandir.
 function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer }) {
@@ -684,7 +693,7 @@ function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer }) {
         ? <img className="carte-galerie-image" src={o.image} alt="" loading="lazy" />
         : <div className="carte-galerie-image carte-galerie-image-vide" />}
       <div className="carte-galerie-corps">
-        <span className="numero">#{o.ref}</span>
+        <span className="numero">#{o.ref}{o.conflit && <PastilleConflit />}</span>
         <div className="carte-galerie-titre">{o.titre || '—'}</div>
         <div className="carte-galerie-artiste">
           {o.artiste || '—'}{o.date ? ' · ' + o.date : ''}
@@ -1270,8 +1279,15 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
       <div className="rangee-tuiles">
         <div className="tuile">
           <div className="tete">
-            <span className="numero">{mode === 'modifier' ? '#' + tuile.ref : 'nouvelle tuile'}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--discret)' }}>{teteInfo}</span>
+            <span className="numero">
+              {mode === 'modifier' ? '#' + tuile.ref : 'nouvelle tuile'}
+              {mode === 'modifier' && tuile.conflit && <PastilleConflit />}
+            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--discret)' }}>
+              {mode === 'modifier' && tuile.conflit
+                ? 'conflit de synchro : la version la plus récente est affichée, choisis dans « Conflits »'
+                : teteInfo}
+            </span>
           </div>
 
           <div className="corps">
@@ -2321,7 +2337,7 @@ function PageCorbeille({ onEtat }) {
                 ? <img className="carte-galerie-image" src={o.image} alt="" loading="lazy" />
                 : <div className="carte-galerie-image carte-galerie-image-vide" />}
               <div className="carte-galerie-corps">
-                <span className="numero">#{o.ref}{o.estLocale ? '' : ' · pack'}</span>
+                <span className="numero">#{o.ref}{o.estLocale ? '' : ' · pack'}{o.conflit && <PastilleConflit />}</span>
                 <div className="carte-galerie-titre">{o.titre || '—'}</div>
                 <div className="carte-galerie-artiste">{o.artiste || '—'}{o.date ? ' · ' + o.date : ''}</div>
                 <div className="corbeille-dates">

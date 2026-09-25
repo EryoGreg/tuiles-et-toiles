@@ -513,6 +513,14 @@ function parTagUtilisateur(tag, texte = '') {
 }
 
 /**
+ * Oeuvres (id) portant au moins un conflit de synchro ouvert : pastille
+ * « conflit » sur leurs cartes et dans l'editeur.
+ */
+function oeuvresEnConflit() {
+  return new Set(instance().prepare('SELECT DISTINCT cle FROM conflits WHERE resolu = 0').all().map((r) => r.cle));
+}
+
+/**
  * Retire toutes les marques livre / etoile / bad_smiley des tuiles visibles
  * (celles d'une tuile en Corbeille reviennent avec elle). @returns {number}
  */
@@ -560,7 +568,7 @@ function definirEtatSync(cle, valeur) {
 }
 
 module.exports = {
-  ouvrir, surOuverture, instance, fermer, exporterVers, migrer, reconstruireVue, SCHEMA_PACK, SCHEMA_USER,
+  ouvrir, surOuverture, instance, fermer, exporterVers, migrer, reconstruireVue, oeuvresEnConflit, SCHEMA_PACK, SCHEMA_USER,
   CHAMPS_TXT,
   compterOeuvres, oeuvre, packMeta, chercher, parCategorie, parNumero,
   tagsDe, basculerTag, parTagUtilisateur, comptesTags, effacerTousLesTags,

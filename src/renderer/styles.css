@@ -795,6 +795,11 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .carte-galerie:hover .carte-galerie-retirer { opacity: 1; }
 .carte-galerie-retirer:hover { background: var(--revoir); color: #fff; }
 
+/* Tuile en conflit de synchro. */
+.pastille-conflit { display: inline-flex; align-items: center; gap: 3px; margin-left: 7px; padding: 0 6px;
+  border-radius: 999px; background: color-mix(in srgb, var(--revoir) 18%, transparent); color: var(--revoir);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: 1px; }
+
 /* Pastilles de tag sur la carte : etat de marquage visible sans ouvrir. */
 .carte-galerie-pips {
   position: absolute; top: 8px; left: 8px; z-index: 1;
