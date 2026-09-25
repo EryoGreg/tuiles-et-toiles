@@ -255,7 +255,9 @@ correction).
   tuiles restent — compressés gzip + base64, `rapport.json`) au script Google Apps Script
   de l'utilisateur (`tools/rapport-reception.gs`, déployé en application Web « Tout le
   monde », propriété `CLE`), qui envoie le mail à `wn7pocu65@mozmail.com` (relais Firefox
-  Relay) avec les journaux en pièces jointes `.txt` (au-delà de 20 Mo : `.gz`),
+  Relay) avec les journaux en pièces jointes `.txt`, mail plafonné à **9 Mo encodés** (limite du
+  relais ; base64 +33 %) : du plus récent au plus ancien, `.txt` si ça tient, sinon `.gz`,
+  sinon écarté et listé dans le mail,
   `replyTo` = email du testeur. Seule autorisation Google : envoyer des mails. Config :
   `src/main/rapport-config.json` `{ url, cle }` (**gitignoré**, embarqué dans l'asar,
   comme `oauth-client.json`). Hors ligne → `Documents\Tuiles et Toiles - rapports\en-attente\`,

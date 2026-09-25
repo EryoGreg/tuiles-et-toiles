@@ -27,14 +27,21 @@
  *
  * Garde-fous : cle partagee (arrete les envois au hasard ; elle est dans
  * l'exe, donc pas un vrai secret), 30 rapports par heure au plus, 45 Mo par
- * requete au plus. Quota Google : 100 mails par jour (compte gratuit).
+ * requete au plus, mail de 9 Mo au plus (limite du relais Firefox). Quota
+ * Google : 100 mails par jour (compte gratuit).
  */
 
 var DESTINATAIRE_DEFAUT = 'wn7pocu65@mozmail.com';
 var PREFIXE_OBJET = '[T&T rapport]';
 var MAX_PAR_HEURE = 30;
 var MAX_REQUETE = 45 * 1024 * 1024;
-var MAX_PIECES_TEXTE = 20 * 1024 * 1024;   // au-dela : pieces jointes compressees (.gz)
+// Taille du mail une fois encode (pieces jointes en base64 : +33 %). Le relais
+// Firefox refuse les mails trop gros (~10 Mo) : on reste a 9 Mo. Journaux pris
+// du plus recent au plus ancien : .txt s'il tient, sinon .gz, sinon ecarte
+// (liste dans le mail ; il reste sur le poste du testeur).
+var MAX_MAIL = 9 * 1024 * 1024;
+var ENCODAGE = 4 / 3;
+var MARGE_ENTETES = 64 * 1024;
 
 function doPost(e) {
   try {
@@ -50,29 +57,45 @@ function doPost(e) {
     if (objet.indexOf(PREFIXE_OBJET) !== 0) objet = PREFIXE_OBJET + ' ' + objet;
     objet = objet.slice(0, 250);
 
+    var corps = String(r.corps || '(sans texte)');
     var pieces = [];
-    var total = 0;
+    var budget = MAX_MAIL - MARGE_ENTETES - corps.length * 2;   // corps : texte + HTML
+    var poids = function (octets) { return Math.ceil(octets * ENCODAGE); };
+    if (r.rapport) {
+      var json = Utilities.newBlob(JSON.stringify(r.rapport, null, 2), 'application/json', 'rapport.json');
+      pieces.push(json);
+      budget -= poids(json.getBytes().length);
+    }
+    var ecartes = [];
+    var compresses = [];
     (r.journaux || []).forEach(function (j) {
       var gz = Utilities.newBlob(Utilities.base64Decode(j.gz64), 'application/x-gzip', j.nom + '.gz');
-      if (total + (j.octets || 0) <= MAX_PIECES_TEXTE) {
+      var tailleGz = gz.getBytes().length;
+      if (poids(j.octets || 0) <= budget) {
         var txt = Utilities.ungzip(gz);
         pieces.push(Utilities.newBlob(txt.getBytes(), 'text/plain', j.nom + '.txt'));
-        total += j.octets || 0;
+        budget -= poids(j.octets || 0);
+      } else if (poids(tailleGz) <= budget) {
+        pieces.push(gz);
+        compresses.push(j.nom);
+        budget -= poids(tailleGz);
       } else {
-        pieces.push(gz);   // gros journaux anciens : compresses
+        ecartes.push(j.nom + ' (' + Math.round((j.octets || 0) / 1024) + ' Ko)');
       }
     });
-    if (r.rapport) {
-      pieces.push(Utilities.newBlob(JSON.stringify(r.rapport, null, 2), 'application/json', 'rapport.json'));
+    if (compresses.length || ecartes.length) {
+      corps += '\n\n— Taille du mail limitée à ' + Math.round(MAX_MAIL / 1048576) + ' Mo (relais) :';
+      if (compresses.length) corps += '\n  joints compressés (.gz) : ' + compresses.join(', ');
+      if (ecartes.length) corps += '\n  non joints, restés sur le poste du testeur : ' + ecartes.join(', ');
     }
 
     var options = { attachments: pieces, name: 'Tuiles et Toiles' };
     var contact = String(r.contact || '');
     if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact)) options.replyTo = contact;
     var dest = props.getProperty('DESTINATAIRE') || DESTINATAIRE_DEFAUT;
-    MailApp.sendEmail(dest, objet, String(r.corps || '(sans texte)'), options);
+    MailApp.sendEmail(dest, objet, corps, options);
 
-    return repondre({ ok: true, id: r.id || null, pieces: pieces.length });
+    return repondre({ ok: true, id: r.id || null, pieces: pieces.length, compresses: compresses, ecartes: ecartes });
   } catch (err) {
     return repondre({ ok: false, erreur: String(err && err.message || err) });
   }

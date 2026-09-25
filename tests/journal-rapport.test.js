@@ -223,14 +223,36 @@ async function testA(nom, fn) {
     assert.ok(!fs.existsSync(DOSSIER), 'rien ecrit sur disque quand tout va bien');
   });
 
-  await testA('gros journaux : au-dela de 20 Mo, les plus anciens joints compresses (.gz)', async () => {
+  // Taille du mail encode (base64 des pieces jointes) : <= 9 Mo (relais Firefox).
+  const tailleMail = (m) => m.corps.length * 2 + m.options.attachments.reduce((s, a) => s + Math.ceil(a.octets.length * 4 / 3), 0);
+
+  await testA('gros journaux (25 Mo) : mail <= 9 Mo, recents en .txt, anciens compresses (.gz)', async () => {
     const g = scriptGoogle();
     configurer(g.fetch);
     await rapport.envoyer(FORM);
-    const pieces = g.mails[0].options.attachments;
-    const txt = pieces.filter((a) => /\.txt$/.test(a.nom)).reduce((s, a) => s + a.octets.length, 0);
-    assert.ok(txt <= 20 * 1024 * 1024, 'texte ' + txt);
-    assert.ok(pieces.some((a) => /\.gz$/.test(a.nom)), pieces.map((a) => a.nom).join());
+    const m = g.mails[0];
+    assert.ok(tailleMail(m) <= 9 * 1024 * 1024, 'mail ' + tailleMail(m));
+    assert.equal(m.options.attachments[1].nom, 'journal.log.txt', 'le plus recent en clair');
+    assert.ok(m.options.attachments.some((a) => /\.gz$/.test(a.nom)), m.options.attachments.map((a) => a.nom).join());
+    assert.match(m.corps, /joints compressés \(\.gz\)/);
+  });
+
+  await testA('journaux incompressibles : ceux qui ne tiennent pas sont ecartes et listes dans le mail', async () => {
+    const g = scriptGoogle();
+    const bruit = (n) => require('crypto').randomBytes(n).toString('base64');
+    const journaux = ['journal.log', 'journal.log.1', 'journal.log.2'].map((nom) => {
+      const brut = Buffer.from(bruit(3 * 1024 * 1024), 'utf8');
+      return { nom, octets: brut.length, gz64: zlib.gzipSync(brut).toString('base64') };
+    });
+    const rep = JSON.parse(await (await g.fetch('x', { body: JSON.stringify({
+      cle: CLE, id: 'R1', objet: '[T&T rapport] test', corps: 'corps', journaux, rapport: { a: 1 }
+    }) })).text());
+    assert.equal(rep.ok, true);
+    const m = g.mails[0];
+    assert.ok(tailleMail(m) <= 9 * 1024 * 1024, 'mail ' + tailleMail(m));
+    assert.ok(rep.ecartes.length >= 1, JSON.stringify(rep));
+    assert.match(m.corps, /non joints, restés sur le poste du testeur : journal\.log\.\d/);
+    assert.ok(m.options.attachments.some((a) => a.nom === 'journal.log.txt'), 'le plus recent toujours joint');
   });
 
   await testA('cle refusee par le script -> rapport mis en attente', async () => {
