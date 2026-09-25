@@ -13,6 +13,54 @@ const DENSITES = [5, 7, 9];
 // refermer. Le gestionnaire renvoie true s'il a absorbé le retour.
 const NavContext = createContext({ setRetour: () => {} });
 
+/* ---------------------------------------------------- preferences d'affichage */
+
+// Tri, sens et filtres de chaque page : gardes d'un onglet a l'autre ET d'un
+// lancement a l'autre (reglage « prefs_affichage » de cet appareil, non
+// synchronise). Charges une fois avant le premier affichage des pages (App),
+// donc lus de facon synchrone : pas de clignotement a l'ouverture.
+const PREFS = { valeurs: {}, charge: false, minuteur: null };
+function chargerPrefs(v) {
+  if (PREFS.charge) return;   // ensuite, la memoire fait foi (ecriture differee)
+  PREFS.valeurs = v && typeof v === 'object' ? v : {};
+  PREFS.charge = true;
+}
+function enregistrerPrefs() {
+  clearTimeout(PREFS.minuteur);
+  PREFS.minuteur = setTimeout(() => {
+    window.api.reglages.definir('prefs_affichage', JSON.stringify(PREFS.valeurs));
+  }, 300);
+}
+
+/** Comme useState, mais la valeur survit au changement d'onglet et au redemarrage. */
+function usePref(cle, defaut) {
+  const [v, setV] = useState(() => (cle in PREFS.valeurs ? PREFS.valeurs[cle] : defaut));
+  const courant = useRef(v);
+  const poser = useCallback((x) => {
+    const n = typeof x === 'function' ? x(courant.current) : x;
+    courant.current = n;
+    PREFS.valeurs = { ...PREFS.valeurs, [cle]: n };
+    enregistrerPrefs();
+    setV(n);
+  }, [cle]);
+  return [v, poser];
+}
+
+// Texte de recherche : garde en changeant d'onglet, oublie au redemarrage
+// (une vieille recherche oubliee ferait croire a une page vide).
+const MEMOIRE_SESSION = new Map();
+function useSession(cle, defaut) {
+  const [v, setV] = useState(() => (MEMOIRE_SESSION.has(cle) ? MEMOIRE_SESSION.get(cle) : defaut));
+  const poser = useCallback((x) => {
+    setV((ancien) => {
+      const n = typeof x === 'function' ? x(ancien) : x;
+      MEMOIRE_SESSION.set(cle, n);
+      return n;
+    });
+  }, [cle]);
+  return [v, poser];
+}
+
 /* ------------------------------------------------------------------ menu */
 
 function Menu({ etat, aller, onQuitter }) {
@@ -288,17 +336,24 @@ function Tuile({
 // oeuvres, tag de jeu toujours censure. Categorie : une ou plusieurs familles
 // de tags (choix multiple), tag de jeu visible s'il est seul sur la tuile.
 function NouvellePartie({ onLancer }) {
-  const [mode, setMode] = useState('aleatoire');
+  const [mode, setMode] = usePref('partie:mode', 'aleatoire');
   const [cats, setCats] = useState(null);
-  const [choisies, setChoisies] = useState([]);   // valeurs de categorie
-  const [q, setQ] = useState('');
+  const [choisies, setChoisies] = usePref('partie:categories', []);   // valeurs de categorie
+  const [q, setQ] = useSession('partie:recherche', '');
   // Combinaison des catégories choisies :
   //   additif (défaut) : l'œuvre porte AU MOINS UNE des catégories
   //   soustractif      : l'œuvre porte TOUTES les catégories
-  const [soustractif, setSoustractif] = useState(false);
+  const [soustractif, setSoustractif] = usePref('partie:soustractif', false);
   const [apercu, setApercu] = useState(null);     // { total, possibles }
 
-  useEffect(() => { window.api.jeu.categories().then(setCats); }, []);
+  useEffect(() => {
+    window.api.jeu.categories().then((l) => {
+      setCats(l);
+      // Categories memorisees disparues depuis (pack mis a jour, tuile supprimee) : retirees.
+      const connues = new Set(l.map((c) => c.valeur));
+      setChoisies((s) => (s.every((v) => connues.has(v)) ? s : s.filter((v) => connues.has(v))));
+    });
+  }, []);
 
   // Aperçu du résultat (nb de tuiles, catégories encore ajoutables en
   // soustractif). Tout en mémoire côté main sur ~431 lignes → instantané.
@@ -854,9 +909,9 @@ function BarreFiltres({ triModes, tri, onTri, sens, onSens, q, onQ, tags }) {
 // la couleur d'accent changent d'une page a l'autre.
 function Galerie({ nom, tag, couleur, Icone, description, onEtat }) {
   const [brut, setBrut] = useState(null);
-  const [tri, setTri] = useState('ajout');
-  const [sens, setSens] = useState('asc');
-  const [q, setQ] = useState('');
+  const [tri, setTri] = usePref('galerie:' + tag + ':tri', 'ajout');
+  const [sens, setSens] = usePref('galerie:' + tag + ':sens', 'asc');
+  const [q, setQ] = useSession('galerie:' + tag + ':recherche', '');
   const [apercuId, setApercuId] = useState(null);
   const [nonce, setNonce] = useState(0);
 
@@ -952,10 +1007,10 @@ function PageRevoir({ onEtat }) {
 // mot devant apparaitre quelque part hors image). Clic = agrandir, avec le
 // rail de marquage comme partout.
 function PageBibliotheque({ onEtat, onChoisirTuile }) {
-  const [q, setQ] = useState('');
-  const [sens, setSens] = useState('asc');
-  const [catsFiltre, setCatsFiltre] = useState([]);       // tags selectionnes
-  const [soustractif, setSoustractif] = useState(false);
+  const [q, setQ] = useSession('bibliotheque:recherche', '');
+  const [sens, setSens] = usePref('bibliotheque:sens', 'asc');
+  const [catsFiltre, setCatsFiltre] = usePref('bibliotheque:categories', []);       // tags selectionnes
+  const [soustractif, setSoustractif] = usePref('bibliotheque:soustractif', false);
   const [resultats, setResultats] = useState(null);
   const [total, setTotal] = useState(null);
   const [apercuId, setApercuId] = useState(null);
@@ -2486,7 +2541,11 @@ export default function App() {
   const setRetour = useCallback((fn) => { retourInterneRef.current = fn || null; }, []);
   const navValue = useMemo(() => ({ setRetour }), [setRetour]);
 
-  const charger = useCallback(async () => setEtat(await window.api.etat()), []);
+  const charger = useCallback(async () => {
+    const e = await window.api.etat();
+    chargerPrefs(e.prefs);
+    setEtat(e);
+  }, []);
 
   // Synchro en cours, visible depuis toutes les pages (barre laterale).
   const [synchroEnCours, setSynchroEnCours] = useState(null);

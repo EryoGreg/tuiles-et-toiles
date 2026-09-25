@@ -337,7 +337,12 @@ function gerer(canal, fn) {
   });
 }
 
+function lirePrefsAffichage() {
+  try { return JSON.parse(db.reglage('prefs_affichage', '{}')) || {}; } catch { return {}; }
+}
+
 gerer('etat', () => ({
+  prefs: lirePrefsAffichage(),
   oeuvres: db.compterOeuvres(),
   tags: db.comptesTags(),
   theme: db.reglage('theme', 'auto'),
