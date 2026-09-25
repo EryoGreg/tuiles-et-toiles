@@ -380,7 +380,10 @@ function api(oauth) {
 // Execute op(oauth). Si Google refuse le jeton, on l'oublie, on relance le
 // flux OAuth (navigateur) et on retente une seule fois. surReconnexion()
 // previent l'interface que le navigateur va s'ouvrir.
-async function avecReconnexion(op, surReconnexion, surReconnecte) {
+// sansReconnexion (synchro automatique) : jamais de navigateur ouvert sans
+// clic -> { erreur, jetonMort: true }, le jeton est garde pour la prochaine
+// synchro manuelle.
+async function avecReconnexion(op, surReconnexion, surReconnecte, { sansReconnexion = false } = {}) {
   const oauth = clientCourant();
   if (!oauth) return { erreur: 'Google Drive non connecté.' };
   try { return await op(oauth); }
@@ -389,7 +392,8 @@ async function avecReconnexion(op, surReconnexion, surReconnecte) {
       journal.erreur('drive', 'operation-echec', e);
       return { erreur: e.message || String(e) };
     }
-    journal.avertir('drive', 'reconnexion-necessaire', { raison: e.message });
+    journal.avertir('drive', 'reconnexion-necessaire', { raison: e.message, sansReconnexion });
+    if (sansReconnexion) return { erreur: 'Session Google expirée.', jetonMort: true };
   }
 
   deconnecter();

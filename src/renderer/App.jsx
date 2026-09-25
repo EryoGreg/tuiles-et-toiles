@@ -1719,6 +1719,13 @@ function Options({ etat, onEtat, aller }) {
       if (annonces.current.has(r.cycle)) return;
       annonces.current.add(r.cycle);
     }
+    // Synchro automatique : pas de rechargement ni de message, la ligne
+    // « Dernière fois » se met a jour (et l'appli propose d'actualiser).
+    if (r.auto) {
+      onEtat();
+      window.api.synchro.etat().then(setSyn);
+      return;
+    }
     annoncerSynchro(r, ou, ou === 'drive' ? setDrvMsg : setSynMsg);
   }
 
@@ -1951,6 +1958,36 @@ function Options({ etat, onEtat, aller }) {
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{drvMsg.erreur}</div>
         )}
       </section>
+
+      {syn && drv && (drv.connecte || syn.dossier) && (
+        <>
+          <div className="filet" />
+          <section>
+            <div className="etiquette">Synchro automatique</div>
+            <button
+              className={'raccourci-bouton' + (syn.auto && syn.auto.actif ? ' pose' : '')}
+              onClick={async () => {
+                await window.api.reglages.definir('synchro_auto', syn.auto && syn.auto.actif ? '0' : '1');
+                setSyn(await window.api.synchro.etat());
+              }}
+            >
+              {syn.auto && syn.auto.actif ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
+              Synchroniser automatiquement
+            </button>
+            {syn.auto && syn.auto.pauseDrive && drv.connecte && (
+              <div className="options-note" style={{ color: 'var(--revoir)' }}>
+                Session Google expirée : la synchro automatique avec Drive est en pause. Clique
+                « Synchroniser » ci-dessus pour autoriser de nouveau l’accès.
+              </div>
+            )}
+            <div className="options-note">
+              Au lancement, une vingtaine de secondes après chaque modification, toutes les 15 minutes
+              et à la fermeture de l’appli s’il reste des changements à envoyer. Silencieuse : sans
+              connexion, elle réessaie plus tard ; elle n’ouvre jamais le navigateur toute seule.
+            </div>
+          </section>
+        </>
+      )}
 
       <div className="filet" />
 
@@ -2696,13 +2733,25 @@ export default function App() {
 
   // Synchro en cours, visible depuis toutes les pages (barre laterale).
   const [synchroEnCours, setSynchroEnCours] = useState(null);
+  // Synchro automatique qui a apporte du nouveau : la page affichee n'est
+  // pas rechargee d'office (saisie, apercu ouvert…), on propose d'actualiser.
+  const [nouveautes, setNouveautes] = useState(null);   // { conflits }
+  const conflitsAvant = useRef(null);
   useEffect(() => {
     window.api.synchro.etat().then((s) => { if (s.progression && s.progression.enCours) setSynchroEnCours(s.progression); });
     return window.api.synchro.onProgression((p) => {
       setSynchroEnCours(p.enCours ? p : null);
-      if (!p.enCours) charger();   // compteurs (conflits…) a jour sans changer d'onglet
+      if (p.enCours) return;
+      charger();   // compteurs (conflits…) a jour sans changer d'onglet
+      const r = p.resultat;
+      if (!r || !r.auto || r.erreur) return;
+      const recu = r.appliquees || r.imagesRecues || (r.renumerotees && r.renumerotees.length);
+      const nouveauxConflits = r.conflits > (conflitsAvant.current || 0);
+      conflitsAvant.current = r.conflits;
+      if (recu || nouveauxConflits) setNouveautes({ recu: !!recu, conflits: nouveauxConflits ? r.conflits : 0 });
     });
   }, [charger]);
+  useEffect(() => { if (etat && conflitsAvant.current == null) conflitsAvant.current = etat.conflits; }, [etat]);
   useEffect(() => { charger(); }, [charger]);
 
   // Mise a jour : verification discrete peu apres le lancement (reglage
@@ -2855,11 +2904,40 @@ export default function App() {
 
   useEffect(() => window.api.onTenterFermeture(tenterFermeture), [tenterFermeture]);
 
-  const dialogueFermeture = confirmerFermeture && (
+  // Quitter peut attendre l'envoi des dernieres modifications (10 s max).
+  const [fermetureEnCours, setFermetureEnCours] = useState(false);
+  const dialogueFermeture = fermetureEnCours ? (
+    <div className="recouvrement">
+      <div className="boite-dialogue">
+        <h3>Fermeture…</h3>
+        <p>Envoi de tes dernières modifications vers tes autres appareils.</p>
+      </div>
+    </div>
+  ) : confirmerFermeture && (
     <ConfirmationFermeture
       onAnnuler={() => setConfirmerFermeture(false)}
-      onConfirmer={() => window.api.quitter()}
+      onConfirmer={() => { setConfirmerFermeture(false); setFermetureEnCours(true); window.api.quitter(); }}
     />
+  );
+
+  // Pages qu'« Actualiser » peut remonter sans rien perdre (pas l'editeur :
+  // une saisie en cours serait perdue).
+  const PAGES_LISTES = ['bibliotheque', 'livre', 'etoile', 'revoir', 'corbeille', 'conflits'];
+  const bandeauNouveautes = nouveautes && (nouveautes.conflits || PAGES_LISTES.includes(page)) && (
+    <div className="bandeau-synchro" role="status">
+      <I.Echange t={15} />
+      <span>
+        {nouveautes.recu ? 'Du nouveau de tes autres appareils.' : ''}
+        {nouveautes.conflits ? ' ' + nouveautes.conflits + ' conflit(s) à trancher.' : ''}
+      </span>
+      {nouveautes.recu && PAGES_LISTES.includes(page) && (
+        <button className="bouton-neutre" onClick={() => { setNouveautes(null); setNavNonce((n) => n + 1); }}>Actualiser</button>
+      )}
+      {nouveautes.conflits > 0 && page !== 'conflits' && (
+        <button className="bouton-neutre" onClick={() => { setNouveautes(null); naviguer('conflits'); }}>Voir</button>
+      )}
+      <button className="bandeau-synchro-x" onClick={() => setNouveautes(null)} title="Fermer"><I.Croix t={12} /></button>
+    </div>
   );
 
   const NOMS_RAC = { bureau: 'le bureau', menu: 'le menu Démarrer', taskbar: 'la barre des tâches' };
@@ -2934,6 +3012,7 @@ export default function App() {
         {dialogueFermeture}
         {dialogueRaccourcis}
         {dialoguePropositionRaccourcis}
+        {bandeauNouveautes}
         <BandeauMaj />
       </div>
      </NavContext.Provider>

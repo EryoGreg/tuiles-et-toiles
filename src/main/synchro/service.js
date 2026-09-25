@@ -248,22 +248,26 @@ async function coeur(t, sorte) {
   }
 }
 
-async function exclusif(par, fn) {
+async function exclusif(par, fn, auto = false) {
   if (enCours) return { erreur: 'Une synchro est déjà en cours.', enCoursPar: progression.par, cycle: progression.cycle };
   enCours = true;
   const cycle = ++nCycles;
-  signaler({ enCours: true, par, cycle, debut: Date.now(), etape: 'depart', libelle: null, faits: null, total: null, resultat: null });
+  signaler({ enCours: true, par, auto, cycle, debut: Date.now(), etape: 'depart', libelle: null, faits: null, total: null, resultat: null });
   let r;
   try { r = await fn(); }
   catch (e) { r = { erreur: 'Synchro interrompue : ' + e.message }; }
   finally { enCours = false; }
-  r = { ...r, cycle };
+  r = { ...r, cycle, auto };
   signaler({ enCours: false, etape: 'fin', libelle: r.erreur ? 'Échec' : 'Terminé', faits: null, total: null, resultat: r });
   return r;
 }
 
-/** Synchro par le dossier partage choisi dans Options. */
-function synchroniser() {
+/**
+ * Synchro par le dossier partage choisi dans Options.
+ * @param {{ auto?: boolean }} o  auto : lancee par synchro/auto.js (le rendu
+ *   ne recharge pas la page, il propose d'actualiser)
+ */
+function synchroniser({ auto = false } = {}) {
   const a = etat.appareil();
   if (!a.dossier_synchro) return Promise.resolve({ erreur: 'Aucun dossier de synchro choisi.' });
   if (!fs.existsSync(a.dossier_synchro)) {
@@ -278,7 +282,7 @@ function synchroniser() {
     } catch (e) {
       return { erreur: 'Synchro interrompue : ' + e.message };
     }
-  });
+  }, auto);
 }
 
 /**
@@ -286,8 +290,10 @@ function synchroniser() {
  * expiree : reconnexion dans le navigateur puis nouvel essai (drive.js).
  * @param {() => void} [surReconnexion] previent l'interface
  * @param {object} [apiTest] api Drive de substitution (tests : faux Drive)
+ * @param {{ auto?: boolean }} [o]  auto : pas de reconnexion (jamais de
+ *   navigateur ouvert sans clic) -> { erreur, jetonMort }
  */
-function synchroniserDrive(surReconnexion, apiTest) {
+function synchroniserDrive(surReconnexion, apiTest, { auto = false } = {}) {
   return exclusif('drive', async () => {
     const op = async (oauth) => {
       const bilan = await coeur(creerTransportDrive(apiTest || drive.api(oauth)), 'drive');
@@ -299,8 +305,9 @@ function synchroniserDrive(surReconnexion, apiTest) {
     }
     return drive.avecReconnexion(op,
       () => { signaler({ etape: 'reconnexion' }); if (surReconnexion) surReconnexion(); },
-      () => signaler({ etape: 'reprise' }));
-  });
+      () => signaler({ etape: 'reprise' }),
+      { sansReconnexion: auto });
+  }, auto);
 }
 
 const LIBELLES = {

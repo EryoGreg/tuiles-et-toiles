@@ -1107,6 +1107,15 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .rapport-actions { flex-wrap: wrap; }
 
+/* --- bandeau apres une synchro automatique ------------------------------------ */
+.bandeau-synchro { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px 10px 14px; border-radius: 11px; background: var(--surface); border: 1px solid var(--laiton);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28); font-size: 13px; color: var(--encre-vive); max-width: calc(100vw - 40px); }
+.bandeau-synchro > svg { color: var(--laiton); flex: none; }
+.bandeau-synchro .bouton-neutre { padding: 5px 11px; font-size: 12.5px; }
+.bandeau-synchro-x { background: none; border: none; color: var(--discret); cursor: pointer; padding: 4px; display: flex; }
+.bandeau-synchro-x:hover { color: var(--encre-vive); }
+
 /* --- versions precedentes ---------------------------------------------------- */
 .boite-versions { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
 .versions-champ { margin-bottom: 18px; }

@@ -7,7 +7,7 @@
  * ici, le processus principal detiendra le jeton OAuth.
  */
 
-const { app, BrowserWindow, ipcMain, nativeTheme, protocol, net, dialog, shell, clipboard, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, protocol, net, dialog, shell, clipboard, screen, powerMonitor } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -27,6 +27,7 @@ const rapport = require('./rapport');
 const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
+const { creerAuto } = require('./synchro/auto');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
 // champ "name" du package.json (tuiles-et-toiles).
@@ -223,6 +224,10 @@ app.whenReady().then(() => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('synchro:progression', p);
     }
   });
+  synchroAuto.demarrer();
+  // Au reveil, le reseau met quelques secondes a revenir.
+  powerMonitor.on('resume', () => setTimeout(() => synchroAuto.declencher('reveil'), 10e3));
+
   rapport.configurer({
     dossier: path.join(app.getPath('documents'), 'Tuiles et Toiles - rapports'),
     version: app.getVersion(),
@@ -464,6 +469,7 @@ gerer('sauvegarde:importer', (_e, chemin) => {
 gerer('drive:etat', () => drive.etat());
 gerer('drive:connecter', async () => {
   const r = await drive.connecter();
+  if (r.connecte) db.definirEtatSync('drive_pause_auto', '');
   journal.evt('drive', 'connecter', { connecte: !!r.connecte, erreur: r.erreur || null });
   return { ...drive.etat(), ...r };
 });
@@ -472,8 +478,37 @@ gerer('drive:deconnecter', () => { drive.deconnecter(); journal.evt('drive', 'de
 // OAuth ; le rendu l'apprend par la progression de la synchro (etape reconnexion).
 const surReconnexionDrive = () => () => journal.evt('drive', 'reconnexion-auto');
 
+// Synchro automatique (synchro/auto.js) vers chaque cible configuree et
+// joignable : Google Drive (sauf pause apres une session expiree : pas de
+// navigateur ouvert sans clic) et le dossier partage (s'il est branche).
+const synchroAuto = creerAuto({
+  actif: () => db.reglage('synchro_auto', '1') === '1',
+  cibles: () => {
+    const c = [];
+    if (drive.etat().connecte && !db.etatSync('drive_pause_auto')) c.push('drive');
+    const dossier = etat.appareil().dossier_synchro;
+    if (dossier && fs.existsSync(dossier)) c.push('dossier');
+    return c;
+  },
+  lancer: async (cible) => {
+    const r = cible === 'drive'
+      ? await synchro.synchroniserDrive(null, null, { auto: true })
+      : await synchro.synchroniser({ auto: true });
+    if (r && r.jetonMort) {
+      db.definirEtatSync('drive_pause_auto', new Date().toISOString());
+      journal.avertir('synchro', 'auto-drive-pause', { raison: 'session Google expiree' });
+    }
+    return r;
+  },
+  aEnvoyer: () => db.instance().prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
+  journal
+});
+function etatAuto() {
+  return { actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: db.etatSync('drive_pause_auto') || null };
+}
+
 // Synchro par dossier partage (E2c) : fusion ligne a ligne, rien n'est ecrase.
-gerer('synchro:etat', () => synchro.etat());
+gerer('synchro:etat', () => ({ ...synchro.etat(), auto: etatAuto() }));
 gerer('synchro:choisirDossier', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Dossier de synchro (partagé entre tes appareils)',
@@ -487,7 +522,16 @@ gerer('synchro:choisirDossier', async () => {
 gerer('synchro:oublier', () => { journal.evt('synchro', 'oublier-dossier'); return synchro.oublierDossier(); });
 // Bilan detaille journalise par synchro/service.js (domaine synchro).
 gerer('synchro:synchroniser', () => synchro.synchroniser());
-gerer('synchro:drive', (e) => synchro.synchroniserDrive(surReconnexionDrive(e)));
+gerer('synchro:drive', async (e) => {
+  const r = await synchro.synchroniserDrive(surReconnexionDrive(e));
+  // Synchro manuelle reussie : la synchro auto Drive reprend (pause posee par
+  // une session expiree, voir synchroAuto).
+  if (!r.erreur && db.etatSync('drive_pause_auto')) {
+    db.definirEtatSync('drive_pause_auto', '');
+    journal.evt('synchro', 'auto-drive-reprise');
+  }
+  return r;
+});
 
 // Mise a jour : verification (au lancement si maj_auto, ou bouton Options),
 // telechargement avec progression, puis installation = relance sur le nouvel exe.
@@ -597,7 +641,9 @@ gerer('theme:systeme', () => (nativeTheme.shouldUseDarkColors ? 'sombre' : 'clai
 // La confirmation de fermeture est une fenetre HTML aux tons de l'appli (voir
 // App.jsx), pas une boite de dialogue Windows : plus de son systeme. Ce canal
 // ferme directement, la question a deja ete posee cote rendu.
-gerer('app:quitter', () => {
+gerer('app:quitter', async () => {
+  // Dernieres modifications pas encore parties : envoi avant de fermer (10 s max).
+  try { await synchroAuto.avantFermeture(); } catch (e) { journal.erreur('synchro', 'auto-fermeture', e); }
   fermetureAutorisee = true;
   if (fenetre) fenetre.close(); else app.quit();
   return true;
