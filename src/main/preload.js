@@ -63,6 +63,11 @@ contextBridge.exposeInMainWorld('api', {
     importer: (chemin) => ipcRenderer.invoke('sauvegarde:importer', chemin)
   },
 
+  copieSecurite: {
+    etat: () => ipcRenderer.invoke('copie:etat'),
+    ouvrir: () => ipcRenderer.invoke('copie:ouvrir')
+  },
+
   drive: {
     etat: () => ipcRenderer.invoke('drive:etat'),
     connecter: () => ipcRenderer.invoke('drive:connecter'),

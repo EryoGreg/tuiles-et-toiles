@@ -1618,6 +1618,8 @@ function Options({ etat, onEtat, aller }) {
     return null;
   });
   const [sauvOccupe, setSauvOccupe] = useState(false);
+  const [copie, setCopie] = useState(null);             // copie de securite automatique
+  useEffect(() => { window.api.copieSecurite.etat().then(setCopie); }, []);
   const [drv, setDrv] = useState(null);                  // etat Google Drive
   const [drvOccupe, setDrvOccupe] = useState(false);
   // Bilan de la derniere synchro, qui survit au rechargement suivant une fusion.
@@ -2075,6 +2077,17 @@ function Options({ etat, onEtat, aller }) {
           qui manque revient, rien n’est effacé. Pour annuler une modification, passe plutôt
           par la tuile elle-même.
         </div>
+        {copie && (
+          <div className="options-note">
+            Copie de sécurité automatique chaque semaine (4 gardées) :{' '}
+            {copie.derniere
+              ? 'la dernière date du ' + new Date(copie.derniere.le).toLocaleDateString('fr-FR', { dateStyle: 'long' }) + '. '
+              : 'la première sera faite sous peu. '}
+            {copie.derniere && (
+              <button className="lien-discret" onClick={() => window.api.copieSecurite.ouvrir()}>Ouvrir le dossier</button>
+            )}
+          </div>
+        )}
       </section>
 
       <div className="filet" />

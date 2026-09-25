@@ -129,6 +129,27 @@ const TEXTES = {
     'Ne modifie pas le contenu de l\'archive : l\'import pourrait échouer.'
   ],
 
+  // Documents\Tuiles et Toiles - sauvegardes\ (copie-securite.js)
+  sauvegardes_auto: [
+    ...titre('Copies de sécurité de Tuiles et Toiles'),
+    'Une fois par semaine, l\'application Tuiles et Toiles range ici,',
+    'toute seule, une copie de tes données : tuiles créées, corrections,',
+    'archives, marques et images. Elle garde les 4 plus récentes (un mois)',
+    'et supprime les plus anciennes.',
+    '',
+    'C\'est un filet pour les coups durs que la synchro entre appareils ne',
+    'couvre pas : dossier de synchro supprimé, seul appareil perdu, erreur',
+    'recopiée partout.',
+    '',
+    'Pour reprendre une copie : Options → « Importer une sauvegarde… ». Elle',
+    'se fusionne avec tes données (ce qui manque revient, rien n\'est',
+    'effacé).',
+    '',
+    'Tu peux copier ces fichiers ailleurs (clé USB, autre disque) : c\'est',
+    'encore plus sûr. Ne les renomme pas : l\'application ne reconnaîtrait',
+    'plus ses copies et ne ferait plus le ménage.'
+  ],
+
   // Documents\Tuiles et Toiles - rapports\ (cree seulement si un envoi echoue)
   rapports: [
     ...titre('Rapports d\'erreur Tuiles et Toiles'),

@@ -142,6 +142,53 @@ const etatDe = (a) => a.d.prepare('SELECT entite, cle, champ, valeur, hlc FROM e
     assert.ok(A.d.prepare("SELECT cree_le FROM oeuvres_locales WHERE id='local:v'").get().cree_le.startsWith('2025-03-01'));
   });
 
+  console.log('copie de securite automatique');
+  const fs = require('fs'), os = require('os');
+  const copie = require(path.join(RACINE, 'src/main/copie-securite'));
+  const JOUR = 86400e3;
+
+  await test('une copie par semaine, 4 gardees, LISEZMOI, jamais sans donnees', async () => {
+    const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-copie-'));
+    let t = Date.parse('2026-09-01T09:00:00Z'), donnees = false;
+    copie.configurer({
+      dossier, maintenant: () => t, aDesDonnees: () => donnees,
+      exporter: (chemin) => fs.writeFileSync(chemin, 'zip ' + t)
+    });
+    assert.equal(copie.siBesoin().raison, 'aucune-donnee');
+    donnees = true;
+    assert.equal(copie.siBesoin().faite, true);
+    // mtime = date de la copie : l'horloge simulee n'agit pas sur le disque.
+    const dater = () => {
+      for (const f of copie.lister()) {
+        const d = new Date(Date.parse(f.nom.slice(11, 21) + 'T09:00:00Z'));
+        fs.utimesSync(path.join(dossier, f.nom), d, d);
+      }
+    };
+    dater();
+    t += 3 * JOUR;
+    assert.equal(copie.siBesoin().raison, 'recente');
+    for (let i = 0; i < 6; i++) { t += 7 * JOUR; assert.equal(copie.siBesoin().faite, true); dater(); }
+    const l = copie.lister();
+    assert.equal(l.length, 4);
+    assert.equal(l[0].nom, 'sauvegarde-' + new Date(t).toISOString().slice(0, 10) + '.zip');
+    assert.ok(fs.existsSync(path.join(dossier, 'LISEZMOI.txt')));
+    assert.ok(!fs.readdirSync(dossier).some((f) => f.endsWith('.tmp')));
+    fs.rmSync(dossier, { recursive: true, force: true });
+  });
+
+  await test('echec de l\'export : pas de copie a moitie ecrite', async () => {
+    const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-copie-'));
+    copie.configurer({
+      dossier, aDesDonnees: () => true,
+      exporter: (chemin) => { fs.writeFileSync(chemin, 'debut'); throw new Error('disque plein'); }
+    });
+    const r = copie.siBesoin();
+    assert.equal(r.faite, false);
+    assert.equal(r.raison, 'echec');
+    assert.deepEqual(fs.readdirSync(dossier).filter((f) => f !== 'LISEZMOI.txt'), []);
+    fs.rmSync(dossier, { recursive: true, force: true });
+  });
+
   console.log(`\n${nOk} ok, ${nKo} KO`);
   process.exit(nKo ? 1 : 0);
 })();

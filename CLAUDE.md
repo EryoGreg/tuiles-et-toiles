@@ -30,8 +30,16 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 
 - É0 ✅ export / import zip (`src/main/sauvegarde.js`, `adm-zip`). Zip = `utilisateur.db`
   (via `VACUUM INTO`, base `pack` exclue) + `images-locales/` + `manifest.json`.
-  Import = **remplacement complet**, copie de secours `utilisateur.db.avant-import-<horodatage>`,
-  `reconstruireVue({force})` + `window.location.reload()`. Options → « Sauvegarde des données ».
+  Import = **fusion** (depuis 0.3) : les ops du journal du zip passent par
+  `echange.fusionner` (comme une synchro), rien n'est effacé, conflit si deux versions
+  s'ignoraient ; ops importées marquées `pousse = 0` → repartent vers les autres appareils.
+  Zip d'avant le journal : ops de genèse sous un id d'appareil dérivé du zip (`etat.opsGenese`
+  + `horodaterGenese`). Images manquantes seulement. Copie de secours
+  `utilisateur.db.avant-import-<horodatage>`. (L'ancien remplacement complet faisait diverger
+  les appareils synchronisés en silence.) Options → « Sauvegarde des données ».
+  **Copie de sécurité auto** (`src/main/copie-securite.js`) : zip hebdomadaire silencieux dans
+  `Documents\Tuiles et Toiles - sauvegardes\` (`data/sauvegardes/` en dev), 4 gardés, écrit en
+  `.tmp` puis renommé, vérifié 1 min après le lancement puis toutes les 6 h.
 - É1 ✅ snapshot Drive via API (`src/main/drive.js`). OAuth installed-app + PKCE, redirection
   loopback `http://localhost:<port>`, navigateur système. Scope `drive.file`, dossier `Tuiles et
   Toiles/` (sans `&` — nom de dossier Drive). Fichier `utilisateur.zip` mis à jour en place ;
@@ -40,8 +48,10 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   Jeton (refresh_token) chiffré `safeStorage` → `%APPDATA%\Tuiles et Toiles\drive-jeton.bin`.
   Client OAuth : `src/main/oauth-client.json` (gitignoré, embarqué dans l'asar). Projet Google
   Cloud `tuiles-et-toiles`, écran de consentement en **Testing** → chaque testeur à ajouter en
-  *test user*, ou publier l'app. Options → « Google Drive » : Connecter / Sauvegarder / Restaurer
-  / Déconnecter. Pas d'auto push/pull pour l'instant (boutons manuels).
+  *test user*, ou publier l'app (sinon le jeton expire tous les 7 jours : `invalid_grant`).
+  **Sauvegarder / Restaurer (zip complet sur Drive) retirés en 0.3** : la synchro fait mieux, et
+  Restaurer remplaçait la base. `utilisateur.zip` et `historique/` restent sur les Drive
+  existants, importables (fusion). Options → « Google Drive » : Synchroniser / Déconnecter.
 - É2 (payant) fusion ligne à ligne via journal de changements keyé par `id` stable.
   Cible : PC ↔ mobile (portage Capacitor prévu), plusieurs appareils. Découpage :
   - É2a ✅ journal local (`src/main/synchro/`). `appareil.json` (id 8 hex aléatoire,
@@ -115,17 +125,31 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     lien « Voir les conflits » dans le bilan de synchro. Noms d'appareils retenus dans
     `sync.appareils_connus`. Test de propriété : `tests/synchro-e2e.test.js [n] [graine]`
     (2 à 4 appareils, arrivées, absences de plusieurs semaines, horloge contrôlée).
+  - É2f ✅ (0.3) filets de sécurité et synchro automatique :
+    - **Nom de segment toujours croissant** (`echange.pousser`) : si la première op à envoyer
+      est plus ancienne que `sync.dernier_segment` (ops importées), le nom part d'un `tic()`.
+      Sinon les autres appareils (curseur = nom de segment) ne le liraient jamais.
+    - **Corbeille** (`edition.corbeille` / `restaurer`, entrée de barre latérale visible s'il y
+      a quelque chose) : tuiles locales supprimées dont le contenu est encore au registre
+      (« effacée définitivement le … » = `compaction.purgeeLe`) et œuvres du pack archivées.
+      Restaurer = écriture ordinaire. Les marques d'une tuile supprimée **restent** (invisibles :
+      `comptesTags`, `parTagUtilisateur` et `effacerTousLesTags` joignent `oeuvres_effectives`).
+    - **Versions précédentes** (`edition.versions`, bouton de l'éditeur) : toutes les valeurs de
+      chaque champ, tirées de `changements`, tous appareils ; « Reprendre » remplit l'éditeur,
+      rien n'est écrit avant validation. Pas l'image (une image remplacée est effacée du disque).
+    - **Synchro automatique** (`synchro/auto.js`, réglage `synchro_auto`, actif par défaut) :
+      lancement + 6 s, 20 s de calme après une modification (surveillance toutes les 15 s),
+      toutes les 15 min, réveil, fermeture (≤ 10 s, `app:quitter` attend). Échec → nouvel essai
+      5 min plus tard. Mode auto : **jamais de navigateur** — jeton mort → `sync.drive_pause_auto`
+      (bandeau rouge dans Options) jusqu'à une synchro manuelle réussie. Une synchro auto ne
+      recharge pas la page (`resultat.auto`) : bandeau « Du nouveau… Actualiser » sur les
+      pages de liste (pas l'éditeur), et « N conflit(s) à trancher — Voir ».
   - **À faire, PC et mobile :**
-    - **Corbeille** (entrée de menu + compteur) : tuiles locales supprimées (pierre tombale,
-      encore au registre) **et** œuvres du pack archivées — aujourd'hui aucune UI ne
-      désarchive. Restaurer = `_existe = 1` / archive → NULL, propagé par la synchro. Afficher
-      « supprimée le X, définitivement effacée le Y » (purge des pierres tombales à la
-      compaction, É2e ; les archives du pack ne sont jamais purgées). Ne plus retirer les
-      marques à la suppression d'une tuile locale : elles sont déjà invisibles (jointure sur
-      `oeuvres_effectives`) et reviendraient ainsi avec la tuile.
-    - **Conflits : jamais de modale au lancement** (règle 1). Fait en É2e : écran, pastille,
-      lien dans le bilan. Reste : **marque sur les tuiles concernées** (galeries, éditeur) et
-      toast global quand la synchro deviendra automatique.
+    - **Conflits** : marque sur les tuiles concernées (galeries, éditeur).
+    - Retirer un appareil perdu de la liste (il bloque la purge 90 jours) ; afficher le compte
+      Google connecté et prévenir s'il diffère de celui des autres appareils.
+    - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
+      première mise à jour de pack.
   Décisions actées : préfixe de ref par appareil (`L`, puis `M`, `N`, `P`…) attribué en
   rejoignant ; les tuiles d'un appareil **jamais partagées** sont renumérotées une fois en
   rejoignant (« ref figée » vaut à partir du partage).
@@ -285,6 +309,9 @@ correction).
 
 ## Pièges de l'environnement
 
+- **Barres obliques inverses dans les heredocs de l'outil Bash** : `\\` y devient `\` (un
+  `\'` Python y perd sa barre, un `\\n` devient un vrai saut de ligne). Écrire les scripts
+  Python avec l'outil Write, pas en heredoc.
 - **Séquences `\u` dans les outils d'écriture.** Les outils d'édition de Claude décodent
   `\uXXXX` en caractère réel : une regex écrite ainsi devient illisible (voire cassée par
   un U+2028). Générer ces lignes par script (`chr(92) + 'u200B'`).

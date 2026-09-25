@@ -1163,3 +1163,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .drive-encours.attente { color: var(--revoir); }
 .entree.synchro-en-cours { color: var(--laiton); }
 .entree.synchro-en-cours .drive-pastille { flex: 0 0 auto; }
+
+/* Lien discret dans une note (Options) */
+.lien-discret { background: none; border: none; padding: 0; font: inherit; color: var(--laiton); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.lien-discret:hover { color: var(--encre-vive); }

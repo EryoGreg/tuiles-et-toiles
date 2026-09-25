@@ -28,6 +28,7 @@ const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
 const { creerAuto } = require('./synchro/auto');
+const copieSecurite = require('./copie-securite');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
 // champ "name" du package.json (tuiles-et-toiles).
@@ -218,6 +219,16 @@ app.whenReady().then(() => {
     user: USER, imagesLocales: DOSSIER_IMAGES_LOCALES, pack: PACK, versionApp: app.getVersion()
   });
   drive.configurer({ dossierUser: DOSSIER_USER });
+  // Copie de securite hebdomadaire, silencieuse (copie-securite.js). Une minute
+  // apres le lancement (pas pendant le demarrage), puis verifiee toutes les 6 h.
+  copieSecurite.configurer({
+    dossier: DEV ? path.join(DOSSIER_USER, 'sauvegardes') : path.join(app.getPath('documents'), 'Tuiles et Toiles - sauvegardes'),
+    exporter: (chemin) => sauvegarde.exporter(chemin),
+    aDesDonnees: () => db.instance().prepare('SELECT COUNT(*) n FROM etat').get().n > 0
+  });
+  const copier = () => { try { copieSecurite.siBesoin(); } catch (e) { journal.erreur('sauvegarde', 'copie-securite', e); } };
+  setTimeout(copier, 60e3);
+  setInterval(copier, 6 * 3600e3);
   synchro.configurer({
     dossierUser: DOSSIER_USER, imagesLocales: DOSSIER_IMAGES_LOCALES,
     surProgression: (p) => {
@@ -316,7 +327,7 @@ function infosRapport() {
 // Chaque canal est journalise : arguments resumes, duree, resultat ou erreur.
 // Lectures appelees en boucle -> DEBUG ; resultat { erreur } -> WARN.
 const ROUTINE = new Set([
-  'etat', 'drive:etat', 'synchro:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
+  'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
   'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero',
   'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile'
 ]);
@@ -464,6 +475,14 @@ gerer('sauvegarde:importer', (_e, chemin) => {
     journal.erreur('sauvegarde', 'import', e, { chemin });
     return { erreur: e.message };
   }
+});
+
+gerer('copie:etat', () => copieSecurite.etat());
+gerer('copie:ouvrir', async () => {
+  const { dossier } = copieSecurite.etat();
+  if (!fs.existsSync(dossier)) return { erreur: 'Aucune copie pour l’instant.' };
+  const err = await shell.openPath(dossier);
+  return err ? { erreur: err } : { ok: true };
 });
 
 gerer('drive:etat', () => drive.etat());

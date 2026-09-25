@@ -21,6 +21,9 @@ src/main/oauth-client.json
 *.db-shm
 data/logs/
 
+# Copies de securite automatiques (en dev ; Documents\ une fois empaquete)
+data/sauvegardes/
+
 # Identite de l'installation (synchro) : propre a chaque poste
 data/appareil.json
 
