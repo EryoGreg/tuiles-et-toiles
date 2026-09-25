@@ -110,10 +110,10 @@ function msDe(iso, maintenant) {
  * fois par base. HLC = date REELLE de la ligne (cree_le / modifie_le) : a la
  * fusion avec un autre appareil, c'est la valeur modifiee le plus recemment
  * qui gagne, pas celle de l'appareil active en dernier.
- * @returns {number} nombre d'ops emises
+ * Sert aussi a l'import d'un zip d'avant le journal (sauvegarde.js).
+ * @returns {Array<{ ms, entite, cle, champ, valeur }>}
  */
-function genese(d) {
-  const now = Date.now();
+function opsGenese(d, now = Date.now()) {
   const ops = [];
   const pousser = (iso, entite, cle, champ, val) =>
     ops.push({ ms: msDe(iso, now), entite, cle, champ, valeur: JSON.stringify(val) });
@@ -134,19 +134,32 @@ function genese(d) {
   for (const r of d.prepare('SELECT * FROM user_tags').all()) {
     pousser(r.cree_le, 'tag', r.oeuvre_id, r.tag, 1);
   }
+  return ops;
+}
 
-  // Compteur par milliseconde : plusieurs champs d'une meme tuile partagent sa date.
+/**
+ * HLC des ops de genese : date de la ligne, compteur par milliseconde
+ * (plusieurs champs d'une meme tuile partagent sa date).
+ */
+function horodaterGenese(ops, idAppareil) {
   const cpt = new Map();
+  return ops.map((o) => {
+    const n = cpt.get(o.ms) || 0;
+    cpt.set(o.ms, n + 1);
+    return { hlc: formater(o.ms, n, idAppareil), appareil: idAppareil, entite: o.entite, cle: o.cle,
+      champ: o.champ, valeur: o.valeur, base: null, vus: null };
+  });
+}
+
+function genese(d) {
+  const ops = horodaterGenese(opsGenese(d), appareil.id);
   const insChg = d.prepare(`INSERT INTO changements (hlc, appareil, entite, cle, champ, valeur, base, pousse)
     VALUES (?, ?, ?, ?, ?, ?, NULL, 0)`);
   const insEtat = d.prepare(`INSERT OR IGNORE INTO etat (entite, cle, champ, valeur, hlc, base)
     VALUES (?, ?, ?, ?, ?, NULL)`);
   for (const o of ops) {
-    const n = cpt.get(o.ms) || 0;
-    cpt.set(o.ms, n + 1);
-    const h = formater(o.ms, n, appareil.id);
-    insChg.run(h, appareil.id, o.entite, o.cle, o.champ, o.valeur);
-    insEtat.run(o.entite, o.cle, o.champ, o.valeur, h);
+    insChg.run(o.hlc, o.appareil, o.entite, o.cle, o.champ, o.valeur);
+    insEtat.run(o.entite, o.cle, o.champ, o.valeur, o.hlc);
   }
   return ops.length;
 }
@@ -184,5 +197,5 @@ function preparer(d) {
 
 module.exports = {
   configurer, contexte, appareil: lAppareil, valeur, lignes, existe, ecrire, supprimerLocale,
-  lot, conflits, resoudre, CHAMPS_LOCALE
+  lot, conflits, resoudre, CHAMPS_LOCALE, opsGenese, horodaterGenese
 };

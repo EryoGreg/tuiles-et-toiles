@@ -7,10 +7,13 @@
  *   images-locales/<nom>     images des tuiles creees
  *   manifest.json            versions + comptes, pour verifier avant import
  *
- * Etape 0 de la synchro : l'utilisateur depose ce zip dans un dossier
- * Google Drive (ou le transporte a la main) et l'importe sur un autre poste.
- * L'import REMPLACE entierement les donnees locales — une copie horodatee de
- * l'ancienne base est gardee a cote (utilisateur.db.avant-import-<horodatage>).
+ * L'import FUSIONNE (comme une synchro) : les ops du journal du zip sont
+ * appliquees par le moteur de synchro, rien n'est efface. Une donnee modifiee
+ * des deux cotes garde la version la plus recente, et un conflit s'ouvre si
+ * les deux versions s'ignoraient. Remplacer la base aurait fait diverger les
+ * appareils synchronises en silence (le journal local repartait en arriere).
+ * Une copie de la base d'avant l'import est gardee a cote
+ * (utilisateur.db.avant-import-<horodatage>).
  */
 
 const fs = require('fs');
@@ -18,10 +21,15 @@ const path = require('path');
 const os = require('os');
 const AdmZip = require('adm-zip');
 
+const crypto = require('crypto');
+const Database = require('better-sqlite3');
+
 const db = require('./db');
 const lisezmoi = require('./lisezmoi');
 const journal = require('./journal');
 const jeu = require('./jeu');
+const etat = require('./synchro/etat');
+const echange = require('./synchro/echange');
 
 let cfg = null;
 function configurer({ user, imagesLocales, pack, versionApp }) {
@@ -91,7 +99,6 @@ function exporter(cheminZip) {
 
 function lireVersionPack() {
   try {
-    const Database = require('better-sqlite3');
     const d = new Database(cfg.pack, { readonly: true, fileMustExist: true });
     const r = d.prepare("SELECT valeur FROM pack_meta WHERE cle = 'version'").get();
     d.close();
@@ -120,9 +127,33 @@ function inspecter(cheminZip) {
 }
 
 /**
- * Restaure les donnees depuis un zip. REMPLACE utilisateur.db et
- * images-locales/. Sauvegarde l'ancienne base a cote avant d'ecraser.
- * @returns {{ manifest, sauvegardePrecedente, comptes }|{ erreur }}
+ * Ops a fusionner, lues dans la base du zip (ouverte en lecture seule).
+ * Zip recent : son journal `changements`. Zip d'avant le journal (0.1.x) :
+ * ops fabriquees comme a la genese (date reelle des lignes), sous un
+ * identifiant d'appareil derive du contenu du zip — reimporter le meme zip ne
+ * cree donc rien de nouveau.
+ */
+function lireOps(z, octets) {
+  const aTable = (n) => !!z.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(n);
+  if (aTable('changements')) {
+    const cols = z.prepare('PRAGMA table_info(changements)').all().map((c) => c.name);
+    const sel = ['hlc', 'appareil', 'entite', 'cle', 'champ', 'valeur', 'base',
+      cols.includes('vus') ? 'vus' : 'NULL AS vus',
+      cols.includes('remplace') ? 'remplace' : '0 AS remplace'].join(', ');
+    return { source: 'journal', ops: z.prepare('SELECT ' + sel + ' FROM changements ORDER BY hlc').all() };
+  }
+  const id = crypto.createHash('sha1').update(octets).digest('hex').slice(0, 8);
+  const brutes = etat.opsGenese(z);
+  return { source: 'ancienne-sauvegarde', appareilDerive: id, ops: etat.horodaterGenese(brutes, id) };
+}
+
+/**
+ * Importe un zip en le FUSIONNANT avec les donnees locales. Les ops nouvelles
+ * sont marquees a envoyer : a la prochaine synchro elles partent vers les
+ * autres appareils (reprise si le dossier de synchro a ete perdu). Images :
+ * celles qui manquent sont copiees, aucune n'est remplacee. Reglages
+ * (theme, tri…) : propres a chaque appareil, non importes.
+ * @returns {{ manifest, sauvegardePrecedente, source, bilan, resume, conflits, imagesCopiees }|{ erreur }}
  */
 function importer(cheminZip) {
   const t0 = Date.now();
@@ -136,47 +167,59 @@ function importer(cheminZip) {
   });
 
   const zip = new AdmZip(cheminZip);
-  const bufDb = zip.getEntry('utilisateur.db').getData();
+  const octets = zip.getEntry('utilisateur.db').getData();
+  const tmp = path.join(os.tmpdir(), 'tuiles-import-' + horodatage() + '-' + process.pid + '.db');
+  let lu;
+  try {
+    fs.writeFileSync(tmp, octets);
+    const z = new Database(tmp, { readonly: true, fileMustExist: true });
+    try { lu = lireOps(z, octets); } finally { z.close(); }
+  } catch (e) {
+    journal.erreur('sauvegarde', 'import-lecture-base', e, { cheminZip });
+    return { erreur: 'La base de ce zip est illisible : ' + e.message };
+  } finally {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
+  }
+  journal.evt('sauvegarde', 'import:ops-lues', { source: lu.source, ops: lu.ops.length, appareilDerive: lu.appareilDerive || null });
 
-  // 1. Vider le -wal dans le fichier principal, puis fermer.
-  try { db.instance().pragma('wal_checkpoint(TRUNCATE)'); } catch { /* pas de wal */ }
-  db.fermer();
+  // Copie de secours de la base actuelle (VACUUM INTO : propre, sans -wal).
+  const sauvegardePrecedente = cfg.user + '.avant-import-' + horodatage();
+  db.exporterVers(sauvegardePrecedente);
 
-  // 2. Copie de secours de l'ancienne base.
-  let sauvegardePrecedente = null;
-  if (fs.existsSync(cfg.user)) {
-    sauvegardePrecedente = cfg.user + '.avant-import-' + horodatage();
-    fs.copyFileSync(cfg.user, sauvegardePrecedente);
+  let f;
+  try {
+    f = echange.fusionner(etat.contexte(), lu.ops, { pousse: 0 });
+  } catch (e) {
+    // Rien n'est applique (une seule transaction) : horloge d'une op trop en avance…
+    journal.erreur('sauvegarde', 'import-fusion', e, { cheminZip, ops: lu.ops.length });
+    return { erreur: 'Import impossible : ' + e.message };
   }
 
-  // 3. Remplacer utilisateur.db (et retirer -wal / -shm devenus caducs).
-  for (const suff of ['', '-wal', '-shm']) {
-    try { fs.rmSync(cfg.user + suff, { force: true }); } catch { /* absent */ }
-  }
-  fs.writeFileSync(cfg.user, bufDb);
-
-  // 4. Remplacer images-locales/ par celles du zip.
+  // Images manquantes seulement : un nom d'image est unique (uuid).
   fs.mkdirSync(cfg.imagesLocales, { recursive: true });
-  for (const f of listerImages()) {
-    try { fs.rmSync(path.join(cfg.imagesLocales, f), { force: true }); } catch { /* verrou */ }
-  }
+  let imagesCopiees = 0, imagesPresentes = 0;
   for (const e of zip.getEntries()) {
     if (e.isDirectory) continue;
     const m = e.entryName.match(/^images-locales\/(.+)$/);
-    if (!m) continue;
-    fs.writeFileSync(path.join(cfg.imagesLocales, path.basename(m[1])), e.getData());
+    if (!m || path.basename(m[1]) === lisezmoi.NOM) continue;
+    const cible = path.join(cfg.imagesLocales, path.basename(m[1]));
+    if (fs.existsSync(cible)) { imagesPresentes++; continue; }
+    fs.writeFileSync(cible, e.getData());
+    imagesCopiees++;
   }
 
-  // 5. Rouvrir : reconstruit oeuvres_effectives, recalcule les masques.
-  db.ouvrir(cfg.user, cfg.pack);
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
+  const conflits = db.instance().prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n;
   journal.evt('sauvegarde', 'import:fin', {
-    sauvegardePrecedente, comptesApres: comptesLocaux(),
-    images: fs.readdirSync(cfg.imagesLocales).filter((f) => f !== lisezmoi.NOM).length, ms: Date.now() - t0
+    source: lu.source, bilan: f.bilan, resume: f.resume, conflits, imagesCopiees, imagesPresentes,
+    sauvegardePrecedente, comptesApres: comptesLocaux(), ms: Date.now() - t0
   });
 
-  return { manifest: insp.manifest, sauvegardePrecedente, comptes: comptesLocaux() };
+  return {
+    manifest: insp.manifest, sauvegardePrecedente, source: lu.source,
+    bilan: f.bilan, resume: f.resume, conflits, imagesCopiees
+  };
 }
 
-module.exports = { configurer, exporter, inspecter, importer };
+module.exports = { configurer, exporter, inspecter, importer, _lireOps: lireOps };

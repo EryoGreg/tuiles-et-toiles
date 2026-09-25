@@ -246,10 +246,10 @@ function poser(ctx, op) {
   projeter(ctx, op.entite, op.cle, op.champ, parse(op.valeur), op.hlc);
 }
 
-function insererOp(ctx, op, pousse) {
-  ctx.d.prepare(`INSERT INTO changements (hlc, appareil, entite, cle, champ, valeur, base, vus, pousse)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(op.hlc, op.appareil, op.entite, op.cle, op.champ, op.valeur, op.base, op.vus, pousse);
+function insererOp(ctx, op, pousse, remplace = 0) {
+  ctx.d.prepare(`INSERT INTO changements (hlc, appareil, entite, cle, champ, valeur, base, vus, pousse, remplace)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(op.hlc, op.appareil, op.entite, op.cle, op.champ, op.valeur, op.base, op.vus, pousse, remplace);
 }
 
 /**
@@ -320,16 +320,19 @@ function valide(op) {
 
 /**
  * Applique une op venue d'un autre appareil. A appeler dans une transaction.
+ * @param {{ pousse?: 0|1, remplace?: 0|1 }} o  pousse = 0 : op a renvoyer a la
+ *   prochaine synchro (import d'une sauvegarde : les autres appareils ne l'ont
+ *   peut-etre jamais vue) ; remplace : marquage repris de la base d'origine
  * @returns {'connue'|'rejetee'|'avance'|'ignoree'} ignoree = plus ancienne que
  *   la valeur courante (gardee au journal : elle compte pour les conflits)
  */
-function appliquer(ctx, r) {
+function appliquer(ctx, r, { pousse = 1, remplace = 0 } = {}) {
   if (!valide(r)) return 'rejetee';
   if (ctx.d.prepare('SELECT 1 FROM changements WHERE hlc=?').get(r.hlc)) return 'connue';
   ctx.horloge.recevoir(r.hlc);
   const op = { hlc: r.hlc, appareil: r.appareil, entite: r.entite, cle: r.cle, champ: r.champ,
     valeur: r.valeur == null ? null : r.valeur, base: r.base || null, vus: r.vus || null };
-  insererOp(ctx, op, 1);
+  insererOp(ctx, op, pousse, remplace ? 1 : 0);
   const v = lire(ctx, op.entite, op.cle, op.champ);
   const avance = !v || op.hlc > v.hlc;
   if (avance) poser(ctx, op);

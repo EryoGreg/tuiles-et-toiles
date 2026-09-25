@@ -1485,6 +1485,33 @@ const RACCOURCIS = [
   ['taskbar', 'Épingler à la barre des tâches', 'Épinglé à la barre — détacher']
 ];
 
+// Resume d'une synchro ou d'un import en mots (echange.resumer).
+function direChangements(s, images) {
+  const l = [];
+  const n = (k, un, plusieurs) => { if (s && s[k]) l.push(s[k] + ' ' + (s[k] > 1 ? plusieurs : un)); };
+  n('tuilesNouvelles', 'nouvelle tuile', 'nouvelles tuiles');
+  n('tuilesModifiees', 'tuile modifiée', 'tuiles modifiées');
+  n('tuilesSupprimees', 'tuile supprimée', 'tuiles supprimées');
+  n('tuilesRestaurees', 'tuile restaurée', 'tuiles restaurées');
+  n('oeuvresCorrigees', 'œuvre corrigée', 'œuvres corrigées');
+  n('marques', 'marque', 'marques');
+  n('archives', 'archivage', 'archivages');
+  if (images) l.push(images + ' image' + (images > 1 ? 's' : ''));
+  return l.join(', ');
+}
+
+// « Envoyé : … Reçu : … » d'un bilan de synchro (service.js).
+function phraseBilan(r) {
+  // Bilan d'avant les resumes (0.2.2 et avant) : compte d'ops seulement.
+  if (!r.envoye && !r.recu && (r.poussees || r.appliquees)) {
+    return (r.poussees || 0) + ' modification(s) envoyée(s), ' + (r.appliquees || 0) + ' reçue(s).';
+  }
+  const envoye = direChangements(r.envoye, r.imagesEnvoyees);
+  const recu = direChangements(r.recu, r.imagesRecues);
+  return !envoye && !recu ? 'Tout était déjà à jour.'
+    : [envoye && 'Envoyé : ' + envoye + '.', recu && 'Reçu : ' + recu + '.'].filter(Boolean).join(' ');
+}
+
 function Options({ etat, onEtat, aller }) {
   const [confirmation, setConfirmation] = useState(false);
   const [demandeEffacement, setDemandeEffacement] = useState(false);
@@ -1494,6 +1521,14 @@ function Options({ etat, onEtat, aller }) {
   const [raccourciManuel, setRaccourciManuel] = useState(false);
   const [sauvMsg, setSauvMsg] = useState(null);          // { ok } | { erreur }
   const [sauvImport, setSauvImport] = useState(null);    // zip choisi, en attente de confirmation
+  // Bilan d'un import, qui survit au rechargement de la page.
+  const [importFait] = useState(() => {
+    try {
+      const m = sessionStorage.getItem('import-msg');
+      if (m) { sessionStorage.removeItem('import-msg'); return JSON.parse(m); }
+    } catch { /* stockage indisponible */ }
+    return null;
+  });
   const [sauvOccupe, setSauvOccupe] = useState(false);
   const [drv, setDrv] = useState(null);                  // etat Google Drive
   const [drvOccupe, setDrvOccupe] = useState(false);
@@ -1506,8 +1541,7 @@ function Options({ etat, onEtat, aller }) {
     return null;
   });
   const [drvMsg, setDrvMsg] = useState(msgRecharge && msgRecharge.ou === 'drive' ? msgRecharge.msg : null);
-  const [drvConflit, setDrvConflit] = useState(null);    // { sens: 'pousser'|'tirer', distantModifie? }
-  const [drvAction, setDrvAction] = useState(null);      // 'connexion' | 'envoi' | 'recuperation' | 'fusion'
+  const [drvAction, setDrvAction] = useState(null);      // 'connexion'
   const [syn, setSyn] = useState(null);                  // etat synchro (dossier + Drive)
   const [synMsg, setSynMsg] = useState(msgRecharge && msgRecharge.ou === 'dossier' ? msgRecharge.msg : null);
 
@@ -1516,6 +1550,7 @@ function Options({ etat, onEtat, aller }) {
   const totalMarques = etat.tags.livre + etat.tags.etoile + etat.tags.bad_smiley;
 
   const flashSauv = (m) => { setSauvMsg(m); setTimeout(() => setSauvMsg(null), 7000); };
+  useEffect(() => { if (importFait) setSauvMsg(importFait); }, []);
 
   const exporterDonnees = async () => {
     setSauvOccupe(true); setSauvMsg(null);
@@ -1539,22 +1574,16 @@ function Options({ etat, onEtat, aller }) {
     setSauvImport(null); setSauvOccupe(true);
     const r = await window.api.sauvegarde.importer(chemin);
     if (r && r.erreur) { setSauvOccupe(false); flashSauv({ erreur: r.erreur }); return; }
+    const recu = direChangements(r.resume, r.imagesCopiees);
+    const msg = {
+      ok: recu ? 'Sauvegarde fusionnée : ' + recu + '.' : 'Rien de nouveau dans cette sauvegarde : tout était déjà là.',
+      conflits: r.conflits
+    };
+    try { sessionStorage.setItem('import-msg', JSON.stringify(msg)); } catch { /* tant pis */ }
     window.location.reload();   // la base a changé — repartir propre
   };
 
   useEffect(() => { window.api.drive.etat().then(setDrv); }, []);
-  // Session Google expiree en cours d'envoi : le navigateur s'ouvre pour
-  // reconnecter, puis l'operation reprend toute seule.
-  // (La synchro, elle, affiche sa reconnexion via sa progression.)
-  const actionAvantReconnexion = useRef(null);
-  useEffect(() => window.api.drive.onReconnexion(() => setDrvAction((a) => {
-    if (!a || a === 'reconnexion') return a;
-    actionAvantReconnexion.current = a;
-    return 'reconnexion';
-  })), []);
-  useEffect(() => window.api.drive.onReconnecte(() => setDrvAction((a) => (
-    a === 'reconnexion' ? actionAvantReconnexion.current : a
-  ))), []);
   const drvFlash = (m) => { setDrvMsg(m); setTimeout(() => setDrvMsg(null), 8000); };
 
   const drvConnecter = async () => {
@@ -1565,25 +1594,6 @@ function Options({ etat, onEtat, aller }) {
     if (r.erreur) drvFlash({ erreur: r.erreur });
   };
   const drvDeconnecter = async () => { setDrv(await window.api.drive.deconnecter()); };
-
-  const drvPousser = async (forcer) => {
-    setDrvOccupe(true); setDrvMsg(null); setDrvAction('envoi');
-    const r = await window.api.drive.pousser({ forcer: !!forcer });
-    setDrvOccupe(false); setDrvAction(null);
-    // Une reconnexion auto a pu changer (ou perdre) le compte connecte.
-    setDrv(await window.api.drive.etat());
-    if (r.conflit) { setDrvConflit(r); return; }
-    if (r.erreur) { drvFlash({ erreur: r.erreur }); return; }
-    drvFlash({ ok: r.reconnecte ? 'Reconnecté à Google, sauvegardé sur Drive.' : 'Sauvegardé sur Drive.' });
-  };
-  const drvTirer = async (forcer) => {
-    setDrvOccupe(true); setDrvMsg(null); setDrvAction('recuperation');
-    const r = await window.api.drive.tirer({ forcer: !!forcer });
-    const fin = async () => { setDrvOccupe(false); setDrvAction(null); setDrv(await window.api.drive.etat()); };
-    if (r.aJour) { await fin(); drvFlash({ ok: 'Déjà à jour avec Drive.' }); return; }
-    if (r.erreur) { await fin(); drvFlash({ erreur: r.erreur }); return; }
-    window.location.reload();
-  };
 
   // Progression de la synchro, tenue par le processus principal : une page
   // (re)ouverte pendant une synchro l'affiche aussitot, et le bilan arrive
@@ -1635,23 +1645,7 @@ function Options({ etat, onEtat, aller }) {
       morceaux.push('Cet appareil numérote désormais ses tuiles « ' + r.prefixe + ' » : '
         + r.renumerotees.map((x) => x.avant + ' → ' + x.apres).join(', ') + '.');
     }
-    const dire = (s, images) => {
-      const l = [];
-      const n = (k, un, plusieurs) => { if (s && s[k]) l.push(s[k] + ' ' + (s[k] > 1 ? plusieurs : un)); };
-      n('tuilesNouvelles', 'nouvelle tuile', 'nouvelles tuiles');
-      n('tuilesModifiees', 'tuile modifiée', 'tuiles modifiées');
-      n('tuilesSupprimees', 'tuile supprimée', 'tuiles supprimées');
-      n('tuilesRestaurees', 'tuile restaurée', 'tuiles restaurées');
-      n('oeuvresCorrigees', 'œuvre corrigée', 'œuvres corrigées');
-      n('marques', 'marque', 'marques');
-      n('archives', 'archivage', 'archivages');
-      if (images) l.push(images + ' image' + (images > 1 ? 's' : ''));
-      return l.join(', ');
-    };
-    const envoye = dire(r.envoye, r.imagesEnvoyees);
-    const recu = dire(r.recu, r.imagesRecues);
-    morceaux.push(!envoye && !recu ? 'Tout était déjà à jour.'
-      : [envoye && 'Envoyé : ' + envoye + '.', recu && 'Reçu : ' + recu + '.'].filter(Boolean).join(' '));
+    morceaux.push(phraseBilan(r));
     if (r.conflits) morceaux.push(r.conflits + ' conflit(s) à trancher — la valeur la plus récente est affichée en attendant.');
     if (r.rattrapage) morceaux.push('Rattrapage depuis un snapshot.');
     if (r.tuilesOubliees) morceaux.push(r.tuilesOubliees + ' tuile(s) supprimée(s) depuis plus de 90 jours vidée(s).');
@@ -1832,12 +1826,6 @@ function Options({ etat, onEtat, aller }) {
               <button className="bouton-neutre" onClick={drvSynchroniser} disabled={drvOccupe || prog.enCours}>
                 <I.Echange t={16} /> {syncDrive ? 'Synchro en cours…' : 'Synchroniser'}
               </button>
-              <button className="bouton-neutre" onClick={() => drvPousser(false)} disabled={drvOccupe || prog.enCours}>
-                <I.FlecheVert t={16} /> Sauvegarder sur Drive
-              </button>
-              <button className="bouton-neutre" onClick={() => setDrvConflit({ sens: 'tirer' })} disabled={drvOccupe || prog.enCours}>
-                <I.FlecheVert t={16} bas /> Restaurer depuis Drive
-              </button>
               <button className="bouton-neutre" onClick={drvDeconnecter} disabled={drvOccupe || prog.enCours}>
                 <I.Croix t={14} /> Déconnecter
               </button>
@@ -1847,26 +1835,23 @@ function Options({ etat, onEtat, aller }) {
               {syn && syn.derniereDrive
                 ? 'Dernière synchro le ' + new Date(syn.derniereDrive.le).toLocaleString('fr-FR') + '.'
                 : 'Jamais synchronisé depuis ce poste.'}
-              {drv.synchroLe
-                ? ' Dernière sauvegarde complète le ' + new Date(drv.synchroLe).toLocaleString('fr-FR') + '.'
-                : ''}
               {syn && syn.conflits ? ' ' + syn.conflits + ' conflit(s) à trancher.' : ''}
             </div>
+            {!drvMsg && syn && syn.derniereDrive && (
+              <div className="options-note">Dernière fois : {phraseBilan(syn.derniereDrive)}</div>
+            )}
             <div className="options-note">
-              <strong>Synchroniser</strong> fusionne ligne à ligne avec tes autres appareils :
-              rien n’est écrasé. <strong>Sauvegarder</strong> / <strong>Restaurer</strong> copient
-              ou remplacent l’ensemble de tes données d’un bloc.
+              <strong>Synchroniser</strong> envoie les changements faits sur cet appareil et
+              récupère ceux de tes autres appareils. Rien n’est écrasé : chaque modification
+              est fusionnée. Si une même tuile a été modifiée des deux côtés, la version la plus
+              récente s’affiche et l’autre t’est proposée dans « Conflits ».
             </div>
           </>
         )}
         {drvAction && (
           <div className="drive-encours">
             <span className="drive-pastille" />
-            {drvAction === 'fusion' ? 'Synchro avec Google Drive…'
-              : drvAction === 'envoi' ? 'Envoi des données vers Google Drive…'
-              : drvAction === 'recuperation' ? 'Récupération des données depuis Google Drive…'
-              : drvAction === 'reconnexion' ? 'Session Google expirée — autorise de nouveau l’accès dans le navigateur…'
-              : 'Connexion à Google Drive — autorise l’accès dans le navigateur…'}
+            Connexion à Google Drive — autorise l’accès dans le navigateur…
           </div>
         )}
         {syncDrive && <ProgressionSynchro p={prog} titre="Synchro avec Google Drive" />}
@@ -1878,34 +1863,6 @@ function Options({ etat, onEtat, aller }) {
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{drvMsg.erreur}</div>
         )}
       </section>
-
-      {drvConflit && (
-        <BoiteConfirmation
-          titre={drvConflit.sens === 'pousser' ? 'Sauvegarde Drive plus récente' : 'Restaurer depuis Drive ?'}
-          texteConfirmer={drvConflit.sens === 'pousser' ? 'Écraser avec mes données locales' : 'Remplacer le local'}
-          onAnnuler={() => setDrvConflit(null)}
-          onConfirmer={() => {
-            const s = drvConflit.sens;
-            setDrvConflit(null);
-            if (s === 'pousser') drvPousser(true); else drvTirer(true);
-          }}
-        >
-          {drvConflit.sens === 'pousser' ? (
-            <p>
-              La sauvegarde sur Drive a été modifiée depuis ta dernière synchro
-              {drvConflit.distantModifie
-                ? ' (le ' + new Date(drvConflit.distantModifie).toLocaleString('fr-FR') + ')'
-                : ''}. La remplacer par tes données locales ? L’ancienne version distante
-              est copiée dans « Tuiles et Toiles/historique/ » avant l’écrasement.
-            </p>
-          ) : (
-            <p>
-              Les données locales seront <strong>remplacées</strong> par la sauvegarde Drive.
-              Une copie de ta base actuelle est gardée à côté. L’application se relance.
-            </p>
-          )}
-        </BoiteConfirmation>
-      )}
 
       <div className="filet" />
 
@@ -1921,8 +1878,8 @@ function Options({ etat, onEtat, aller }) {
             <div className="options-note">
               Un dossier que tes appareils voient tous : clé USB, dossier OneDrive, Dropbox ou
               Syncthing. L’app y crée « Tuiles et Toiles » (même rangement que sur Google
-              Drive, avec un LISEZMOI dans chaque dossier). Chaque modification y est rangée
-              ligne à ligne — rien n’est écrasé, les deux côtés fusionnent.
+              Drive, avec un LISEZMOI dans chaque dossier). Synchroniser envoie les changements
+              de cet appareil et récupère ceux des autres — rien n’est écrasé, tout fusionne.
             </div>
           </>
         ) : (
@@ -1945,6 +1902,9 @@ function Options({ etat, onEtat, aller }) {
                 : 'Jamais synchronisé.'}
               {syn.conflits ? ' ' + syn.conflits + ' conflit(s) à trancher.' : ''}
             </div>
+            {!synMsg && syn.derniere && (
+              <div className="options-note">Dernière fois : {phraseBilan(syn.derniere)}</div>
+            )}
             {syn.avertissement && (
               <div className="options-note" style={{ color: 'var(--revoir)' }}>{syn.avertissement}</div>
             )}
@@ -1978,14 +1938,17 @@ function Options({ etat, onEtat, aller }) {
         {sauvMsg && sauvMsg.ok && (
           <div className="options-confirmation"><I.Coche t={14} /> {sauvMsg.ok}</div>
         )}
+        {sauvMsg && sauvMsg.conflits > 0 && aller && (
+          <button className="bouton-neutre" onClick={() => aller('conflits')}><I.Echange t={16} /> Voir les conflits</button>
+        )}
         {sauvMsg && sauvMsg.erreur && (
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{sauvMsg.erreur}</div>
         )}
         <div className="options-note">
           Le zip contient tes tuiles créées, tes corrections, tes archives et tes marques —
-          pas le pack. Dépose-le dans un dossier Google Drive pour le retrouver sur un autre
-          poste. L’import <strong>remplace</strong> les données locales (une copie de
-          l’ancienne base est gardée à côté).
+          pas le pack. L’import <strong>fusionne</strong> la sauvegarde avec tes données : ce
+          qui manque revient, rien n’est effacé. Pour annuler une modification, passe plutôt
+          par la tuile elle-même.
         </div>
       </section>
 
@@ -2009,13 +1972,15 @@ function Options({ etat, onEtat, aller }) {
       {sauvImport && (
         <BoiteConfirmation
           titre="Importer cette sauvegarde ?"
-          texteConfirmer="Importer et remplacer"
+          texteConfirmer="Importer et fusionner"
           onAnnuler={() => setSauvImport(null)}
           onConfirmer={confirmerImport}
         >
           <p>
-            Toutes les données locales (tuiles créées, corrections, archives, marques,
-            réglages) seront <strong>remplacées</strong> par le contenu de la sauvegarde.
+            Le contenu de la sauvegarde (tuiles créées, corrections, archives, marques) sera
+            <strong> fusionné</strong> avec tes données : ce qui manque ici revient, rien
+            n’est effacé. Si une même tuile a changé des deux côtés, la version la plus
+            récente est gardée et l’autre t’est proposée dans « Conflits ».
           </p>
           {sauvImport.manifest && (
             <p className="options-note">
@@ -2027,8 +1992,8 @@ function Options({ etat, onEtat, aller }) {
             </p>
           )}
           <p>
-            Une copie de ta base actuelle est gardée
-            (utilisateur.db.avant-import-…). L’application se relance après l’import.
+            Une copie de ta base actuelle est gardée (utilisateur.db.avant-import-…). Si la
+            synchro est active, ces données partiront aussi vers tes autres appareils.
           </p>
         </BoiteConfirmation>
       )}

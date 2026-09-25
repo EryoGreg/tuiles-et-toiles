@@ -42,7 +42,7 @@ const MAX_MAILTO = 1900;   // au-dela, Windows / certains clients tronquent le l
 
 const SUJETS = [
   { cle: 'synchro', libelle: 'Synchro entre appareils' },
-  { cle: 'drive', libelle: 'Google Drive (connexion, sauvegarde, restauration)' },
+  { cle: 'drive', libelle: 'Google Drive (connexion, accès)' },
   { cle: 'creation', libelle: 'Création ou modification d’une tuile' },
   { cle: 'image', libelle: 'Image non importée ou mal affichée' },
   { cle: 'jeu', libelle: 'Jeu : tirage, révélation, catégories' },

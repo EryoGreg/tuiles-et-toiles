@@ -1,16 +1,14 @@
 'use strict';
 /**
- * Sauvegarde des donnees utilisateur dans Google Drive.
+ * Acces Google Drive : connexion OAuth, jeton, et l'API minimale dont la
+ * synchro ligne a ligne a besoin (synchro/transport-drive.js). Scope
+ * drive.file : l'app ne voit que les fichiers qu'elle a elle-meme crees.
  *
- * Etape 1 de la synchro. Snapshot au fichier entier : le zip de sauvegarde.js
- * (utilisateur.db + images-locales) est televerse dans un dossier « Tuiles et
- * Toiles » du Drive de l'utilisateur. Scope drive.file : l'app ne voit que les
- * fichiers qu'elle a elle-meme crees.
- *
- * Conflit : on garde le headRevisionId du fichier distant a la derniere
- * synchro. Si le distant a bouge depuis, push/pull s'arretent et demandent
- * confirmation. Avant tout ecrasement, la version distante est copiee dans
- * « Tuiles et Toiles/historique/ » — rien n'est jamais perdu.
+ * (Jusqu'a la 0.2, un bouton « Sauvegarder sur Drive » televersait aussi un
+ * zip complet, utilisateur.zip, et « Restaurer » le relisait en remplacant la
+ * base : retires, la synchro fait mieux et le remplacement faisait diverger
+ * les appareils. Les anciens utilisateur.zip et historique/ restent sur Drive,
+ * importables par Options -> « Importer une sauvegarde », qui fusionne.)
  *
  * OAuth : installed-app + PKCE, redirection loopback 127.0.0.1, navigateur
  * systeme. Le refresh token est chiffre (safeStorage / DPAPI) dans %APPDATA%.
@@ -18,28 +16,19 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const http = require('http');
 const crypto = require('crypto');
 const { shell, safeStorage, net } = require('electron');
 const { OAuth2Client } = require('google-auth-library');
 
-const db = require('./db');
-const sauvegarde = require('./sauvegarde');
 const journal = require('./journal');
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const NOM_DOSSIER = 'Tuiles et Toiles';
-const NOM_HISTO = 'historique';
-const NOM_FICHIER = 'utilisateur.zip';
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 
 const b64url = (buf) => buf.toString('base64')
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-// Textes des LISEZMOI : communs au dossier Drive et au dossier partage local.
-const lisezmoi = require('./lisezmoi');
 
 let cfg = null;      // { jeton: <chemin fichier> }
 let client = null;   // OAuth2Client memo (jeton courant)
@@ -91,13 +80,10 @@ function deconnecter() {
 function etat() {
   const c = lireClient();
   const jeton = c ? chargerJeton() : null;
-  let synchroLe = null;
-  try { synchroLe = db.etatSync('drive_synchro_le'); } catch { /* base pas encore ouverte */ }
   return {
     configure: !!c,
     connecte: !!(jeton && jeton.refresh_token),
-    email: jeton ? (jeton.email || null) : null,
-    synchroLe
+    email: jeton ? (jeton.email || null) : null
   };
 }
 
@@ -296,109 +282,10 @@ async function appelJson(oauth, methode, url, corps) {
   return txt ? JSON.parse(txt) : {};
 }
 
-async function idDossierNomme(oauth, nom, parent) {
-  const q = `name='${nom.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder'`
-    + ` and '${parent}' in parents and trashed=false`;
-  // Plus ancien d'abord : meme choix que la synchro (transport-drive) si deux
-  // dossiers homonymes existent.
-  const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams({
-    q, fields: 'files(id)', spaces: 'drive', orderBy: 'createdTime'
-  }));
-  if (r.files && r.files.length) return r.files[0].id;
-  const cree = await appelJson(oauth, 'POST', API + '/files', {
-    name: nom, mimeType: 'application/vnd.google-apps.folder', parents: [parent]
-  });
-  return cree.id;
-}
-
-async function trouverFichier(oauth, dossierId) {
-  const q = `name='${NOM_FICHIER}' and '${dossierId}' in parents and trashed=false`;
-  const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams({
-    q, fields: 'files(id,headRevisionId,modifiedTime,size)', spaces: 'drive'
-  }));
-  return (r.files && r.files[0]) || null;
-}
-
-async function copierVersHistorique(oauth, dossierId, distant) {
-  const histoId = await idDossierNomme(oauth, NOM_HISTO, dossierId);
-  try { await majLisezmoi(oauth, histoId, 'historique'); } catch { /* non critique */ }
-  const stamp = String(distant.modifiedTime || new Date().toISOString()).replace(/[:.]/g, '-').slice(0, 19);
-  await appelJson(oauth, 'POST', API + '/files/' + distant.id + '/copy', {
-    name: 'utilisateur-' + stamp + '.zip', parents: [histoId]
-  });
-}
-
-async function majLisezmoi(oauth, dossierId, cle = 'racine') {
-  const token = await jetonAcces(oauth);
-  const q = `name='LISEZMOI.txt' and '${dossierId}' in parents and trashed=false`;
-  const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams({
-    q, fields: 'files(id)', spaces: 'drive'
-  }));
-  const donnees = Buffer.from(lisezmoi.texte(cle), 'utf8');
-  const id = r.files && r.files[0] && r.files[0].id;
-
-  if (id) {
-    await requete(UPLOAD + '/files/' + id + '?uploadType=media',
-      { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'text/plain; charset=UTF-8' }, body: donnees });
-    return;
-  }
-  const limite = '----tt' + crypto.randomBytes(8).toString('hex');
-  const meta = JSON.stringify({ name: 'LISEZMOI.txt', parents: [dossierId] });
-  const corps = Buffer.concat([
-    Buffer.from('--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n'),
-    Buffer.from('--' + limite + '\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n'),
-    donnees,
-    Buffer.from('\r\n--' + limite + '--\r\n')
-  ]);
-  await requete(UPLOAD + '/files?uploadType=multipart',
-    { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps });
-}
-
-async function televerser(oauth, dossierId, cheminZip, existant) {
-  const token = await jetonAcces(oauth);
-  const donnees = fs.readFileSync(cheminZip);
-
-  if (existant) {
-    const res = await requete(
-      UPLOAD + '/files/' + existant.id + '?uploadType=media&fields=id,headRevisionId,modifiedTime',
-      { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/zip' }, body: donnees }
-    );
-    if (!res.ok) await echecEnvoi(res);
-    return res.json();
-  }
-
-  const limite = '----tt' + crypto.randomBytes(8).toString('hex');
-  const meta = JSON.stringify({ name: NOM_FICHIER, parents: [dossierId] });
-  const corps = Buffer.concat([
-    Buffer.from('--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n'),
-    Buffer.from('--' + limite + '\r\nContent-Type: application/zip\r\n\r\n'),
-    donnees,
-    Buffer.from('\r\n--' + limite + '--\r\n')
-  ]);
-  const res = await requete(
-    UPLOAD + '/files?uploadType=multipart&fields=id,headRevisionId,modifiedTime',
-    { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + limite }, body: corps }
-  );
-  if (!res.ok) await echecEnvoi(res);
-  return res.json();
-}
-
 async function echecEnvoi(res) {
   const txt = await res.text();
   verifierAcces(res.status, txt);
   throw new Error('Envoi ' + res.status + ' : ' + txt.slice(0, 300));
-}
-
-async function telecharger(oauth, fichierId, cible) {
-  const token = await jetonAcces(oauth);
-  const res = await requete(API + '/files/' + fichierId + '?alt=media',
-    { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) {
-    const txt = await res.text();
-    verifierAcces(res.status, txt);
-    throw new Error('Téléchargement ' + res.status);
-  }
-  fs.writeFileSync(cible, Buffer.from(await res.arrayBuffer()));
 }
 
 // --- api minimale pour la synchro ligne a ligne (synchro/transport-drive) ---
@@ -488,7 +375,7 @@ function api(oauth) {
   };
 }
 
-// --- push / pull -------------------------------------------------------
+// --- reconnexion ---------------------------------------------------------
 
 // Execute op(oauth). Si Google refuse le jeton, on l'oublie, on relance le
 // flux OAuth (navigateur) et on retente une seule fois. surReconnexion()
@@ -524,73 +411,4 @@ async function avecReconnexion(op, surReconnexion, surReconnecte) {
   }
 }
 
-function pousser({ forcer = false } = {}, surReconnexion, surReconnecte) {
-  return avecReconnexion((oauth) => opPousser(oauth, forcer), surReconnexion, surReconnecte);
-}
-
-function tirer({ forcer = false } = {}, surReconnexion, surReconnecte) {
-  return avecReconnexion((oauth) => opTirer(oauth, forcer), surReconnexion, surReconnecte);
-}
-
-async function opPousser(oauth, forcer) {
-  const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
-  const distant = await trouverFichier(oauth, dossierId);
-  const revConnue = db.etatSync('drive_rev');
-  const distantABouge = distant && distant.headRevisionId !== revConnue;
-
-  journal.evt('drive', 'sauvegarde:debut', {
-    dossierId, distant: distant ? { rev: distant.headRevisionId, modifie: distant.modifiedTime, octets: distant.size } : null,
-    revConnue, distantABouge: !!distantABouge, forcer
-  });
-  if (distantABouge && !forcer) {
-    journal.avertir('drive', 'sauvegarde:conflit', { distantModifie: distant.modifiedTime });
-    return { conflit: true, sens: 'pousser', distantModifie: distant.modifiedTime };
-  }
-  if (distantABouge) await copierVersHistorique(oauth, dossierId, distant);
-
-  const tmp = path.join(os.tmpdir(), 'tuiles-drive-push-' + Date.now() + '.zip');
-  let maj;
-  try {
-    sauvegarde.exporter(tmp);
-    maj = await televerser(oauth, dossierId, tmp, distant);
-  } finally {
-    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
-  }
-  try { await majLisezmoi(oauth, dossierId); } catch { /* non critique */ }
-
-  db.definirEtatSync('drive_rev', maj.headRevisionId || '');
-  db.definirEtatSync('drive_synchro_le', new Date().toISOString());
-  journal.evt('drive', 'sauvegarde:fin', { rev: maj.headRevisionId, historique: !!distantABouge });
-  return { ok: true, synchroLe: db.etatSync('drive_synchro_le') };
-}
-
-async function opTirer(oauth, forcer) {
-  const dossierId = await idDossierNomme(oauth, NOM_DOSSIER, 'root');
-  const distant = await trouverFichier(oauth, dossierId);
-  journal.evt('drive', 'restauration:debut', {
-    dossierId, distant: distant ? { rev: distant.headRevisionId, modifie: distant.modifiedTime, octets: distant.size } : null,
-    revConnue: db.etatSync('drive_rev'), forcer
-  });
-  if (!distant) return { erreur: 'Aucune sauvegarde sur Drive pour l’instant.' };
-
-  if (!forcer && distant.headRevisionId === db.etatSync('drive_rev')) {
-    return { aJour: true };
-  }
-
-  const tmp = path.join(os.tmpdir(), 'tuiles-drive-pull-' + Date.now() + '.zip');
-  let r;
-  try {
-    await telecharger(oauth, distant.id, tmp);
-    r = sauvegarde.importer(tmp);
-  } finally {
-    try { fs.rmSync(tmp, { force: true }); } catch { /* deja parti */ }
-  }
-  if (r.erreur) return r;
-
-  db.definirEtatSync('drive_rev', distant.headRevisionId || '');
-  db.definirEtatSync('drive_synchro_le', new Date().toISOString());
-  journal.evt('drive', 'restauration:fin', { rev: distant.headRevisionId, manifest: r.manifest });
-  return { ok: true, manifest: r.manifest };
-}
-
-module.exports = { configurer, etat, connecter, deconnecter, pousser, tirer, api, avecReconnexion };
+module.exports = { configurer, etat, connecter, deconnecter, api, avecReconnexion };

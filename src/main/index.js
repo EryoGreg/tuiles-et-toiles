@@ -301,7 +301,7 @@ function infosRapport() {
       opsJournal: n('SELECT COUNT(*) n FROM changements'), aPousser: n('SELECT COUNT(*) n FROM changements WHERE pousse=0'),
       conflitsOuverts: s.conflits, dossier: s.dossier, derniereDossier: s.derniere, derniereDrive: s.derniereDrive
     },
-    drive: { configure: dv.configure, connecte: dv.connecte, derniereSauvegarde: dv.synchroLe },
+    drive: { configure: dv.configure, connecte: dv.connecte },
     reglages: { theme: db.reglage('theme'), majAuto: db.reglage('maj_auto', '1') }
   };
 }
@@ -449,7 +449,7 @@ gerer('sauvegarde:importer', (_e, chemin) => {
   try {
     const out = sauvegarde.importer(chemin);
     if (out.erreur) { journal.evt('sauvegarde', 'import-refuse', { chemin, erreur: out.erreur }); return out; }
-    journal.evt('sauvegarde', 'import', { chemin, comptes: out.comptes });
+    journal.evt('sauvegarde', 'import', { chemin, source: out.source, resume: out.resume, conflits: out.conflits });
     return out;
   } catch (e) {
     journal.erreur('sauvegarde', 'import', e, { chemin });
@@ -464,24 +464,9 @@ gerer('drive:connecter', async () => {
   return { ...drive.etat(), ...r };
 });
 gerer('drive:deconnecter', () => { drive.deconnecter(); journal.evt('drive', 'deconnecter'); return drive.etat(); });
-// Jeton refuse par Google en cours d'operation : drive.js relance le flux
-// OAuth ; on previent le rendu pour qu'il affiche « autorise dans le navigateur ».
-const surReconnexionDrive = (e) => () => {
-  journal.evt('drive', 'reconnexion-auto');
-  if (!e.sender.isDestroyed()) e.sender.send('drive:reconnexion');
-};
-// Reconnexion reussie : l'interface remet le message de l'operation en cours.
-const surReconnecteDrive = (e) => () => { if (!e.sender.isDestroyed()) e.sender.send('drive:reconnecte'); };
-gerer('drive:pousser', async (e, opts) => {
-  const r = await drive.pousser(opts || {}, surReconnexionDrive(e), surReconnecteDrive(e));
-  journal.evt('drive', 'pousser', { ok: !!r.ok, conflit: !!r.conflit, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
-  return r;
-});
-gerer('drive:tirer', async (e, opts) => {
-  const r = await drive.tirer(opts || {}, surReconnexionDrive(e), surReconnecteDrive(e));
-  journal.evt('drive', 'tirer', { ok: !!r.ok, aJour: !!r.aJour, reconnecte: !!r.reconnecte, erreur: r.erreur || null });
-  return r;
-});
+// Jeton refuse par Google en cours de synchro : drive.js relance le flux
+// OAuth ; le rendu l'apprend par la progression de la synchro (etape reconnexion).
+const surReconnexionDrive = () => () => journal.evt('drive', 'reconnexion-auto');
 
 // Synchro par dossier partage (E2c) : fusion ligne a ligne, rien n'est ecrase.
 gerer('synchro:etat', () => synchro.etat());
