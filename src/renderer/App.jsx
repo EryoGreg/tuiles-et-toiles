@@ -1609,6 +1609,8 @@ function PageEdition({ onEtat }) {
           <span>
             <div className="nom">Créer une tuile</div>
             <div className="desc">Champs vides, à remplir librement</div>
+            {/* Sur mobile, la ligne de boutons de l'editeur n'a pas la place de le dire. */}
+            {SUR_MOBILE && <div className="desc">Tuile locale — jamais envoyée au pack, exportable</div>}
           </span>
         </button>
         <button className="carte" onClick={() => setMode('liste')}>

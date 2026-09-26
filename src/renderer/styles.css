@@ -1308,6 +1308,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   /* Titre et conservation sur toute la largeur ; artiste | date. */
   .grille2 { gap: 8px 10px; }
   .champ-titre, .champ-lieu { grid-column: 1 / -1; }
+  .editeur-jeu .grille2 > .champ:nth-child(3n+1) { grid-column: 1 / -1; }   /* titre, conservation */
   .valeur, .valeur-titre { height: auto; min-height: 30px; }
   .valeur .masque { height: 30px; padding: 4px 10px; }
   .texte-titre { font-size: 19px; line-height: 1.2; }
@@ -1331,7 +1332,12 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .annee span { font-size: 13px !important; line-height: 1.3; }
   /* Une seule ligne de boutons : Precedente en icone seule. */
   .ligne-actions, .apercu-jeu .ligne-actions { margin-left: 0; width: 100%; flex-wrap: nowrap; gap: 6px; }
-  .jeu:not(.apercu-jeu) .compteur-sac { display: none; }
+  .jeu:not(.apercu-jeu) .compteur-sac, .editeur-jeu .compteur-sac { display: none; }
+  /* Editeur : Supprimer / Versions a gauche, Annuler / Valider a droite, sur deux lignes si besoin. */
+  .editeur-jeu .ligne-actions { flex-wrap: wrap; }
+  .editeur-jeu .actions-gauche:empty { display: none; }
+  .editeur-jeu .actions-droite { flex: 1 1 100%; }
+  .editeur-jeu .actions-droite > button { flex: 1 1 0; justify-content: center; }
   .actions-gauche { gap: 6px; flex: none; }
   .actions-droite { flex: 1 1 auto; gap: 6px; flex-wrap: nowrap; }
   .jeu:not(.apercu-jeu) .actions-droite > button { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
@@ -1349,6 +1355,12 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .galerie-tete { margin-bottom: 16px; gap: 12px; }
   .galerie-tete h2 { font-size: 22px; }
   .galerie-grille { gap: 10px; }
+  /* Fenetre des tags : ancree sur toute la barre de filtres (le bouton Tags
+     passe a gauche sur mobile, un ancrage a droite la sortait de l'ecran). */
+  .galerie-tri { position: relative; }
+  .sel-tags { position: static; }
+  .sel-tags-pop { left: 0; right: 0; width: auto; }
+  .sel-tags-liste { max-height: min(320px, 50vh); }
   /* 3 ou 4 cartes par ligne : texte resserre, titre sur 3 lignes au plus. */
   [data-grille="3"] .galerie-grille, [data-grille="4"] .galerie-grille { gap: 7px; }
   [data-grille="3"] .carte-galerie-corps, [data-grille="4"] .carte-galerie-corps { padding: 6px 7px 7px; gap: 2px; }
