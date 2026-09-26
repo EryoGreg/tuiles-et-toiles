@@ -22,8 +22,9 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Module local (pas un paquet npm) : a declarer avant super.onCreate.
+        // Modules locaux (pas des paquets npm) : a declarer avant super.onCreate.
         registerPlugin(MiseAJourPlugin.class);
+        registerPlugin(LectureTextePlugin.class);
         super.onCreate(savedInstanceState);
     }
 

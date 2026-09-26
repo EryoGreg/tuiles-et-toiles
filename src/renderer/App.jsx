@@ -1203,6 +1203,21 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const [enCours, setEnCours] = useState(false);
   const [historique, setHistorique] = useState(null);   // null | 'chargement' | [{ champ, versions }]
   const [aVersions, setAVersions] = useState(false);
+  // Lecture du cartel (mobile) : null | 'lecture' | { lignes, proposition } | { erreur }
+  const [cartel, setCartel] = useState(null);
+  const lireCartel = async (source) => {
+    setCartel('lecture');
+    let r;
+    try { r = await window.api.edition.lireCartel(source); }
+    catch (err) { r = { erreur: String(err && err.message || err) }; }
+    setCartel(r && (r.erreur || (r.lignes && r.lignes.length)) ? r
+      : r ? { erreur: 'Aucun texte trouvé sur la photo. Rapproche-toi du cartel, sans reflet.' } : null);
+  };
+  const remplirDepuisCartel = (valeurs) => {
+    window.api.evt('edition', 'cartel-remplir', { champs: Object.keys(valeurs) });
+    setChamps((x) => ({ ...x, ...valeurs }));
+    setCartel(null);
+  };
 
   // Le bouton n'apparait que s'il y a un historique a montrer.
   useEffect(() => {
@@ -1364,6 +1379,17 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
               )}
             </div>
 
+            {SUR_MOBILE && (
+              <div className="cartel-boutons">
+                <button className="bouton-neutre" onClick={() => lireCartel('camera')} disabled={cartel === 'lecture'}>
+                  <I.Appareil t={15} /> {cartel === 'lecture' ? 'Lecture…' : 'Lire le cartel'}
+                </button>
+                <button className="bouton-neutre" onClick={() => lireCartel('galerie')} disabled={cartel === 'lecture'}>
+                  Cartel depuis la galerie
+                </button>
+              </div>
+            )}
+
             <div className="corps-reste">
               <div className="grille2">
                 <ChampEdit etiquette="Titre" v={champs.titre} onChange={set('titre')} serif grand />
@@ -1423,12 +1449,143 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
         </div>
       </div>
 
+      {cartel && cartel !== 'lecture' && (
+        <BoiteCartel lecture={cartel} actuels={champs} onRemplir={remplirDepuisCartel}
+          onRelire={() => lireCartel('camera')} onFermer={() => setCartel(null)} />
+      )}
       {historique && (
         <BoiteVersions
           historique={historique} actuels={champs}
           onReprendre={reprendre} onFermer={() => setHistorique(null)}
         />
       )}
+    </div>
+  );
+}
+
+// --- lecture du cartel -------------------------------------------------------
+
+const CHAMPS_CARTEL = ['titre', 'artiste', 'date', 'description', 'tags'];
+// Ce que l'analyse (src/main/cartel-analyse.js) a reconnu dans chaque ligne.
+const ROLES_CARTEL = {
+  artiste: 'artiste', titre: 'titre', date: 'date', texte: 'description', technique: 'tags',
+  vie: 'dates de vie', provenance: 'provenance', numero: 'numéro', traduction: 'traduction',
+  doublon: 'doublon', autre: ''
+};
+
+// Lignes choisies -> un texte : meme bloc = meme paragraphe.
+function joindreLignes(lignes) {
+  let s = '';
+  let bloc = null;
+  for (const l of lignes) {
+    const t = l.texte.trim();
+    if (!s) s = t;
+    else if (l.bloc !== bloc) s += '\n' + t;
+    else if (/-$/.test(s)) s += t;
+    else s += ' ' + t;
+    bloc = l.bloc;
+  }
+  return s;
+}
+
+// Proposition de l'analyse, corrigeable : toucher des lignes puis un champ.
+// Rien n'est ecrit avant « Valider » dans l'editeur.
+function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
+  const [prop, setProp] = useState(() => ({ ...(lecture.proposition || {}) }));
+  const [coches, setCoches] = useState(() => Object.fromEntries(CHAMPS_CARTEL.map((c) => {
+    const v = (lecture.proposition || {})[c];
+    return [c, !!v && !String(actuels[c] || '').trim()];   // un champ deja rempli n'est pas ecrase d'office
+  })));
+  const [sel, setSel] = useState([]);
+  const [lignesDe, setLignesDe] = useState({});   // champ -> indices choisis a la main
+  useEffect(() => {
+    const clavier = (e) => { if (e.key === 'Escape') onFermer(); };
+    window.addEventListener('keydown', clavier);
+    return () => window.removeEventListener('keydown', clavier);
+  }, [onFermer]);
+
+  if (lecture.erreur) {
+    return (
+      <div className="recouvrement" onClick={onFermer}>
+        <div className="boite-dialogue" onClick={(e) => e.stopPropagation()}>
+          <h3>Lecture du cartel</h3>
+          <p>{lecture.erreur}</p>
+          <div className="actions">
+            <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
+            <button className="bouton-valide" onClick={onRelire}><I.Appareil t={14} /> Reprendre une photo</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const basculer = (i) => setSel((x) => (x.includes(i) ? x.filter((k) => k !== i) : [...x, i]));
+  const mettre = (champ) => {
+    const choisies = sel.slice().sort((a, b) => a - b);
+    setProp((p) => ({ ...p, [champ]: joindreLignes(choisies.map((i) => lecture.lignes[i])) }));
+    setCoches((c) => ({ ...c, [champ]: true }));
+    setLignesDe((m) => ({ ...m, [champ]: choisies }));
+    setSel([]);
+  };
+  const choisis = CHAMPS_CARTEL.filter((c) => coches[c] && String(prop[c] || '').trim());
+  const remplir = () => onRemplir(Object.fromEntries(choisis.map((c) => [c, prop[c]])));
+  const etiquetteDe = (i, l) => {
+    const c = Object.keys(lignesDe).find((k) => lignesDe[k].includes(i));
+    return c ? LIBELLES_CHAMPS[c].toLowerCase() : ROLES_CARTEL[l.role] || '';
+  };
+
+  return (
+    <div className="recouvrement" onClick={onFermer}>
+      <div className="boite-dialogue boite-cartel" onClick={(e) => e.stopPropagation()}>
+        <h3>Texte lu sur le cartel</h3>
+
+        <div className="cartel-propositions">
+          {CHAMPS_CARTEL.map((c) => (
+            <label key={c} className={'cartel-prop' + (prop[c] ? '' : ' vide')}>
+              <input type="checkbox" checked={!!coches[c] && !!prop[c]} disabled={!prop[c]}
+                onChange={(e) => setCoches((x) => ({ ...x, [c]: e.target.checked }))} />
+              <span className="etiquette">{LIBELLES_CHAMPS[c]}</span>
+              <span className="cartel-prop-valeur">
+                {prop[c] || '—'}
+                {prop[c] && String(actuels[c] || '').trim() && (
+                  <em> — remplace « {String(actuels[c]).slice(0, 40)}{String(actuels[c]).length > 40 ? '…' : ''} »</em>
+                )}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="options-note">Pour corriger : touche une ou plusieurs lignes, puis le champ où les mettre.</div>
+        <div className="cartel-lignes">
+          {lecture.lignes.map((l, i) => {
+            const nouveauBloc = i > 0 && lecture.lignes[i - 1].bloc !== l.bloc;
+            const eti = etiquetteDe(i, l);
+            return (
+              <button key={i} className={'cartel-ligne role-' + (l.role || 'autre') + (sel.includes(i) ? ' choisie' : '') + (nouveauBloc ? ' nouveau-bloc' : '')}
+                onClick={() => basculer(i)}>
+                <span className="cartel-ligne-texte">{l.texte}</span>
+                {eti && <span className="cartel-ligne-role">{eti}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {sel.length > 0 && (
+          <div className="cartel-cibles">
+            <span>Mettre {sel.length > 1 ? 'ces ' + sel.length + ' lignes' : 'cette ligne'} dans :</span>
+            {CHAMPS_CARTEL.map((c) => (
+              <button key={c} className="puce" onClick={() => mettre(c)}>{LIBELLES_CHAMPS[c]}</button>
+            ))}
+          </div>
+        )}
+
+        <div className="actions">
+          <button className="bouton-neutre" onClick={onFermer}>Annuler</button>
+          <button className="bouton-valide" onClick={remplir} disabled={!choisis.length}>
+            <I.Coche t={14} /> {choisis.length ? 'Remplir ' + choisis.length + ' champ' + (choisis.length > 1 ? 's' : '') : 'Rien de coché'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

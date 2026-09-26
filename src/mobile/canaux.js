@@ -20,9 +20,11 @@ const synchro = require('../main/synchro/service');
 const { creerAuto } = require('../main/synchro/auto');
 const reseau = require('./reseau');
 const maj = require('./maj');
+const cartel = require('./cartel');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
-  'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions']);
+  'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions',
+  'edition:cartelEtat', 'edition:lireCartel']);
 
 function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
   // Journalise comme gerer() du PC, puis signale une ecriture possible (la
@@ -129,6 +131,11 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
     const octets = new Uint8Array(await (await fetch(chemin)).arrayBuffer());
     return images.importer(octets, dossierImagesLocales, { origine: 'appareil-photo', octets: octets.length });
   });
+  // Cartel du musee : photo -> lignes de texte, que l'editeur range dans les champs.
+  g('edition:lireCartel', (source) => cartel.lire(source === 'galerie' ? 'galerie' : 'camera'));
+  g('edition:cartelEtat', () => cartel.etat());
+  // Modele de lecture telecharge d'avance (Wi-Fi) : pret au musee, hors ligne.
+  setTimeout(() => cartel.preparer({ reseauPermis: () => reseau.wifi() }), 8000);
   g('edition:importerImage', (octets, meta) => images.importer(new Uint8Array(octets), dossierImagesLocales, { origine: 'depot', ...(meta || {}) }));
   g('edition:importerImageUrl', () => ({ erreur: 'Sur mobile, choisis l’image dans ta galerie ou prends une photo.' }));
   g('edition:oublierImage', (nom) => edition.oublierImage(nom));

@@ -50,6 +50,9 @@ contextBridge.exposeInMainWorld('api', {
     choisirImage: () => ipcRenderer.invoke('edition:choisirImage'),
     // Mobile seulement : photo prise avec l'appareil photo du telephone.
     prendrePhoto: () => ipcRenderer.invoke('edition:prendrePhoto'),
+    // Photo d'un cartel -> lignes de texte (mobile, ML Kit) ; source 'camera' | 'galerie'
+    lireCartel: (source) => ipcRenderer.invoke('edition:lireCartel', source),
+    cartelEtat: () => ipcRenderer.invoke('edition:cartelEtat'),
     importerImage: (octets, meta) => ipcRenderer.invoke('edition:importerImage', octets, meta),
     importerImageUrl: (url) => ipcRenderer.invoke('edition:importerImageUrl', url),
     oublierImage: (nom) => ipcRenderer.invoke('edition:oublierImage', nom)

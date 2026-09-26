@@ -264,6 +264,18 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   de ce PC — même clé que les APK installés et que le SHA-1 du client OAuth Android. **Sauvegarder
   ce fichier** : perdu = plus aucune mise à jour possible (désinstaller / réinstaller), et nouveau
   SHA-1 à déclarer. Une vraie clé de release viendra avec le Play Store.
+- **Lecture du cartel** (éditeur, mobile) : « Lire le cartel » / « Cartel depuis la galerie » →
+  photo (non gardée) → module natif `LectureTextePlugin.java` (Google ML Kit Text Recognition v2,
+  variante **Play Services** : modèle fourni par les services Google, téléchargé une fois puis hors
+  ligne ; la variante embarquée ajoutait 46 Mo à l'APK) → `src/mobile/cartel.js` (préparation du
+  modèle 8 s après le lancement en Wi-Fi ; blocs triés de haut en bas) → **`src/main/cartel-analyse.js`**
+  (JS pur, rôle par ligne : artiste, vie, titre, date, technique→tags, texte→description,
+  provenance, numéro, traduction, doublon, autre) → boîte `BoiteCartel` : proposition cochée
+  (un champ déjà rempli n'est pas écrasé d'office), correction en touchant des lignes puis un
+  champ, rien d'écrit avant « Valider ». Conservation jamais proposée (absente des cartels).
+  Chaque lecture est journalisée (lignes, rôles, tailles) : un rapport d'erreur suffit pour régler
+  les règles sur un cartel raté. Tests : `tests/cartel-analyse.test.js` sur 9 cartels réels
+  retranscrits (`tests/cartels-exemples.js`, hauteurs estimées ; photos hors dépôt). PC : pas encore.
 - `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
   `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
 

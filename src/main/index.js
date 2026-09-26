@@ -472,6 +472,9 @@ gerer('edition:importerImageUrl', async (_e, url) => {
   }
 });
 
+// Lecture de cartel (ML Kit) : appli Android seulement pour l'instant.
+gerer('edition:lireCartel', () => ({ erreur: 'La lecture de cartel est disponible dans l’appli Android.' }));
+gerer('edition:cartelEtat', () => ({ disponible: false }));
 gerer('edition:choisirImage', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Choisir une image',
