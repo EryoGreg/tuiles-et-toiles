@@ -55,4 +55,70 @@ function creerFauxDrive() {
   };
 }
 
-module.exports = { creerFauxDrive };
+/**
+ * Le faux Drive vu a travers HTTP : un fetch qui repond comme l'API REST v3
+ * (les requetes que fait src/main/drive-api.js). Sert a faire passer la suite
+ * de synchro par le vrai code HTTP (TT_TRANSPORT=drive-http).
+ * @param {object} faux  creerFauxDrive()
+ * @param {{ jetonValide?: () => boolean }} o
+ */
+function fetchFauxDrive(faux, { jetonValide = () => true } = {}) {
+  const MIME = 'application/vnd.google-apps.folder';
+  const reponse = (status, corps, brut) => ({
+    ok: status >= 200 && status < 300, status,
+    text: async () => (brut ? '' : JSON.stringify(corps || {})),
+    json: async () => corps || {},
+    arrayBuffer: async () => { const b = Buffer.from(brut || []); return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
+  });
+  return async (url, opts = {}) => {
+    const u = new URL(url);
+    const m = (opts.method || 'GET').toUpperCase();
+    const auth = (opts.headers && opts.headers.Authorization) || '';
+    if (!/^Bearer .+/.test(auth) || !jetonValide()) return reponse(401, { error: { code: 401, message: 'Invalid Credentials' } });
+    const chemin = u.pathname;
+    const idDans = (pref) => decodeURIComponent(chemin.slice(pref.length));
+    if (m === 'GET' && chemin === '/drive/v3/files') {
+      const q = u.searchParams.get('q');
+      const parent = /'([^']+)' in parents/.exec(q)[1];
+      const nom = /name='((?:[^'\\]|\\.)*)'/.exec(q);
+      const dossier = /mimeType!=/.test(q) ? false : /mimeType=/.test(q) ? true : undefined;
+      const l = await faux.lister(parent, { nom: nom ? nom[1].replace(/\\(.)/g, '$1') : undefined, dossier });
+      return reponse(200, { files: l.map((f) => ({ id: f.id, name: f.name, createdTime: f.createdTime, mimeType: f.dossier ? MIME : 'application/octet-stream' })) });
+    }
+    if (m === 'POST' && chemin === '/drive/v3/files') {
+      const b = JSON.parse(opts.body);
+      return reponse(200, { id: await faux.creerDossier(b.name, b.parents[0]) });
+    }
+    if (m === 'POST' && chemin === '/upload/drive/v3/files') {
+      const limite = /boundary=(.+)$/.exec(opts.headers['Content-Type'])[1];
+      const corps = Buffer.from(opts.body);
+      const parties = [];
+      let i = corps.indexOf('--' + limite);
+      while (i >= 0) {
+        const j = corps.indexOf('--' + limite, i + limite.length + 2);
+        if (j < 0) break;
+        const partie = corps.subarray(i + limite.length + 4, j - 2);   // sans CRLF de fin
+        const k = partie.indexOf('\r\n\r\n');
+        parties.push(partie.subarray(k + 4));
+        i = j;
+      }
+      const meta = JSON.parse(parties[0].toString('utf8'));
+      return reponse(200, { id: await faux.creerFichier(meta.name, meta.parents[0], parties[1]) });
+    }
+    if (m === 'PATCH' && chemin.startsWith('/upload/drive/v3/files/')) {
+      await faux.majFichier(idDans('/upload/drive/v3/files/'), Buffer.from(opts.body));
+      return reponse(200, {});
+    }
+    if (m === 'DELETE' && chemin.startsWith('/drive/v3/files/')) {
+      await faux.supprimer(idDans('/drive/v3/files/'));
+      return reponse(204, null, []);
+    }
+    if (m === 'GET' && chemin.startsWith('/drive/v3/files/') && u.searchParams.get('alt') === 'media') {
+      try { return reponse(200, null, await faux.lire(idDans('/drive/v3/files/'))); }
+      catch { return reponse(404, { error: { code: 404 } }); }
+    }
+    return reponse(400, { error: 'requete inattendue ' + m + ' ' + chemin });
+  };
+}
+
+module.exports = { creerFauxDrive, fetchFauxDrive };

@@ -11,7 +11,7 @@
     "dist": "node scripts/faire-icone.js && node node_modules/vite/bin/vite.js build && node node_modules/electron-builder/out/cli/cli.js --win portable nsis",
     "polices": "node scripts/polices.js",
     "import": "node scripts/lancer-node.js src/main/import.js",
-    "test": "node scripts/lancer-node.js tests/synchro-e2a.test.js && node scripts/lancer-node.js tests/synchro-e2b.test.js && node scripts/lancer-node.js tests/synchro-e2c.test.js && node scripts/lancer-node.js tests/synchro-e2d.test.js && node scripts/lancer-node.js tests/synchro-e2e.test.js && node scripts/lancer-node.js tests/synchro-auto.test.js && node scripts/lancer-node.js tests/sauvegarde-fusion.test.js && node scripts/lancer-node.js tests/images-distantes.test.js && node scripts/lancer-node.js tests/journal-rapport.test.js",
+    "test": "node scripts/lancer-node.js tests/synchro-e2a.test.js && node scripts/lancer-node.js tests/synchro-e2b.test.js && node scripts/lancer-node.js tests/synchro-drive-http.test.js && node scripts/lancer-node.js tests/synchro-e2c.test.js && node scripts/lancer-node.js tests/synchro-e2d.test.js && node scripts/lancer-node.js tests/synchro-e2e.test.js && node scripts/lancer-node.js tests/synchro-auto.test.js && node scripts/lancer-node.js tests/sauvegarde-fusion.test.js && node scripts/lancer-node.js tests/images-distantes.test.js && node scripts/lancer-node.js tests/journal-rapport.test.js",
     "postinstall": "node scripts/binaire-sqlite.js"
   },
   "dependencies": {

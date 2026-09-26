@@ -6,6 +6,7 @@
  *
  * TT_TRANSPORT=dossier : meme suite sur le transport dossier (disque, E2c).
  * TT_TRANSPORT=drive   : meme suite sur le transport Drive (faux Drive en memoire, E2d).
+ * TT_TRANSPORT=drive-http : idem, a travers le vrai code HTTP (drive-api.js).
  *
  * Plusieurs appareils dans un meme processus, chacun sur sa base en memoire,
  * relies par un transport memoire. Propriete verifiee : quelles que soient les
@@ -29,7 +30,7 @@ const { creerTransportMemoire } = require(path.join(RACINE, 'src/main/synchro/tr
 const { creerTransportDossier } = require(path.join(RACINE, 'src/main/synchro/transport-dossier'));
 
 const { creerTransportDrive } = require(path.join(RACINE, 'src/main/synchro/transport-drive'));
-const { creerFauxDrive } = require('./faux-drive');
+const { creerFauxDrive, fetchFauxDrive } = require('./faux-drive');
 
 const TRANSPORT = process.env.TT_TRANSPORT || 'memoire';
 const SUR_DISQUE = TRANSPORT === 'dossier';
@@ -37,6 +38,14 @@ const TMP = SUR_DISQUE ? fs.mkdtempSync(path.join(os.tmpdir(), 'tt-e2b-')) : nul
 let nMondes = 0;
 /** Un « espace partage » par monde ; chaque appareil y accede par SON transport. */
 function creerEspace() {
+  if (TRANSPORT === 'drive-http') {
+    // Le vrai code HTTP (src/main/drive-api.js) face au faux Drive.
+    const faux = creerFauxDrive();
+    const { api } = require(path.join(RACINE, 'src/main/drive-api'))({
+      fetch: fetchFauxDrive(faux), journal: { evt() {}, debug() {}, avertir() {}, erreur() {} }
+    });
+    return () => creerTransportDrive(api({ getAccessToken: async () => ({ token: 'jeton-test' }) }));
+  }
   if (TRANSPORT === 'drive') {
     const faux = creerFauxDrive();
     return () => creerTransportDrive(faux);
