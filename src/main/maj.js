@@ -35,13 +35,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { app, net, shell } = require('electron');
+const { versionSuperieure, decrireAsset, derniereRelease } = require('./maj-github');
 
-const DEPOT = 'EryoGreg/tuiles-et-toiles';
 // Noms d'assets attendus : les changer casse la mise a jour des installations existantes.
 const MOTIF_EXE = /^Tuiles-et-Toiles-\d+\.\d+\.\d+\.exe$/;
 const MOTIF_SETUP = /^Tuiles-et-Toiles-Setup-\d+\.\d+\.\d+\.exe$/;
-const PREFIXE_URL = 'https://github.com/' + DEPOT + '/releases/download/';
-const DELAI_API = 10000;
 
 let trouvee = null;   // derniere release : { version, page, portable, setup }
 let pret = null;      // { chemin, setup, version } telecharge et verifie
@@ -66,68 +64,19 @@ function exeCourant() {
   return null;
 }
 
-// a strictement superieure a b ? (semver "x.y.z")
-function versionSuperieure(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
-  }
-  return false;
-}
-
 function memeChemin(a, b) {
   const n = (p) => path.resolve(String(p || '')).toLowerCase();
   return !!a && !!b && n(a) === n(b);
-}
-
-function decrireAsset(a) {
-  if (!a || !String(a.browser_download_url).startsWith(PREFIXE_URL)) return null;
-  const digest = String(a.digest || '');
-  return {
-    nom: a.name, url: a.browser_download_url, taille: a.size,
-    sha256: digest.startsWith('sha256:') ? digest.slice(7).toLowerCase() : null
-  };
 }
 
 // --- 1. verifier -------------------------------------------------------
 
 async function verifier() {
   const actuelle = app.getVersion();
-  let r;
-  try {
-    const ctl = new AbortController();
-    const minuteur = setTimeout(() => ctl.abort(), DELAI_API);
-    const res = await net.fetch('https://api.github.com/repos/' + DEPOT + '/releases/latest', {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Tuiles-et-Toiles/' + actuelle },
-      signal: ctl.signal
-    });
-    clearTimeout(minuteur);
-    if (!res.ok) {
-      const reste = res.headers.get('x-ratelimit-remaining');
-      const reprise = res.headers.get('x-ratelimit-reset');
-      journal.avertir('maj', 'github-refus', { status: res.status, limite: reste, reprise });
-      if ((res.status === 403 || res.status === 429) && reste === '0') {
-        const quand = reprise ? new Date(Number(reprise) * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null;
-        return {
-          erreur: 'GitHub limite les vérifications depuis ton réseau (trop de requêtes, fréquent derrière un VPN). '
-            + (quand ? 'Réessaie après ' + quand + '.' : 'Réessaie dans une heure.'),
-          actuelle
-        };
-      }
-      return { erreur: 'GitHub a répondu ' + res.status + '.', actuelle };
-    }
-    r = await res.json();
-  } catch (e) {
-    journal.evt('maj', 'github-injoignable', { erreur: e.message, nom: e.name }, 'WARN');
-    return { erreur: 'Impossible de joindre GitHub (hors ligne ?).', actuelle };
-  }
+  const d = await derniereRelease(net.fetch, actuelle, { 'User-Agent': 'Tuiles-et-Toiles/' + actuelle });
+  if (d.erreur) return { erreur: d.erreur, actuelle };
+  const r = d.release;
   const m = mode();
-  journal.evt('maj', 'derniere-release', {
-    actuelle, mode: m, tag: r.tag_name, publiee: r.published_at,
-    assets: (r.assets || []).map((a) => ({ nom: a.name, octets: a.size, digest: !!a.digest }))
-  });
-
   const version = String(r.tag_name || '').replace(/^v/, '');
   const assets = r.assets || [];
   trouvee = {

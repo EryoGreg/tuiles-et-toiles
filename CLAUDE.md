@@ -253,6 +253,17 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   boutons « Prendre une photo » / « Galerie » dans l'éditeur. Retour Android (`@capacitor/app`
   `backButton`) : Échap si une boîte est ouverte, sinon `app:nav` « reculer » ; à la racine,
   `app:quitter` = `minimizeApp`. Icônes : `node scripts/icones-android.js`.
+- **Mise à jour Android** (`src/mobile/maj.js` + module natif `MiseAJourPlugin.java`, déclaré
+  dans `MainActivity.onCreate`) : mêmes canaux `maj:*` et même section Options que le PC ; lecture
+  de la release commune au PC (`src/main/maj-github.js`). Asset `Tuiles-et-Toiles-x.y.z.apk`
+  (`MOTIF_APK`, ne pas changer), téléchargé nativement dans le cache (`maj/`, vidé au lancement),
+  taille + SHA-256 vérifiés, puis installateur d'Android (FileProvider). Première fois : réglage
+  « Installer des applis inconnues » (`REQUEST_INSTALL_PACKAGES`), puis re-cliquer « Installer ».
+  `versionName` / `versionCode` (x·10000+y·100+z) lus dans `package.json` par `build.gradle`.
+  **Signature** : l'APK publié est le build *debug*, signé par `%USERPROFILE%\.android\debug.keystore`
+  de ce PC — même clé que les APK installés et que le SHA-1 du client OAuth Android. **Sauvegarder
+  ce fichier** : perdu = plus aucune mise à jour possible (désinstaller / réinstaller), et nouveau
+  SHA-1 à déclarer. Une vraie clé de release viendra avec le Play Store.
 - `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
   `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
 
@@ -263,9 +274,10 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   `git cherry-pick` (remote `tuiles-et-toiles`). `oauth-client.json` n'est jamais versionné.
 - Publier une version : `npm version x.y.z --no-git-tag-version` (le numéro nomme les exe et le
   dossier d'extraction portable), `npm run dist` (portable **et** NSIS), commit + tag `vx.y.z`,
-  push, puis `gh release create vx.y.z release/Tuiles-et-Toiles-x.y.z.exe
-  release/Tuiles-et-Toiles-Setup-x.y.z.exe` — **les deux fichiers**, chaque forme se met à jour
-  avec le sien. Les exe ne vont jamais dans git (> 100 Mo).
+  push, `npm run dist:android` (→ `release/Tuiles-et-Toiles-x.y.z.apk`), puis `gh release create
+  vx.y.z release/Tuiles-et-Toiles-x.y.z.exe release/Tuiles-et-Toiles-Setup-x.y.z.exe
+  release/Tuiles-et-Toiles-x.y.z.apk` — **les trois fichiers**, chaque forme se met à jour avec le
+  sien. Les exe et l'APK ne vont jamais dans git.
 - **Installateur NSIS** : `oneClick`, par utilisateur (`%LOCALAPPDATA%\Programs\Tuiles et
   Toiles\`, sans droits admin, LISEZMOI `installation` déposé par l'app), relance l'app à la
   fin, ne crée **aucun raccourci** (ceux de l'app, `raccourcis.js`, nom « Tuiles & Toiles »,

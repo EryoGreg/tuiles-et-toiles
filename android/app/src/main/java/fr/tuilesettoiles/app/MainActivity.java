@@ -1,6 +1,7 @@
 package fr.tuilesettoiles.app;
 
 import android.content.Intent;
+import android.os.Bundle;
 import android.util.Log;
 
 import com.getcapacitor.BridgeActivity;
@@ -18,6 +19,13 @@ import ee.forgr.capacitor.social.login.SocialLoginPlugin;
  * autorisation supplementaire.
  */
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        // Module local (pas un paquet npm) : a declarer avant super.onCreate.
+        registerPlugin(MiseAJourPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {

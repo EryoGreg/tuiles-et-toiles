@@ -2085,12 +2085,8 @@ function Options({ etat, onEtat, aller }) {
 
       <div className="filet" />
 
-      {etat.forme !== 'mobile' && (
-        <>
-          <SectionMaj etat={etat} definir={definir} />
-          <div className="filet" />
-        </>
-      )}
+      <SectionMaj etat={etat} definir={definir} />
+      <div className="filet" />
 
       <SectionImages />
 
@@ -3040,7 +3036,9 @@ function ActionsMaj({ maj }) {
       <button className="bouton-valide" onClick={maj.installer}>
         <I.Rafraichir t={14} /> {maj.versInstallee
           ? 'Installer et redémarrer'
-          : 'Redémarrer sur la version ' + maj.info.version}
+          : SUR_MOBILE
+            ? 'Installer la version ' + maj.info.version
+            : 'Redémarrer sur la version ' + maj.info.version}
       </button>
     );
   }
@@ -3087,7 +3085,9 @@ function BandeauMaj() {
       </div>
       <div className="options-note">
         {maj.phase === 'pret'
-          ? 'L’application va se fermer et se relancer. Tes données sont conservées.'
+          ? (SUR_MOBILE
+            ? 'Android va te demander de confirmer l’installation. Tes données sont conservées.'
+            : 'L’application va se fermer et se relancer. Tes données sont conservées.')
           : 'Tu utilises la version ' + maj.info.actuelle + '. Tes données sont conservées.'}
       </div>
       {maj.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{maj.erreur}</div>}
@@ -3140,7 +3140,8 @@ function SectionMaj({ etat, definir }) {
       {maj.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{maj.erreur}</div>}
       <div className="options-note">
         Version installée : {etat.version}. Les nouvelles versions viennent de
-        github.com/EryoGreg/tuiles-et-toiles ; seul l’exe est remplacé, tes données restent.
+        github.com/EryoGreg/tuiles-et-toiles ; seule l’application est remplacée, tes données restent.
+        {SUR_MOBILE && ' La première fois, Android te demandera d’autoriser Tuiles & Toiles à installer des applications.'}
       </div>
     </section>
   );

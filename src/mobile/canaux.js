@@ -19,6 +19,7 @@ const drive = require('./drive');
 const synchro = require('../main/synchro/service');
 const { creerAuto } = require('../main/synchro/auto');
 const reseau = require('./reseau');
+const maj = require('./maj');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
   'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions']);
@@ -51,7 +52,7 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
     sidebarRepliee: db.reglage('sidebar_repliee', '1') === '1',
     grilleColonnes: parseInt(db.reglage('grille_colonnes', '2'), 10) || 2,
     raccourcisProposes: true,
-    majAuto: false,
+    majAuto: db.reglage('maj_auto', '1') === '1',
     forme: 'mobile',
     version,
     derniereSynchro: db.etatSync('derniere_synchro'),
@@ -150,10 +151,20 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
     catch (e) { return { erreur: 'Copie impossible : ' + e.message }; }
   });
 
+  // --- mise a jour depuis GitHub (APK), memes canaux que le PC -----------------
+  maj.configurer({ version });
+  g('maj:verifier', () => maj.verifier());
+  g('maj:telecharger', () => maj.telecharger((recu, total) => emettre('maj:progression', { recu, total })));
+  g('maj:installer', async () => {
+    // Dernieres modifications envoyees et base ecrite avant de ceder la place.
+    try { await auto.avantFermeture(); } catch (e) { journal.erreur('synchro', 'auto-avant-maj', e); }
+    surEcriture();
+    return maj.installer();
+  });
+
   // --- propres au poste : absents sur mobile ------------------------------------
   g('raccourcis:etat', () => null);
   g('raccourcis:perimes', () => []);
-  g('maj:verifier', () => ({ aJour: true }));
   g('copie:etat', () => null);
   // « Quitter » sur Android = passer en arriere-plan (l'appli reste prete).
   g('app:quitter', async () => {

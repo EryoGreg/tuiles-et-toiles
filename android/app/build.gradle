@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+// Version = celle de package.json (la meme que le PC) : la mise a jour compare
+// ce numero a la derniere release GitHub. versionCode x.y.z -> x*10000+y*100+z.
+def versionAppli = new groovy.json.JsonSlurper().parse(file('../../package.json')).version
+def (vMaj, vMin, vCor) = versionAppli.tokenize('.').collect { it as int }
+
 android {
     namespace = "fr.tuilesettoiles.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +12,8 @@ android {
         applicationId "fr.tuilesettoiles.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode vMaj * 10000 + vMin * 100 + vCor
+        versionName versionAppli
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

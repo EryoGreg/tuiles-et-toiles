@@ -1367,6 +1367,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .edition-retour { bottom: calc(70px + env(safe-area-inset-bottom)); }
   .bandeau-synchro, .edition-toast { bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
   .bandeau-annulation { bottom: calc(126px + env(safe-area-inset-bottom)); }
+  .maj-bandeau { left: 12px; right: 12px; width: auto; bottom: calc(70px + env(safe-area-inset-bottom)); padding: 14px 16px; }
   .journal-entree { grid-template-columns: 40px 44px 1fr; }
   .journal-entree > .bouton-neutre, .journal-absente { grid-column: 3; justify-self: start; }
   .appareil { grid-template-columns: 26px 1fr auto; }
