@@ -190,6 +190,8 @@ app.whenReady().then(() => {
     lisezmoi.deposer(DOSSIER_USER, 'donnees');
     lisezmoi.deposer(DOSSIER_IMAGES_LOCALES, 'images_locales');
     lisezmoi.deposer(path.join(DOSSIER_USER, 'logs'), 'logs');
+    // Version installee : dossier du programme (remis a neuf a chaque mise a jour).
+    if (maj.mode() === 'installee') lisezmoi.deposer(path.dirname(process.execPath), 'installation');
   }
 
   protocol.handle('tuile', (requete) => {
@@ -370,6 +372,7 @@ gerer('etat', () => ({
   grilleColonnes: parseInt(db.reglage('grille_colonnes', '5'), 10) || 5,
   raccourcisProposes: db.reglage('raccourcis_proposes', '0') === '1',
   majAuto: db.reglage('maj_auto', '1') === '1',
+  forme: maj.mode(),
   version: app.getVersion(),
   derniereSynchro: db.etatSync('derniere_synchro'),
   conflits: etat.conflits().length,
@@ -559,14 +562,16 @@ gerer('maj:verifier', async () => {
   journal.evt('maj', 'verifier', { disponible: r.disponible ? r.version : null, erreur: r.erreur || null });
   return r;
 });
-gerer('maj:telecharger', async (e) => {
+gerer('maj:telecharger', async (e, opts) => {
   const r = await maj.telecharger((recu, total) => {
     if (!e.sender.isDestroyed()) e.sender.send('maj:progression', { recu, total });
-  });
+  }, { versInstallee: !!(opts && opts.versInstallee) });
   journal.evt('maj', 'telecharger', { ok: !!r.ok, erreur: r.erreur || null });
   return r;
 });
-gerer('maj:installer', () => {
+gerer('maj:installer', async () => {
+  // Dernieres modifications envoyees avant de ceder la place (10 s max).
+  try { await synchroAuto.avantFermeture(); } catch (e) { journal.erreur('synchro', 'auto-avant-maj', e); }
   const r = maj.installer();
   journal.evt('maj', 'installer', { ok: !!r.ok, erreur: r.erreur || null });
   if (r.ok) {

@@ -2,20 +2,34 @@
 /**
  * Mise a jour de l'application depuis les Releases GitHub (depot public).
  *
- * electron-updater ne gere pas la cible « portable » : on le fait a la main.
+ * Deux formes de l'appli, deux fichiers par release :
+ *   portable   Tuiles-et-Toiles-x.y.z.exe        un seul exe, rien a installer,
+ *              mais il se decompresse (~300 Mo, images comprises) a CHAQUE
+ *              lancement : lent sur un PC modeste
+ *   installee  Tuiles-et-Toiles-Setup-x.y.z.exe  installateur NSIS, par
+ *              utilisateur (%LOCALAPPDATA%\Programs, sans droits admin) :
+ *              demarrage rapide
+ * Les donnees (%APPDATA%\Tuiles et Toiles) sont les memes pour les deux :
+ * passer de l'une a l'autre ne touche a rien.
+ *
+ * Fait a la main (electron-updater ne gere pas le portable) :
  *   1. verifier()    : GET releases/latest, compare a app.getVersion().
- *   2. telecharger() : l'exe de la release est ecrit a cote de l'exe courant
- *                      (.part puis renommage), taille + SHA-256 verifies
- *                      contre le digest publie par GitHub.
- *   3. installer()   : lance le nouvel exe et laisse un marqueur ; au demarrage
- *                      suivant, nettoyerApresMaj() supprime l'ancien exe.
+ *   2. telecharger() : l'exe de la forme courante (ou l'installateur, pour
+ *                      passer du portable a l'installee) ; .part puis
+ *                      renommage, taille + SHA-256 verifies contre le digest
+ *                      publie par GitHub.
+ *   3. installer()   : portable -> lance le nouvel exe ; installee ->
+ *                      installateur silencieux (/S), qui relance l'appli ;
+ *                      passage portable -> installee : installateur visible.
+ *                      Un marqueur permet au lancement suivant de supprimer
+ *                      l'ancien exe portable / l'installateur telecharge.
  *
  * Regle 1 : rien de bloquant. Hors ligne ou GitHub en panne -> { erreur },
  * l'appli continue. Rien n'est telecharge sans clic de l'utilisateur.
- * Les donnees (%APPDATA%) ne sont jamais touchees : seul l'exe change.
  */
 
 const fs = require('fs');
+const os = require('os');
 const journal = require('./journal');
 const path = require('path');
 const crypto = require('crypto');
@@ -23,21 +37,33 @@ const { spawn } = require('child_process');
 const { app, net, shell } = require('electron');
 
 const DEPOT = 'EryoGreg/tuiles-et-toiles';
+// Noms d'assets attendus : les changer casse la mise a jour des installations existantes.
 const MOTIF_EXE = /^Tuiles-et-Toiles-\d+\.\d+\.\d+\.exe$/;
+const MOTIF_SETUP = /^Tuiles-et-Toiles-Setup-\d+\.\d+\.\d+\.exe$/;
 const PREFIXE_URL = 'https://github.com/' + DEPOT + '/releases/download/';
 const DELAI_API = 10000;
 
-let trouvee = null;   // derniere release plus recente trouvee
-let pret = null;      // chemin de l'exe telecharge et verifie
+let trouvee = null;   // derniere release : { version, page, portable, setup }
+let pret = null;      // { chemin, setup, version } telecharge et verifie
 let marqueur = null;  // %APPDATA%\...\maj-en-cours.json
 
 function configurer({ dossierUser }) {
   marqueur = path.join(dossierUser, 'maj-en-cours.json');
 }
 
-// Exe portable lance par l'utilisateur (absent en dev / exe non portable).
+/** 'dev' | 'portable' | 'installee' */
+function mode() {
+  if (!app.isPackaged) return 'dev';
+  return process.env.PORTABLE_EXECUTABLE_FILE ? 'portable' : 'installee';
+}
+
+// Exe que l'utilisateur lance (portable : l'exe d'origine, pas sa copie
+// decompressee dans le cache temporaire).
 function exeCourant() {
-  return process.env.PORTABLE_EXECUTABLE_FILE || null;
+  const m = mode();
+  if (m === 'portable') return process.env.PORTABLE_EXECUTABLE_FILE;
+  if (m === 'installee') return process.execPath;
+  return null;
 }
 
 // a strictement superieure a b ? (semver "x.y.z")
@@ -48,6 +74,20 @@ function versionSuperieure(a, b) {
     if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
   }
   return false;
+}
+
+function memeChemin(a, b) {
+  const n = (p) => path.resolve(String(p || '')).toLowerCase();
+  return !!a && !!b && n(a) === n(b);
+}
+
+function decrireAsset(a) {
+  if (!a || !String(a.browser_download_url).startsWith(PREFIXE_URL)) return null;
+  const digest = String(a.digest || '');
+  return {
+    nom: a.name, url: a.browser_download_url, taille: a.size,
+    sha256: digest.startsWith('sha256:') ? digest.slice(7).toLowerCase() : null
+  };
 }
 
 // --- 1. verifier -------------------------------------------------------
@@ -82,60 +122,72 @@ async function verifier() {
     journal.evt('maj', 'github-injoignable', { erreur: e.message, nom: e.name }, 'WARN');
     return { erreur: 'Impossible de joindre GitHub (hors ligne ?).', actuelle };
   }
+  const m = mode();
   journal.evt('maj', 'derniere-release', {
-    actuelle, tag: r.tag_name, publiee: r.published_at, assets: (r.assets || []).map((a) => ({ nom: a.name, octets: a.size, digest: !!a.digest }))
+    actuelle, mode: m, tag: r.tag_name, publiee: r.published_at,
+    assets: (r.assets || []).map((a) => ({ nom: a.name, octets: a.size, digest: !!a.digest }))
   });
 
   const version = String(r.tag_name || '').replace(/^v/, '');
-  if (!versionSuperieure(version, actuelle)) return { aJour: true, actuelle };
-
-  const exe = (r.assets || []).find((a) => MOTIF_EXE.test(a.name));
-  if (!exe || !String(exe.browser_download_url).startsWith(PREFIXE_URL)) {
-    journal.avertir('maj', 'exe-absent', { version, motif: String(MOTIF_EXE) });
-    return { erreur: 'La version ' + version + ' ne contient pas d’exe téléchargeable.', actuelle };
-  }
-  const digest = String(exe.digest || '');
+  const assets = r.assets || [];
   trouvee = {
-    version,
-    nom: exe.name,
-    url: exe.browser_download_url,
-    taille: exe.size,
-    sha256: digest.startsWith('sha256:') ? digest.slice(7).toLowerCase() : null,
-    page: r.html_url
+    version, page: r.html_url,
+    portable: decrireAsset(assets.find((a) => MOTIF_EXE.test(a.name))),
+    setup: decrireAsset(assets.find((a) => MOTIF_SETUP.test(a.name)))
   };
+  // Portable : proposer la version installee (demarrage plus rapide), meme a jour.
+  const migration = m === 'portable' && trouvee.setup
+    ? { version, taille: trouvee.setup.taille }
+    : null;
+
+  if (!versionSuperieure(version, actuelle)) return { aJour: true, actuelle, migration };
+
+  const asset = m === 'installee' ? trouvee.setup : trouvee.portable;
+  if (!asset && m !== 'dev') {
+    journal.avertir('maj', 'exe-absent', { version, mode: m });
+    return { erreur: 'La version ' + version + ' ne contient pas de fichier pour cette installation.', actuelle, migration };
+  }
   return {
-    disponible: true,
-    actuelle,
-    version,
-    notes: r.body || '',
-    taille: exe.size,
-    installable: !!exeCourant()
+    disponible: true, actuelle, version, notes: r.body || '',
+    taille: asset ? asset.taille : null,
+    installable: m !== 'dev' && !!asset,
+    migration
   };
 }
 
 // --- 2. telecharger ------------------------------------------------------
 
-// Dossier de l'exe courant s'il est inscriptible, sinon Telechargements.
-function dossierCible() {
+// Portable : a cote de l'exe courant s'il est inscriptible, sinon
+// Telechargements. Installateur : dossier temporaire (supprime apres usage).
+function dossierCible(setup) {
+  if (setup) return os.tmpdir();
   const d = path.dirname(exeCourant());
   try { fs.accessSync(d, fs.constants.W_OK); return d; }
   catch { return app.getPath('downloads'); }
 }
 
-async function telecharger(surProgression) {
+/**
+ * @param {(recu, total) => void} surProgression
+ * @param {{ versInstallee?: boolean }} o  telecharger l'installateur pour
+ *   passer du portable a la version installee
+ */
+async function telecharger(surProgression, { versInstallee = false } = {}) {
   if (!trouvee) return { erreur: 'Aucune mise à jour trouvée.' };
-  // Dev ou exe non portable : on ouvre simplement la page de la release.
-  if (!exeCourant()) { shell.openExternal(trouvee.page); return { pageOuverte: true }; }
+  const m = mode();
+  if (m === 'dev') { shell.openExternal(trouvee.page); return { pageOuverte: true }; }
+  const setup = m === 'installee' || versInstallee;
+  const asset = setup ? trouvee.setup : trouvee.portable;
+  if (!asset) return { erreur: 'Fichier absent de la version ' + trouvee.version + '.' };
 
-  const cible = path.join(dossierCible(), trouvee.nom);
-  if (path.resolve(cible) === path.resolve(exeCourant())) return { erreur: 'Déjà sur cette version.' };
+  const cible = path.join(dossierCible(setup), asset.nom);
+  if (memeChemin(cible, exeCourant())) return { erreur: 'Déjà sur cette version.' };
   const part = cible + '.part';
   const t0 = Date.now();
-  journal.evt('maj', 'telechargement:debut', { version: trouvee.version, cible, octets: trouvee.taille, sha256: !!trouvee.sha256 });
+  journal.evt('maj', 'telechargement:debut', { version: trouvee.version, setup, versInstallee, cible, octets: asset.taille, sha256: !!asset.sha256 });
 
   let fd = null;
   try {
-    const res = await net.fetch(trouvee.url);
+    const res = await net.fetch(asset.url);
     if (!res.ok || !res.body) throw new Error('Téléchargement ' + res.status);
 
     const hash = crypto.createHash('sha256');
@@ -150,18 +202,18 @@ async function telecharger(surProgression) {
       hash.update(morceau);
       recu += morceau.length;
       const t = Date.now();
-      if (surProgression && t - dernierEnvoi > 200) { dernierEnvoi = t; surProgression(recu, trouvee.taille); }
+      if (surProgression && t - dernierEnvoi > 200) { dernierEnvoi = t; surProgression(recu, asset.taille); }
     }
     fs.closeSync(fd); fd = null;
 
-    if (recu !== trouvee.taille) throw new Error('Fichier incomplet (' + recu + ' / ' + trouvee.taille + ' octets).');
-    if (trouvee.sha256 && hash.digest('hex') !== trouvee.sha256) {
+    if (recu !== asset.taille) throw new Error('Fichier incomplet (' + recu + ' / ' + asset.taille + ' octets).');
+    if (asset.sha256 && hash.digest('hex') !== asset.sha256) {
       throw new Error('Empreinte SHA-256 incorrecte : fichier corrompu ou modifié.');
     }
     fs.renameSync(part, cible);
-    pret = cible;
-    if (surProgression) surProgression(recu, trouvee.taille);
-    journal.evt('maj', 'telechargement:fin', { cible, octets: recu, ms: Date.now() - t0, empreinteVerifiee: !!trouvee.sha256 });
+    pret = { chemin: cible, setup, version: trouvee.version };
+    if (surProgression) surProgression(recu, asset.taille);
+    journal.evt('maj', 'telechargement:fin', { cible, octets: recu, ms: Date.now() - t0, empreinteVerifiee: !!asset.sha256 });
     return { ok: true, chemin: cible };
   } catch (e) {
     journal.erreur('maj', 'telechargement', e, { cible, ms: Date.now() - t0 });
@@ -173,52 +225,81 @@ async function telecharger(surProgression) {
 
 // --- 3. installer ----------------------------------------------------------
 
-// Lance le nouvel exe ; l'appelant ferme ensuite l'application.
+/**
+ * Lance le nouvel exe ou l'installateur ; l'appelant ferme ensuite l'appli.
+ * Installateur : silencieux pour une mise a jour de la version installee
+ * (--force-run : il relance l'appli), visible pour un passage depuis le
+ * portable (il relance l'appli a la fin).
+ */
 function installer() {
-  if (!pret || !fs.existsSync(pret)) return { erreur: 'Mise à jour non téléchargée.' };
+  if (!pret || !fs.existsSync(pret.chemin)) return { erreur: 'Mise à jour non téléchargée.' };
+  const m = mode();
+  const args = pret.setup && m === 'installee' ? ['/S', '--updated', '--force-run'] : [];
+  const nouveauMarqueur = {
+    version: pret.version,
+    vers: pret.setup ? 'installee' : 'portable',
+    ancien: m === 'portable' ? exeCourant() : null,     // exe portable a supprimer une fois remplace
+    nouveau: pret.setup ? null : pret.chemin,
+    setup: pret.setup ? pret.chemin : null              // installateur a supprimer apres usage
+  };
   try {
-    fs.writeFileSync(marqueur, JSON.stringify({ ancien: exeCourant(), nouveau: pret }));
-    spawn(pret, [], { detached: true, stdio: 'ignore', cwd: path.dirname(pret) }).unref();
-    journal.evt('maj', 'installation-lancee', { ancien: exeCourant(), nouveau: pret });
+    fs.writeFileSync(marqueur, JSON.stringify(nouveauMarqueur));
+    spawn(pret.chemin, args, { detached: true, stdio: 'ignore', cwd: path.dirname(pret.chemin) }).unref();
+    journal.evt('maj', 'installation-lancee', { ...nouveauMarqueur, args });
     return { ok: true };
   } catch (e) {
-    journal.erreur('maj', 'installation', e, { nouveau: pret });
+    journal.erreur('maj', 'installation', e, { chemin: pret.chemin });
     return { erreur: e.message || String(e) };
   }
 }
 
-// Au demarrage du nouvel exe : supprime l'ancien. Il reste verrouille tant
-// que son lanceur portable n'a pas fini de se fermer -> quelques essais.
-function nettoyerApresMaj(journal) {
+/**
+ * Au lancement de la nouvelle version : supprime l'ancien exe portable et
+ * l'installateur telecharge. Un fichier encore verrouille (lanceur portable
+ * qui finit de se fermer) -> quelques essais.
+ */
+function nettoyerApresMaj(journalApp) {
+  const j = journalApp || journal;
   if (!marqueur || !fs.existsSync(marqueur)) return;
   let m;
   try { m = JSON.parse(fs.readFileSync(marqueur, 'utf8')); } catch { m = null; }
   const oublier = () => { try { fs.rmSync(marqueur, { force: true }); } catch { /* rien */ } };
-  if (!m || !m.ancien || !m.nouveau) { oublier(); return; }
+  if (!m || (!m.ancien && !m.setup)) { oublier(); return; }
 
-  // Lancement qui n'est pas celui du nouvel exe (l'ancien relance a la main,
-  // ou le dev) : on garde le marqueur pour le prochain lancement du nouveau.
+  // Est-ce bien la nouvelle version qui demarre ? Sinon (ancien exe relance a
+  // la main, installation abandonnee) on garde le marqueur pour plus tard.
   const courant = exeCourant();
-  if (!courant || path.resolve(m.nouveau) !== path.resolve(courant)) return;
+  if (!courant) return;
+  const vers = m.vers || 'portable';   // marqueur d'avant 0.3.2 : portable -> portable
+  const arrivee = vers === 'portable'
+    ? memeChemin(m.nouveau, courant)
+    : mode() === 'installee' && !versionSuperieure(m.version || '0.0.0', app.getVersion());
+  if (!arrivee) return;
 
-  // Garde-fou : ne supprimer qu'un exe de l'appli, jamais l'exe courant.
-  if (!MOTIF_EXE.test(path.basename(m.ancien)) || path.resolve(m.ancien) === path.resolve(courant)) {
-    oublier();
-    return;
-  }
+  // Garde-fous : ne supprimer que des fichiers de l'appli, jamais l'exe courant.
+  const aSupprimer = [];
+  if (m.ancien && MOTIF_EXE.test(path.basename(m.ancien)) && !memeChemin(m.ancien, courant)) aSupprimer.push(m.ancien);
+  if (m.setup && MOTIF_SETUP.test(path.basename(m.setup))) aSupprimer.push(m.setup);
+  if (!aSupprimer.length) { oublier(); return; }
+
   let essais = 0;
   const essayer = () => {
     essais += 1;
-    try {
-      fs.rmSync(m.ancien, { force: true });
-      fs.rmSync(marqueur, { force: true });
-      if (journal) journal.evt('maj', 'ancien-exe-supprime', { ancien: m.ancien });
-    } catch (e) {
-      if (essais < 30) setTimeout(essayer, 2000);
-      else if (journal) journal.avertir('maj', 'ancien-exe-non-supprime', { ancien: m.ancien, erreur: e.message });
+    const restent = aSupprimer.filter((f) => {
+      try { fs.rmSync(f, { force: true }); return false; } catch { return true; }
+    });
+    if (!restent.length) {
+      oublier();
+      j.evt('maj', 'anciens-fichiers-supprimes', { fichiers: aSupprimer, vers });
+    } else if (essais < 30) {
+      aSupprimer.splice(0, aSupprimer.length, ...restent);
+      setTimeout(essayer, 2000);
+    } else {
+      oublier();
+      j.avertir('maj', 'anciens-fichiers-non-supprimes', { fichiers: restent });
     }
   };
   setTimeout(essayer, 3000);
 }
 
-module.exports = { configurer, verifier, telecharger, installer, nettoyerApresMaj, versionSuperieure };
+module.exports = { configurer, mode, verifier, telecharger, installer, nettoyerApresMaj, versionSuperieure };

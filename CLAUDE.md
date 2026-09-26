@@ -12,8 +12,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   champs qu'un tirage cacherait)
 - tri (ordre d'ajout / numéro + sens) et recherche permissive sur toutes les pages
 - 10 thèmes (dont 7 clairs), barres de défilement thématisées
-- exe portable unique, données dans `%APPDATA%`, raccourcis bureau / menu /
-  barre des tâches + détection des raccourcis périmés au lancement
+- deux formes, mêmes données dans `%APPDATA%` : exe **portable** et **installateur NSIS**
+  (depuis 0.3.2, démarrage rapide : le portable se décompresse à chaque lancement), raccourcis
+  bureau / menu / barre des tâches + détection des raccourcis périmés au lancement
 - **S1 du modèle pack** : socle 2 bases (voir « Architecture données »)
 
 **En cours — Édition (ajouts locaux).** Découpage :
@@ -179,20 +180,29 @@ hors-ligne (règle 1).
 - Dépôt **public** github.com/EryoGreg/tuiles-et-toiles. Bristol (github.com/EryoGreg/bristol)
   en est un fork à historique partagé (base commune : tag `v0.1.0`) ; y porter les correctifs par
   `git cherry-pick` (remote `tuiles-et-toiles`). `oauth-client.json` n'est jamais versionné.
-- Publier une version : `npm version x.y.z --no-git-tag-version` (le numéro nomme l'exe et le
-  dossier d'extraction portable), `npm run dist`, commit + tag `vx.y.z`, push, puis
-  `gh release create vx.y.z release/Tuiles-et-Toiles-x.y.z.exe`. L'exe ne va jamais dans git
-  (> 100 Mo).
-- **Mise à jour intégrée** (`src/main/maj.js`) : `electron-updater` ne gère pas la cible portable,
-  donc c'est fait à la main. `releases/latest` via l'API GitHub (anonyme, dépôt public), exe
-  téléchargé à côté de l'exe courant (`PORTABLE_EXECUTABLE_FILE`), taille + SHA-256 vérifiés contre
-  le `digest` publié par GitHub, lancement du nouvel exe, marqueur `maj-en-cours.json` ; au
-  démarrage suivant, le nouvel exe supprime l'ancien. Vérification discrète 4 s après le lancement
-  (réglage `maj_auto`, désactivable dans Options), rien n'est téléchargé sans clic. Hors ligne →
-  silencieux (règle 1). Les raccourcis qui visaient l'ancien exe sont signalés par la détection de
-  raccourcis périmés existante.
-- Nom d'asset attendu par l'updater : `Tuiles-et-Toiles-x.y.z.exe` (`MOTIF_EXE`). Le changer casse
-  la mise à jour des installations existantes.
+- Publier une version : `npm version x.y.z --no-git-tag-version` (le numéro nomme les exe et le
+  dossier d'extraction portable), `npm run dist` (portable **et** NSIS), commit + tag `vx.y.z`,
+  push, puis `gh release create vx.y.z release/Tuiles-et-Toiles-x.y.z.exe
+  release/Tuiles-et-Toiles-Setup-x.y.z.exe` — **les deux fichiers**, chaque forme se met à jour
+  avec le sien. Les exe ne vont jamais dans git (> 100 Mo).
+- **Installateur NSIS** : `oneClick`, par utilisateur (`%LOCALAPPDATA%\Programs\Tuiles et
+  Toiles\`, sans droits admin, LISEZMOI `installation` déposé par l'app), relance l'app à la
+  fin, ne crée **aucun raccourci** (ceux de l'app, `raccourcis.js`, nom « Tuiles & Toiles »,
+  suffisent ; les créer aussi ferait des doublons), garde les données à la désinstallation.
+- **Mise à jour intégrée** (`src/main/maj.js`), à la main (`electron-updater` ne gère pas le
+  portable). `maj.mode()` = `dev` | `portable` | `installee`. `releases/latest` via l'API GitHub
+  (anonyme, dépôt public), taille + SHA-256 vérifiés contre le `digest` publié par GitHub.
+  Portable : nouvel exe téléchargé à côté de l'ancien puis lancé. Installée : installateur
+  téléchargé dans `%TEMP%`, lancé en `/S --updated --force-run` (silencieux, relance l'app).
+  **Portable → installée** : Options → « Passer à la version installée » (installateur visible).
+  Marqueur `maj-en-cours.json` `{ version, vers, ancien, nouveau, setup }` : au lancement de la
+  nouvelle version, l'ancien exe portable et l'installateur téléchargé sont supprimés. La synchro
+  auto envoie ce qui reste avant de céder la place. Vérification discrète 4 s après le lancement
+  (réglage `maj_auto`), rien n'est téléchargé sans clic, hors ligne → silencieux (règle 1).
+  Raccourcis visant l'ancien exe : détection de raccourcis périmés.
+- Noms d'assets attendus par l'updater : `Tuiles-et-Toiles-x.y.z.exe` (`MOTIF_EXE`) et
+  `Tuiles-et-Toiles-Setup-x.y.z.exe` (`MOTIF_SETUP`). Les changer casse la mise à jour des
+  installations existantes.
 
 ## Règles non négociables
 

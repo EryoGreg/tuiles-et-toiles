@@ -108,7 +108,7 @@ contextBridge.exposeInMainWorld('api', {
 
   maj: {
     verifier: () => ipcRenderer.invoke('maj:verifier'),
-    telecharger: () => ipcRenderer.invoke('maj:telecharger'),
+    telecharger: (opts) => ipcRenderer.invoke('maj:telecharger', opts),
     installer: () => ipcRenderer.invoke('maj:installer'),
     onProgression: (fn) => {
       const ecouteur = (_e, p) => fn(p);

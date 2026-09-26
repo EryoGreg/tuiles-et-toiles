@@ -3,8 +3,11 @@
  * Raccourcis Windows (.lnk) : bureau, menu Demarrer, barre des taches.
  *
  * Cible = l'exe portable que l'utilisateur a lance (PORTABLE_EXECUTABLE_FILE),
- * pas l'exe extrait dans le cache temporaire. Si l'utilisateur deplace le
- * portable, les raccourcis pointent alors dans le vide — inherent au portable.
+ * pas l'exe extrait dans le cache temporaire ; version installee : son exe.
+ * Si l'utilisateur deplace le portable, ou passe a la version installee, les
+ * raccourcis pointent dans le vide : detectes au lancement (perimes()).
+ * L'installateur n'en cree aucun lui-meme (nsis.create*Shortcut = false) :
+ * ceux de l'appli, proposes au premier lancement, suffisent.
  *
  * La barre des taches ne s'epingle pas par API sur Windows 10/11 : on invoque
  * le verbe du menu contextuel (« Epingler a la barre des taches »). Selon la

@@ -1,6 +1,6 @@
 {
   "name": "tuiles-et-toiles",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Entrainement memoriel en histoire de l'art",
   "main": "src/main/index.js",
   "private": true,
@@ -8,7 +8,7 @@
     "dev": "node scripts/dev.js",
     "build": "node node_modules/vite/bin/vite.js build",
     "start": "node scripts/dev.js",
-    "dist": "node scripts/faire-icone.js && node node_modules/vite/bin/vite.js build && node node_modules/electron-builder/out/cli/cli.js --win portable",
+    "dist": "node scripts/faire-icone.js && node node_modules/vite/bin/vite.js build && node node_modules/electron-builder/out/cli/cli.js --win portable nsis",
     "polices": "node scripts/polices.js",
     "import": "node scripts/lancer-node.js src/main/import.js",
     "test": "node scripts/lancer-node.js tests/synchro-e2a.test.js && node scripts/lancer-node.js tests/synchro-e2b.test.js && node scripts/lancer-node.js tests/synchro-e2c.test.js && node scripts/lancer-node.js tests/synchro-e2d.test.js && node scripts/lancer-node.js tests/synchro-e2e.test.js && node scripts/lancer-node.js tests/synchro-auto.test.js && node scripts/lancer-node.js tests/sauvegarde-fusion.test.js && node scripts/lancer-node.js tests/journal-rapport.test.js",
@@ -67,6 +67,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "Tuiles-et-Toiles-${version}.${ext}"
@@ -74,6 +80,15 @@
     "portable": {
       "unpackDirName": "TuilesEtToiles-${version}",
       "requestExecutionLevel": "user"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Tuiles-et-Toiles-Setup-${version}.${ext}"
     }
   }
 }

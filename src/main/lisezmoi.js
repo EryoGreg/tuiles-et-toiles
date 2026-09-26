@@ -171,6 +171,17 @@ const TEXTES = {
     'les envoyer.'
   ],
 
+  // %LOCALAPPDATA%\Programs\Tuiles et Toiles\ (version installee).
+  installation: [
+    ...titre('Programme Tuiles et Toiles'),
+    'Le programme Tuiles et Toiles, installé pour ta session Windows. Il ne',
+    'contient aucune de tes données : elles sont dans',
+    '%APPDATA%\\Tuiles et Toiles\\ (tuiles créées, marques, réglages).',
+    '',
+    'Ne modifie rien ici. Pour désinstaller : Paramètres Windows →',
+    'Applications → Tuiles et Toiles. La désinstallation garde tes données.'
+  ],
+
   // %APPDATA%\Tuiles et Toiles\ (dossier de donnees de l'installation).
   donnees: [
     ...titre('Données de Tuiles et Toiles sur cet appareil'),
