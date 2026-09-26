@@ -1,0 +1,8 @@
+{
+  "appId": "fr.tuilesettoiles.app",
+  "appName": "Tuiles et Toiles",
+  "webDir": "dist-mobile",
+  "android": {
+    "backgroundColor": "#15110f"
+  }
+}
