@@ -1,7 +1,7 @@
 {
   "name": "tuiles-et-toiles",
   "version": "0.3.4",
-  "description": "Entrainement memoriel en histoire de l'art",
+  "description": "Tuiles et Toiles",
   "main": "src/main/index.js",
   "private": true,
   "scripts": {
