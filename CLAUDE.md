@@ -56,8 +56,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   `headRevisionId` distant retenu dans la table `sync` (`drive_rev`, `drive_synchro_le`).
   Jeton (refresh_token) chiffré `safeStorage` → `%APPDATA%\Tuiles et Toiles\drive-jeton.bin`.
   Client OAuth : `src/main/oauth-client.json` (gitignoré, embarqué dans l'asar). Projet Google
-  Cloud **`dislike-334115`** (nom affiché « Dislike » ; le projet `tuiles-et-toiles` n'est PAS
-  celui du client). Écran de consentement **en production** depuis le 26/09/2026 (Google Auth
+  Cloud **`dislike-334115`** (ID figé ; renommé « Tuiles et Toiles » le 26/09/2026 — l'ancien
+  projet d'ID `tuiles-et-toiles` était vide et est à supprimer). Bristol utilise le même client :
+  son écran de consentement affiche donc « Tuiles et Toiles ». Écran de consentement **en production** depuis le 26/09/2026 (Google Auth
   Platform → Audience) : nom « Tuiles et Toiles », accueil et confidentialité sur GitHub Pages
   (`docs/`, `https://eryogreg.github.io/tuiles-et-toiles/`), domaine autorisé
   `eryogreg.github.io`, pas de logo (un logo imposerait une vérification). Seul scope
