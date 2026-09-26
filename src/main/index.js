@@ -29,6 +29,7 @@ const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
 const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
+const annuler = require('./annuler');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
 // champ "name" du package.json (tuiles-et-toiles).
@@ -329,7 +330,7 @@ function infosRapport() {
 // Chaque canal est journalise : arguments resumes, duree, resultat ou erreur.
 // Lectures appelees en boucle -> DEBUG ; resultat { erreur } -> WARN.
 const ROUTINE = new Set([
-  'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
+  'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'annuler:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
   'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero',
   'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile'
 ]);
@@ -384,13 +385,28 @@ ipcMain.on('journal:evt', (_e, domaine, quoi, donnees, niveau) =>
   journal.evt(domaine || 'ui', quoi, donnees, ['DEBUG', 'INFO', 'WARN', 'ERREUR'].includes(niveau) ? niveau : 'INFO'));
 
 // Detail (champs decrits, image, masques) journalise par edition.js.
-gerer('edition:creer', (_e, champs) => edition.creer(champs || {}));
+// Actions annulables (Ctrl+Z) : leurs ecritures sont capturees par annuler.js.
+const refDe = (id) => { const o = db.oeuvre(id); return o ? '#' + o.ref : 'une tuile'; };
+const NOMS_MARQUES = { livre: 'livre', etoile: 'étoile', bad_smiley: 'à revoir' };
+gerer('edition:creer', (_e, champs) =>
+  annuler.action((r) => 'Création de #' + (r && r.ref), () => edition.creer(champs || {})));
 gerer('edition:tuile', (_e, id) => edition.tuile(id));
-gerer('edition:modifier', (_e, { id, champs }) => edition.modifier(id, champs || {}));
-gerer('edition:supprimer', (_e, id) => edition.supprimer(id));
+gerer('edition:modifier', (_e, { id, champs }) =>
+  annuler.action('Modification de ' + refDe(id), () => edition.modifier(id, champs || {})));
+gerer('edition:supprimer', (_e, id) =>
+  annuler.action('Suppression de ' + refDe(id), () => edition.supprimer(id)));
 gerer('edition:versions', (_e, id) => edition.versions(id));
 gerer('corbeille:liste', () => edition.corbeille());
-gerer('corbeille:restaurer', (_e, id) => edition.restaurer(id));
+gerer('corbeille:restaurer', (_e, id) =>
+  annuler.action((r) => 'Restauration de #' + (r && r.ref), () => edition.restaurer(id)));
+// Annuler / retablir : l'ecriture inverse, puis vue et sac remis a jour.
+const apresAnnulation = (r) => {
+  if (r.faites) edition.rafraichir();
+  return { ...r, comptes: db.comptesTags() };
+};
+gerer('annuler:annuler', () => apresAnnulation(annuler.annuler()));
+gerer('annuler:retablir', () => apresAnnulation(annuler.retablir()));
+gerer('annuler:etat', () => annuler.etatPiles());
 
 gerer('edition:importerImageUrl', async (_e, url) => {
   const refus = (erreur, detail) => {
@@ -605,12 +621,13 @@ gerer('oeuvres:parTag', (_e, { tag, texte } = {}) => jeu.listerParTag(tag, texte
 gerer('oeuvres:toutes', (_e, criteres) => jeu.listerToutes(criteres));
 
 gerer('tags:basculer', (_e, { id, tag }) => ({
-  actif: db.basculerTag(id, tag),
+  actif: annuler.action((actif) => (actif ? 'Marque ' : 'Retrait de la marque ') + (NOMS_MARQUES[tag] || tag)
+    + ' sur ' + refDe(id), () => db.basculerTag(id, tag)),
   comptes: db.comptesTags()
 }));
 
 gerer('tags:effacerTout', () => ({
-  supprimes: db.effacerTousLesTags(),
+  supprimes: annuler.action('Effacement de toutes les marques', () => db.effacerTousLesTags()),
   comptes: db.comptesTags()
 }));
 
@@ -637,7 +654,7 @@ gerer('appareils:liste', () => synchro.listeAppareils());
 gerer('appareils:retirer', (_e, { id, retirer }) => synchro.retirerAppareil(id, retirer !== false));
 gerer('conflits:liste', () => synchro.listeConflits());
 gerer('conflits:trancher', (_e, { id, choix }) => {
-  synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant');
+  annuler.action('Choix dans un conflit', () => synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant'));
   const reste = synchro.listeConflits();
   // Le choix part vers les autres appareils sans attendre : tout de suite
   // s'il ne reste rien a trancher, sinon 3 s apres le dernier choix.

@@ -39,6 +39,9 @@ function imagesReferencees() {
     const nom = r.entite === 'override' ? v && v.valeur : v;
     if (nom) out.add(nom);
   }
+  // Images qu'une annulation / un retablissement remettrait (require
+  // paresseux : annuler.js depend de synchro/etat, comme ce module).
+  for (const nom of require('./annuler').images()) out.add(nom);
   return out;
 }
 
@@ -342,5 +345,6 @@ function appliquer() {
 
 module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, nettoyerOrphelines, oublierImage,
+  rafraichir: appliquer,
   imagesReferencees
 };

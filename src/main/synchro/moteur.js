@@ -272,6 +272,8 @@ function ecrire(ctx, entite, cle, champ, val, { force = false } = {}) {
     insererOp(ctx, op, 0);
     poser(ctx, op);
     apres(ctx, op);
+    // Annuler / retablir (annuler.js) : valeur avant / apres, JSON brut.
+    if (ctx.surEcriture) ctx.surEcriture({ entite, cle, champ, avant: cour ? cour.valeur : null, apres: v });
     return op.hlc;
   })();
 }

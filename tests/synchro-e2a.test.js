@@ -20,6 +20,7 @@ const edition = require(path.join(RACINE, 'src/main/edition'));
 const jeu = require(path.join(RACINE, 'src/main/jeu'));
 const hlc = require(path.join(RACINE, 'src/main/synchro/hlc'));
 const appareil = require(path.join(RACINE, 'src/main/synchro/appareil'));
+const annuler = require(path.join(RACINE, 'src/main/annuler'));
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-e2a-'));
 const PACK = path.join(TMP, 'pack.db');
@@ -272,6 +273,51 @@ test('pastille conflit : listes, editeur, disparait une fois tranche', () => {
   assert.equal(edition.tuile(p.id).conflit, true);
   d.prepare('UPDATE conflits SET resolu = 1 WHERE cle = ?').run(p.id);
   assert.equal(edition.tuile(p.id).conflit, false);
+});
+
+test('annuler / retablir : creation, modification, suppression, marque', () => {
+  annuler.vider();
+  const r = annuler.action((x) => 'Création de #' + x.ref, () => edition.creer({ titre: 'Avant', artiste: 'X' }));
+  annuler.action('Modification', () => edition.modifier(r.id, { titre: 'Apres', artiste: 'X' }));
+  annuler.action('Marque', () => db.basculerTag(r.id, 'etoile'));
+  assert.deepEqual(annuler.etatPiles(), { annuler: 'Marque', retablir: null });
+
+  let a = annuler.annuler();
+  assert.equal(a.libelle, 'Marque'); assert.equal(a.faites, 1);
+  assert.deepEqual(db.tagsDe(r.id), []);
+  a = annuler.annuler(); edition.rafraichir();
+  assert.equal(db.oeuvre(r.id).titre, 'Avant', 'modification annulee');
+  a = annuler.retablir(); edition.rafraichir();
+  assert.equal(db.oeuvre(r.id).titre, 'Apres', 'modification retablie');
+  assert.deepEqual(annuler.etatPiles(), { annuler: 'Modification', retablir: 'Marque' });
+
+  // Nouvelle action : on ne peut plus retablir.
+  annuler.action('Suppression', () => edition.supprimer(r.id));
+  assert.equal(annuler.etatPiles().retablir, null);
+  annuler.annuler(); edition.rafraichir();
+  assert.ok(db.oeuvre(r.id), 'suppression annulee : tuile revenue');
+
+  // Annuler jusqu'a la creation : la tuile disparait (ni liste, ni corbeille).
+  annuler.annuler(); annuler.annuler(); edition.rafraichir();
+  assert.equal(db.oeuvre(r.id), undefined);
+  assert.equal(edition.corbeille().some((o) => o.id === r.id), false);
+  assert.equal(annuler.annuler().rien, true);
+  annuler.retablir(); edition.rafraichir();
+  assert.equal(db.oeuvre(r.id).titre, 'Avant', 'creation retablie');
+});
+
+test('annuler ne touche pas un champ modifie depuis (synchro, autre action)', () => {
+  annuler.vider();
+  const [p] = unePack();
+  const base = edition.tuile(p.id);
+  annuler.action('Modif', () => edition.modifier(p.id, { ...base, titre: 'Mien', lieu: 'Ici' }));
+  etat.ecrire('override', p.id, 'titre', { valeur: 'Arrive par la synchro', valeur_source: p.titre });
+  const a = annuler.annuler(); edition.rafraichir();
+  assert.equal(a.faites, 1);
+  assert.equal(a.ignorees.length, 1);
+  assert.equal(db.oeuvre(p.id).titre, 'Arrive par la synchro');
+  assert.equal(db.oeuvre(p.id).lieu, base.lieu);
+  edition.modifier(p.id, base);
 });
 
 test('tirage : stats comptees pour cet appareil, hors journal', () => {

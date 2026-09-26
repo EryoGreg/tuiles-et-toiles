@@ -2942,6 +2942,40 @@ export default function App() {
     });
   }, []);
 
+  // Ctrl+Z / Ctrl+Y (ou Ctrl+Maj+Z) : annuler / retablir la derniere action
+  // (annuler.js). Pas dans un champ de saisie ni dans l'editeur de tuile :
+  // la, c'est l'annulation de texte habituelle.
+  const [annulation, setAnnulation] = useState(null);   // { sens, libelle, faites, ignorees, etat }
+  const minuteurAnnulation = useRef(null);
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const annulerOuRetablir = useCallback(async (sens) => {
+    const r = sens === 'annuler' ? await window.api.annuler.annuler() : await window.api.annuler.retablir();
+    setAnnulation({ sens, ...r });
+    clearTimeout(minuteurAnnulation.current);
+    minuteurAnnulation.current = setTimeout(() => setAnnulation(null), 7000);
+    if (r.rien || !r.faites) return;
+    charger();
+    // Listes : remontees pour montrer le resultat. Pas le jeu (la tuile
+    // tiree serait perdue).
+    if (pageRef.current !== 'jeu' && pageRef.current !== 'menu') setNavNonce((n) => n + 1);
+  }, [charger]);
+  useEffect(() => {
+    const k = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const t = e.key.toLowerCase();
+      const sens = t === 'z' && !e.shiftKey ? 'annuler' : (t === 'y' || (t === 'z' && e.shiftKey)) ? 'retablir' : null;
+      if (!sens) return;
+      const cible = e.target;
+      if (cible && (/^(INPUT|TEXTAREA|SELECT)$/.test(cible.tagName) || cible.isContentEditable)) return;
+      if (document.querySelector('.editeur-jeu')) return;
+      e.preventDefault();
+      annulerOuRetablir(sens);
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [annulerOuRetablir]);
+
   // Ctrl+F : donner le focus au champ de recherche de la page courante.
   useEffect(() => {
     const k = (e) => {
@@ -3063,6 +3097,24 @@ export default function App() {
 
   useEffect(() => window.api.onTenterFermeture(tenterFermeture), [tenterFermeture]);
 
+  const noteAnnulation = annulation && (
+    <div className="bandeau-synchro bandeau-annulation" role="status">
+      <I.Rafraichir t={15} />
+      <span>
+        {annulation.rien
+          ? (annulation.sens === 'annuler' ? 'Rien à annuler.' : 'Rien à rétablir.')
+          : !annulation.faites
+            ? 'Rien n’a changé : « ' + annulation.libelle + ' » a été modifié depuis (autre appareil ou autre action).'
+            : (annulation.sens === 'annuler' ? 'Annulé : ' : 'Rétabli : ') + annulation.libelle
+              + (annulation.ignorees && annulation.ignorees.length ? ' (en partie : modifié depuis ailleurs)' : '') + '.'}
+      </span>
+      {!annulation.rien && annulation.sens === 'annuler' && annulation.etat && annulation.etat.retablir && (
+        <button className="bouton-neutre" onClick={() => annulerOuRetablir('retablir')}>Rétablir</button>
+      )}
+      <button className="bandeau-synchro-x" onClick={() => setAnnulation(null)} title="Fermer"><I.Croix t={12} /></button>
+    </div>
+  );
+
   // Quitter peut attendre l'envoi des dernieres modifications (10 s max).
   const [fermetureEnCours, setFermetureEnCours] = useState(false);
   const dialogueFermeture = fermetureEnCours ? (
@@ -3135,6 +3187,7 @@ export default function App() {
     return (
       <MajContext.Provider value={maj}>
         <Menu etat={etat} aller={naviguer} onQuitter={tenterFermeture} />
+        {noteAnnulation}
         <BandeauMaj />
         {dialogueFermeture}
         {dialogueRaccourcis}
@@ -3172,6 +3225,7 @@ export default function App() {
         {dialogueRaccourcis}
         {dialoguePropositionRaccourcis}
         {bandeauNouveautes}
+        {noteAnnulation}
         <BandeauMaj />
       </div>
      </NavContext.Provider>

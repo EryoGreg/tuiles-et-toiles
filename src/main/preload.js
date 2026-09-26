@@ -52,6 +52,12 @@ contextBridge.exposeInMainWorld('api', {
     oublierImage: (nom) => ipcRenderer.invoke('edition:oublierImage', nom)
   },
 
+  annuler: {
+    annuler: () => ipcRenderer.invoke('annuler:annuler'),
+    retablir: () => ipcRenderer.invoke('annuler:retablir'),
+    etat: () => ipcRenderer.invoke('annuler:etat')
+  },
+
   corbeille: {
     liste: () => ipcRenderer.invoke('corbeille:liste'),
     restaurer: (id) => ipcRenderer.invoke('corbeille:restaurer', id)

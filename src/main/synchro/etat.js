@@ -35,6 +35,7 @@ const { CHAMPS_LOCALE } = moteur;
 let appareil = null;
 let horloge = null;
 let accroche = false;
+let capture = null;   // ecritures de l'action en cours (annuler.js)
 
 /**
  * A appeler avant db.ouvrir().
@@ -53,7 +54,37 @@ function lAppareil() {
 
 /** Contexte moteur de l'appareil courant sur la base ouverte. */
 function contexte() {
-  return { d: db.instance(), appareil: lAppareil(), horloge };
+  const ctx = { d: db.instance(), appareil: lAppareil(), horloge };
+  if (capture) ctx.surEcriture = (e) => capture.push(e);
+  return ctx;
+}
+
+/**
+ * Execute fn en relevant les ecritures locales qu'elle fait (un champ ecrit
+ * plusieurs fois : premiere valeur avant, derniere apres ; un champ revenu a
+ * sa valeur d'origine est ecarte). @returns {{ resultat, ecritures }}
+ */
+function capturer(fn) {
+  const avant = capture;
+  capture = [];
+  let brutes;
+  let resultat;
+  try { resultat = fn(); } finally { brutes = capture; capture = avant; }
+  const parCle = new Map();
+  for (const e of brutes) {
+    const k = e.entite + '|' + e.cle + '|' + e.champ;
+    const deja = parCle.get(k);
+    parCle.set(k, deja ? { ...deja, apres: e.apres } : e);
+  }
+  const ecritures = [...parCle.values()].filter((e) => e.avant !== e.apres);
+  if (avant) avant.push(...brutes);   // capture imbriquee : remonte aussi
+  return { resultat, ecritures };
+}
+
+/** Valeur courante d'un champ, JSON brut (null = absent). */
+function brut(entite, cle, champ) {
+  const r = moteur.lire(contexte(), entite, cle, champ);
+  return r ? r.valeur : null;
 }
 
 const valeur = (entite, cle, champ) => moteur.valeur(contexte(), entite, cle, champ);
@@ -197,5 +228,5 @@ function preparer(d) {
 
 module.exports = {
   configurer, contexte, appareil: lAppareil, valeur, lignes, existe, ecrire, supprimerLocale,
-  lot, conflits, resoudre, CHAMPS_LOCALE, opsGenese, horodaterGenese
+  lot, conflits, resoudre, CHAMPS_LOCALE, opsGenese, horodaterGenese, capturer, brut
 };
