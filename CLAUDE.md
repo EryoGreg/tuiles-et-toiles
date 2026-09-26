@@ -380,7 +380,17 @@ correction).
   Amorcé une seule fois par `node scripts/registre-init.js`.
 - `data/pack.db` — régénéré par `npm run import` (`= node scripts/lancer-node.js
   src/main/import.js`).
-- `data/images/` (431 JPEG, 53,5 Mo, côté max 1400 px), bundlé lecture seule.
+- `data/images/` (431 JPEG, 53,5 Mo, côté max 1400 px) : **plus embarquées** depuis 0.3.5.
+  `data/vignettes/` (côté 480 px, 13 Mo) et `data/images-manifest.json` (`{ ref, images: { nom:
+  { octets, sha256 } } }`) le sont, générés par `node scripts/vignettes.js`. Les grandes images
+  sont téléchargées à la demande (`src/main/images-distantes.js`) depuis
+  `raw.githubusercontent.com/EryoGreg/tuiles-et-toiles/<ref>/data/images/`, vérifiées, mises en
+  cache dans `images-cache/` ; sans connexion, la vignette les remplace. PC : tout est récupéré en
+  tâche de fond (réglage `images_hors_ligne`). `tuile://<nom>` = grande image, `tuile://mini/<nom>`
+  = vignette (grilles, Corbeille, journal). **Changer une image du pack** = relancer le script
+  en montant `REF`, puis `git tag <REF> && git push origin <REF>` (jamais servir depuis `main` :
+  l'empreinte ne correspondrait plus). En dev, `data/images/` sert de source locale
+  (`TT_SANS_IMAGES=1` pour tester le téléchargement).
 - `data/utilisateur.db` — créé au runtime, jamais versionné.
 
 33 images font moins de 500 px de côté — limitation de la source, pas de la
