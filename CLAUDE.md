@@ -227,7 +227,11 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   `{ "webClientId" }`, gitignoré, injecté au build) **et** client « Android » (paquet
   `fr.tuilesettoiles.app` + SHA-1 de la clé de signature ; debug :
   `33:08:3A:4F:C3:3A:6B:3D:0B:AA:92:14:4F:0D:C0:E9:59:AB:4C:D5`), dans le projet `dislike-334115`.
-  Une version publiée demandera sa propre clé (et son SHA-1).
+  Une version publiée demandera sa propre clé (et son SHA-1). **Créés le 26/09/2026** : client Web
+  « Tuiles et Toiles - mobile (Web) » (`874776918280-ce2unjgochu6…`, son secret n'est pas utilisé) et
+  client Android « Tuiles et Toiles - Android (debug) ». `MainActivity.java` implémente
+  `ModifiedMainActivityForSocialLoginPlugin` et relaie `onActivityResult` au module : sans ça, le
+  module refuse l'autorisation Drive (« You CANNOT use scopes without modifying the main activity »).
 - `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
   `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
 

@@ -1707,7 +1707,7 @@ function JournalModifs({ onOuvrir }) {
 /* --------------------------------------------------------------- options */
 
 const THEMES = [
-  ['auto', 'Auto (Windows)'],
+  ['auto', SUR_MOBILE ? 'Auto (système)' : 'Auto (Windows)'],
   ['clair', 'Clair'],
   ['parchemin', 'Parchemin'],
   ['lin', 'Lin'],
