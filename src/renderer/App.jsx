@@ -1465,7 +1465,9 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
 
 // --- lecture du cartel -------------------------------------------------------
 
-const CHAMPS_CARTEL = ['titre', 'artiste', 'date', 'description', 'tags'];
+// Conservation : jamais proposee par l'analyse (un cartel ne dit pas ou l'oeuvre
+// est conservee, ou alors dans un sens trompeur), mais on peut y mettre une ligne.
+const CHAMPS_CARTEL = ['titre', 'artiste', 'date', 'lieu', 'description', 'tags'];
 // Ce que l'analyse (src/main/cartel-analyse.js) a reconnu dans chaque ligne.
 // Role -> champ ou l'analyse range la ligne.
 const ROLE_CHAMP = { titre: 'titre', artiste: 'artiste', date: 'date', texte: 'description', technique: 'tags' };

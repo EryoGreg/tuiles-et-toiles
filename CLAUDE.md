@@ -272,7 +272,8 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   (JS pur, rôle par ligne : artiste, vie, titre, date, technique→tags, texte→description,
   provenance, numéro, traduction, doublon, autre) → boîte `BoiteCartel` : proposition cochée
   (un champ déjà rempli n'est pas écrasé d'office), correction en touchant des lignes puis un
-  champ, rien d'écrit avant « Valider ». Conservation jamais proposée (absente des cartels).
+  champ (ordre de sélection respecté, « Retirer du champ » ; une ligne = un champ), rien d'écrit
+  avant « Valider ». Conservation : cible manuelle seulement, jamais proposée par l'analyse.
   Chaque lecture est journalisée (lignes, rôles, tailles) : un rapport d'erreur suffit pour régler
   les règles sur un cartel raté. Tests : `tests/cartel-analyse.test.js` sur 9 cartels réels
   retranscrits (`tests/cartels-exemples.js`, hauteurs estimées ; photos hors dépôt). PC : pas encore.
