@@ -736,7 +736,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   box-shadow: 0 44px 88px -30px rgba(0, 0, 0, 0.85);
 }
 .boite-dialogue h3 { margin: 0 0 10px; font-family: var(--serif); font-weight: 400; font-size: 21px; color: var(--encre-vive); }
-.boite-dialogue p { margin: 0 0 22px; font-size: 13px; color: var(--attenue); line-height: 1.5; }
+.boite-dialogue p { overflow-wrap: anywhere; margin: 0 0 22px; font-size: 13px; color: var(--attenue); line-height: 1.5; }
 .boite-dialogue .actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 .bouton-danger {
@@ -1423,6 +1423,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .edition-retour { bottom: calc(70px + env(safe-area-inset-bottom)); }
   .bandeau-synchro, .edition-toast { bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
   .bandeau-annulation { bottom: calc(126px + env(safe-area-inset-bottom)); }
+  .boite-cartel { max-height: calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   .maj-bandeau { left: 12px; right: 12px; width: auto; bottom: calc(70px + env(safe-area-inset-bottom)); padding: 14px 16px; }
   .journal-entree { grid-template-columns: 40px 44px 1fr; }
   .journal-entree > .bouton-neutre, .journal-absente { grid-column: 3; justify-self: start; }

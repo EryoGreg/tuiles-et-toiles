@@ -99,8 +99,8 @@ async function lire(source) {
     });
     return { lignes, proposition: champs, largeur: r.largeur, hauteur: r.hauteur, ms: r.ms };
   } catch (e) {
-    journal.erreur('cartel', 'lecture', e, { source });
-    return { erreur: (e && e.message) || String(e) };
+    journal.erreur('cartel', 'lecture', e, { source, uri });
+    return { erreur: 'La photo n’a pas pu être lue (' + ((e && e.message) || e) + ').' };
   }
 }
 

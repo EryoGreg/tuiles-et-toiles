@@ -194,6 +194,32 @@ module.exports = [
     }
   },
   {
+    // Sortie REELLE de ML Kit (emulateur, 26/09/2026) sur un cartel fabrique facon
+    // Corot : un bloc par ligne en tete, accents des capitales perdus (« Elève »).
+    nom: 'Corot, sortie ML Kit reelle (blocs d’une ligne, accents perdus)',
+    lignes: [
+      ['Camille Corot', 56, 0],
+      ["Paris, 1796 –Ville d'Avray, 1875", 31, 1],
+      ['Le Bain de Diane', 51, 2],
+      ['Diana at the Bath', 30, 3],
+      ['1855', 25, 4],
+      ['Huile sur toile', 27, 5],
+      ['Elève du peintre paysagiste néoclassique Jean-Victor', 37, 6],
+      ['Bertin, Camille Corot apprend à travailler en plein air', 37, 6],
+      ['avant de composer en atelier des paysages idéalisés qui', 34, 6],
+      ['servent de décor à des récits historiques, mythologiques', 38, 6],
+      ["ou bibliques. A partir de 1850, il s'attache à travailler sur", 36, 6],
+      ['les effets de lumière dans la forêt de Fontainebleau.', 29, 6],
+      ['Achat de la Ville au Salon de la Société des Amis des Arts de BordeauX,', 20, 7],
+      ['1858.', 18, 7],
+      ['Inv. Bx E 489', 20, 8]
+    ],
+    attendu: {
+      artiste: 'Camille Corot', titre: 'Le Bain de Diane', date: '1855', tags: 'Huile sur toile',
+      description: /^Elève du peintre.*Fontainebleau\.$/s
+    }
+  },
+  {
     nom: 'Buire (maison en capitales, lieu + date, bout du cartel voisin)',
     lignes: [
       ['don LUCIE ET ALICE VANLIAN, 2023, inv. 2023.13.3', 40, 0],

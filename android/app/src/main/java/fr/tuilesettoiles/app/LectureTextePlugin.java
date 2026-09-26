@@ -5,6 +5,8 @@ import android.graphics.Rect;
 import android.net.Uri;
 import android.util.Log;
 
+import java.io.File;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -102,7 +104,10 @@ public class LectureTextePlugin extends Plugin {
         }
         final InputImage image;
         try {
-            image = InputImage.fromFilePath(getContext(), Uri.parse(uri));
+            // Le module photo rend un chemin nu (« /data/user/0/… ») : sans schema,
+            // Uri.parse le prendrait pour une adresse de contenu (« No content provider »).
+            Uri adresse = uri.startsWith("/") ? Uri.fromFile(new File(uri)) : Uri.parse(uri);
+            image = InputImage.fromFilePath(getContext(), adresse);
         } catch (Exception e) {
             Log.w(TAG, "lire : image illisible", e);
             call.reject("Image illisible : " + e.getMessage());
