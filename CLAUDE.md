@@ -24,7 +24,15 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 - S3 page Édition + éditeur de tuile + flux « créer »
 - S4 pipeline image (dossier local, resize ≤ 500 Ko, sélecteur + drag-drop fichier)
 - S5 drag-drop web, modifier / supprimer, `user_archive` pour les œuvres du pack
-- S6 undo/redo, menu contextuel (l'export / import zip est passé au chantier synchro, É0)
+- S6 ✅ **annuler / rétablir** (`src/main/annuler.js`, Ctrl+Z / Ctrl+Y ou Ctrl+Maj+Z, hors champs
+  de saisie et hors éditeur) : chaque action utilisateur (canaux IPC enveloppés dans
+  `annuler.action`) relève ses écritures via `etat.capturer` (crochet `ctx.surEcriture` de
+  `moteur.ecrire`) ; annuler / rétablir = écritures ordinaires (synchronisées), un champ modifié
+  depuis n'est pas touché ; 50 actions, en mémoire ; les images citées par les piles échappent
+  au ménage. Annuler une création → `_existe = null` (ni liste ni Corbeille).
+  ✅ **Journal des modifications** (Édition → 3e carte, `edition.journalModifs`) : `changements`
+  hors stats, regroupés par action (même appareil, même tuile, ≤ 3 s), avant → après, paginé
+  par HLC, « Ouvrir » la tuile. Reste : menu contextuel.
 
 **En cours — Sauvegarde / synchro Google Drive.** Ce qui voyage : `utilisateur.db`
 + `images-locales/`. Jamais `pack.db`. Découpage :
@@ -138,6 +146,10 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     - **Versions précédentes** (`edition.versions`, bouton de l'éditeur) : toutes les valeurs de
       chaque champ, tirées de `changements`, tous appareils ; « Reprendre » remplit l'éditeur,
       rien n'est écrit avant validation. Pas l'image (une image remplacée est effacée du disque).
+    - **Conflits** : trancher déclenche une synchro (`synchroAuto.differer`, 3 s après le dernier
+      choix, tout de suite s'il n'en reste plus, même synchro auto désactivée) ; ouvrir l'écran
+      Conflits synchronise d'abord (`conflits:actualiser`) ; réception toutes les 2 min tant que
+      des conflits sont ouverts.
     - **Synchro automatique** (`synchro/auto.js`, réglage `synchro_auto`, actif par défaut) :
       lancement + 6 s, 20 s de calme après une modification (surveillance toutes les 15 s),
       toutes les 15 min, réveil, fermeture (≤ 10 s, `app:quitter` attend). Échec → nouvel essai

@@ -396,6 +396,7 @@ gerer('edition:modifier', (_e, { id, champs }) =>
 gerer('edition:supprimer', (_e, id) =>
   annuler.action('Suppression de ' + refDe(id), () => edition.supprimer(id)));
 gerer('edition:versions', (_e, id) => edition.versions(id));
+gerer('edition:journal', (_e, opts) => edition.journalModifs(opts || {}));
 gerer('corbeille:liste', () => edition.corbeille());
 gerer('corbeille:restaurer', (_e, id) =>
   annuler.action((r) => 'Restauration de #' + (r && r.ref), () => edition.restaurer(id)));

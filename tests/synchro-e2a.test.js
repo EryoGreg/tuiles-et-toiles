@@ -320,6 +320,29 @@ test('annuler ne touche pas un champ modifie depuis (synchro, autre action)', ()
   edition.modifier(p.id, base);
 });
 
+test('journal des modifications : une entree par action, plus recente d’abord, pagine', () => {
+  const r = edition.creer({ titre: 'Journal', artiste: 'Y', date: '1900' });
+  edition.modifier(r.id, { titre: 'Journal 2', artiste: 'Y', date: '1901' });
+  db.basculerTag(r.id, 'livre');
+  const { entrees } = edition.journalModifs({});
+  const miennes = entrees.filter((e) => e.cle === r.id);
+  // Creation, modification et marque dans la meme seconde : la tuile et la
+  // marque sont deux familles, tuile creee + modifiee regroupees.
+  assert.equal(miennes[0].marques[0].nom, 'livre');
+  assert.equal(miennes[0].marques[0].pose, true);
+  const t = miennes[1];
+  assert.ok(t.actions.includes('créée'), JSON.stringify(t.actions));
+  const titre = t.champs.filter((c) => c.champ === 'titre').map((c) => c.valeur);
+  assert.deepEqual(titre, ['Journal', 'Journal 2']);
+  assert.equal(t.champs.find((c) => c.valeur === 'Journal 2').avant, 'Journal');
+  assert.ok(t.appareil.includes('cet appareil'));
+  assert.equal(t.visible, true);
+  const p1 = edition.journalModifs({ limite: 3 });
+  assert.ok(p1.suite);
+  const p2 = edition.journalModifs({ avant: p1.suite, limite: 3 });
+  assert.ok(p2.entrees.length && p2.entrees[0].le <= p1.entrees[p1.entrees.length - 1].le);
+});
+
 test('tirage : stats comptees pour cet appareil, hors journal', () => {
   const avant = nChg();
   const t = jeu.tirer(null);

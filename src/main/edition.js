@@ -332,6 +332,100 @@ function versions(id) {
   return out;
 }
 
+const LIBELLES = {
+  titre: 'Titre', artiste: 'Artiste', date: 'Année / période', lieu: 'Conservation',
+  description: 'Description', tags: 'Tags', image: 'Image', ref_local: 'Numéro'
+};
+const NOMS_MARQUES = { livre: 'livre', etoile: 'étoile', bad_smiley: 'à revoir' };
+const ECART_GROUPE = 3000;   // ms : ecritures d'une meme action regroupees
+
+/**
+ * Journal de toutes les modifications, tous appareils, tire du journal de
+ * synchro : plus recente d'abord, les ecritures d'une meme action (meme
+ * appareil, meme tuile, a quelques secondes pres) regroupees en une entree.
+ * Pagination par HLC : `avant` = `suite` de la page precedente.
+ * @returns {{ entrees: Array, suite: string|null }}
+ */
+function journalModifs({ avant = null, limite = 400 } = {}) {
+  const d = db.instance();
+  const ops = d.prepare(`SELECT hlc, appareil, entite, cle, champ, valeur, base FROM changements
+    WHERE entite IN ('locale', 'override', 'archive', 'tag') AND (? IS NULL OR hlc < ?)
+    ORDER BY hlc DESC LIMIT ?`).all(avant, avant, limite);
+  const moi = etat.appareil();
+  const noms = new Map([[moi.id, moi.nom + ' (cet appareil)']]);
+  try {
+    for (const f of JSON.parse(db.etatSync('appareils_connus') || '[]')) if (f.id !== moi.id) noms.set(f.id, f.nom || f.id);
+  } catch { /* identifiants bruts */ }
+  const parHlc = d.prepare('SELECT valeur FROM changements WHERE hlc = ?');
+  const pack = d.prepare('SELECT ref, titre, image FROM pack.oeuvres WHERE id = ?');
+  const tuiles = new Map();
+  const tuileDe = (cle) => {
+    if (tuiles.has(cle)) return tuiles.get(cle);
+    const o = db.oeuvre(cle);
+    let t;
+    if (o) t = { ref: o.ref, titre: o.titre, image: o.image ? 'tuile://' + o.image : null, visible: true };
+    else if (cle.startsWith('local:')) {
+      const l = etat.lignes('locale', cle);
+      const v = (c) => (l[c] && l[c].valeur != null ? String(l[c].valeur) : '');
+      t = { ref: v('ref_local'), titre: v('titre'), image: v('image') ? 'tuile://' + v('image') : null, visible: false };
+    } else {
+      const p = pack.get(cle);
+      t = { ref: p ? p.ref : '?', titre: p ? p.titre : '(œuvre retirée du pack)', image: p && p.image ? 'tuile://' + p.image : null, visible: false };
+    }
+    tuiles.set(cle, t);
+    return t;
+  };
+  const texte = (entite, brut) => {
+    if (brut == null) return null;
+    const v = JSON.parse(brut);
+    if (entite === 'override') return v && v.valeur != null ? String(v.valeur) : null;
+    return v == null ? null : String(v);
+  };
+
+  const entrees = [];
+  let cour = null;
+  for (const op of ops) {
+    const ms = parseInt(op.hlc.slice(0, 16), 10);
+    const famille = op.entite === 'tag' ? 'tag' : 'tuile';
+    if (!cour || cour.cle !== op.cle || cour.appareilId !== op.appareil || cour.famille !== famille
+        || cour.ms0 - ms > ECART_GROUPE) {
+      const t = tuileDe(op.cle);
+      cour = {
+        id: op.hlc, cle: op.cle, appareilId: op.appareil, appareil: noms.get(op.appareil) || op.appareil,
+        famille, ms0: ms, le: versIso(op.hlc), ref: t.ref, titre: t.titre, image: t.image, visible: t.visible,
+        estLocale: op.cle.startsWith('local:'), actions: [], champs: [], marques: []
+      };
+      entrees.push(cour);
+    }
+    const valeur = op.valeur == null ? null : JSON.parse(op.valeur);
+    const avantBrut = op.base ? (parHlc.get(op.base) || {}).valeur : null;
+    if (op.entite === 'tag') {
+      cour.marques.push({ nom: NOMS_MARQUES[op.champ] || op.champ, pose: valeur != null });
+    } else if (op.entite === 'archive') {
+      cour.actions.push(valeur != null ? 'archivée' : 'désarchivée');
+    } else if (op.champ === '_existe') {
+      const avantV = avantBrut == null ? null : JSON.parse(avantBrut);
+      cour.actions.push(valeur === 1 ? (avantV == null ? 'créée' : 'restaurée')
+        : valeur == null ? 'création annulée' : 'supprimée');
+    } else {
+      cour.champs.push({
+        champ: op.champ, libelle: LIBELLES[op.champ] || op.champ,
+        valeur: op.champ === 'image' ? null : texte(op.entite, op.valeur),
+        avant: op.champ === 'image' ? null : texte(op.entite, avantBrut),
+        duPack: op.entite === 'override' && (valeur == null || valeur.valeur == null),
+        image: op.champ === 'image'
+      });
+    }
+  }
+  for (const e of entrees) {
+    // Ecritures lues de la plus recente a la plus ancienne : ordre naturel.
+    e.champs.reverse(); e.marques.reverse(); e.actions.reverse();
+    if (!e.actions.length && e.champs.length) e.actions.push(e.estLocale ? 'modifiée' : 'corrigée');
+    delete e.ms0;
+  }
+  return { entrees, suite: ops.length === limite ? ops[ops.length - 1].hlc : null };
+}
+
 /** Champ texte d'un formulaire, nettoye ('' si absent). */
 function texte(champs, c) {
   return String(champs[c] == null ? '' : champs[c]).trim();
@@ -344,7 +438,7 @@ function appliquer() {
 }
 
 module.exports = {
-  configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, nettoyerOrphelines, oublierImage,
+  configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
   rafraichir: appliquer,
   imagesReferencees
 };

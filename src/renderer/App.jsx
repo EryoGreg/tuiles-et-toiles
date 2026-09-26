@@ -1445,7 +1445,7 @@ function BoiteVersions({ historique, actuels, onReprendre, onFermer }) {
 }
 
 function PageEdition({ onEtat }) {
-  const [mode, setMode] = useState(null);   // null (choix) | 'creer' | 'liste' | { tuile }
+  const [mode, setMode] = useState(null);   // null (choix) | 'creer' | 'liste' | 'journal' | { tuile }
   const [toast, setToast] = useState(null);
   const [demandeSuppr, setDemandeSuppr] = useState(null);   // la tuile a supprimer
 
@@ -1458,7 +1458,7 @@ function PageEdition({ onEtat }) {
     let f = null;
     if (demandeSuppr) f = () => { setDemandeSuppr(null); return true; };
     else if (mode && mode.tuile) f = () => { setMode('liste'); return true; };
-    else if (mode === 'creer' || mode === 'liste') f = () => { setMode(null); return true; };
+    else if (mode === 'creer' || mode === 'liste' || mode === 'journal') f = () => { setMode(null); return true; };
     setRetour(f);
     return () => setRetour(null);
   }, [mode, demandeSuppr]);
@@ -1492,6 +1492,16 @@ function PageEdition({ onEtat }) {
 
   if (mode === 'creer') {
     return <EditeurTuile mode="creer" onFini={finiCreation} onAnnuler={() => setMode(null)} />;
+  }
+  if (mode === 'journal') {
+    return (
+      <>
+        <JournalModifs onOuvrir={ouvrir} />
+        <button className="edition-retour" onClick={() => setMode(null)}>
+          <I.Fleche t={16} retour /> Retour
+        </button>
+      </>
+    );
   }
   if (mode === 'liste') {
     return (
@@ -1566,7 +1576,124 @@ function PageEdition({ onEtat }) {
             <div className="desc">Choisir une tuile dans la liste</div>
           </span>
         </button>
+        <button className="carte" onClick={() => setMode('journal')}>
+          <span className="pastille"><I.Rafraichir t={22} /></span>
+          <span>
+            <div className="nom">Journal des modifications</div>
+            <div className="desc">Tout ce qui a changé, où et quand, sur tous tes appareils</div>
+          </span>
+        </button>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------ journal des modifications */
+
+const coupe = (s, n = 140) => (s && s.length > n ? s.slice(0, n) + '…' : s);
+
+// Toutes les modifications (journal de synchro), plus recentes d'abord,
+// regroupees par action. Clic sur une tuile encore visible : l'editeur.
+function JournalModifs({ onOuvrir }) {
+  const [entrees, setEntrees] = useState(null);
+  const [suite, setSuite] = useState(null);
+  const [q, setQ] = useSession('edition:journal:recherche', '');
+  const [ouverte, setOuverte] = useState(null);
+  const [charge, setCharge] = useState(false);
+
+  useEffect(() => {
+    window.api.edition.journal({}).then((r) => { setEntrees(r.entrees); setSuite(r.suite); });
+  }, []);
+  const plus = async () => {
+    setCharge(true);
+    const r = await window.api.edition.journal({ avant: suite });
+    setEntrees((l) => [...l, ...r.entrees]); setSuite(r.suite); setCharge(false);
+  };
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const filtre = norm(q.trim());
+  const visibles = entrees && (filtre
+    ? entrees.filter((e) => norm('#' + e.ref + ' ' + e.titre + ' ' + e.appareil + ' ' + e.actions.join(' ')
+      + ' ' + e.champs.map((c) => c.libelle + ' ' + (c.valeur || '')).join(' ')).includes(filtre))
+    : entrees);
+  const jour = (iso) => new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const heure = (iso) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  let jourCourant = null;
+  return (
+    <div className="galerie" style={{ '--accent': 'var(--laiton)' }}>
+      <div className="galerie-tete">
+        <span className="galerie-icone"><I.Rafraichir t={22} /></span>
+        <div>
+          <h2>Journal des modifications</h2>
+          <div className="soustitre">
+            Tout ce qui a changé sur tes tuiles, sur tous tes appareils. Clic sur une entrée pour le
+            détail ; « Ouvrir » pour modifier la tuile.
+          </div>
+        </div>
+      </div>
+      <input className="biblio-recherche journal-recherche" placeholder="Filtrer : numéro, titre, appareil, champ…"
+        value={q} onChange={(e) => setQ(e.target.value)} />
+
+      {!visibles ? <div className="chargement">chargement…</div> : !visibles.length ? (
+        <div className="galerie-vide">{filtre ? 'Aucun résultat.' : 'Aucune modification pour l’instant.'}</div>
+      ) : (
+        <div className="journal">
+          {visibles.map((e) => {
+            const j = jour(e.le);
+            const titreJour = j !== jourCourant ? (jourCourant = j) : null;
+            const resume = [
+              ...e.actions,
+              ...(e.champs.length && !e.actions.includes('créée') ? [e.champs.map((c) => c.libelle).join(', ')] : []),
+              ...e.marques.map((m) => (m.pose ? 'marquée ' : 'marque retirée : ') + m.nom)
+            ].join(' · ');
+            return (
+              <Fragment key={e.id}>
+                {titreJour && <div className="journal-jour">{titreJour}</div>}
+                <div className={'journal-entree' + (ouverte === e.id ? ' ouverte' : '')}
+                  onClick={() => setOuverte(ouverte === e.id ? null : e.id)}>
+                  <span className="journal-heure">{heure(e.le)}</span>
+                  {e.image ? <img className="journal-vignette" src={e.image} alt="" loading="lazy" />
+                    : <span className="journal-vignette journal-vignette-vide" />}
+                  <div className="journal-corps">
+                    <div className="journal-ligne">
+                      <span className="numero">#{e.ref}</span> <span className="journal-titre">{e.titre || '—'}</span>
+                    </div>
+                    <div className="journal-resume">{resume}</div>
+                    <div className="journal-qui">{e.appareil}</div>
+                    {ouverte === e.id && e.champs.length > 0 && (
+                      <div className="journal-detail">
+                        {e.champs.map((c, i) => (
+                          <div key={i} className="journal-champ">
+                            <span className="etiquette">{c.libelle}</span>
+                            {c.image ? <span>image changée</span> : (
+                              <span>
+                                {c.avant != null && !e.actions.includes('créée') && (
+                                  <span className="journal-avant">{coupe(c.avant) || '(vide)'} → </span>
+                                )}
+                                {c.duPack ? 'valeur du pack' : (coupe(c.valeur, 400) || '(vide)')}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {e.visible ? (
+                    <button className="bouton-neutre" onClick={(ev) => { ev.stopPropagation(); onOuvrir({ id: e.cle }); }}>
+                      Ouvrir
+                    </button>
+                  ) : <span className="journal-absente">{e.estLocale ? 'en corbeille ou effacée' : 'archivée'}</span>}
+                </div>
+              </Fragment>
+            );
+          })}
+          {suite && !filtre && (
+            <button className="bouton-neutre journal-plus" onClick={plus} disabled={charge}>
+              {charge ? 'Chargement…' : 'Plus ancien…'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

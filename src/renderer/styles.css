@@ -1151,6 +1151,31 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .appareil-vu { font-size: 11.5px; color: var(--discret); }
 .appareil .bouton-neutre { padding: 4px 10px; font-size: 12px; }
 
+/* --- journal des modifications ------------------------------------------------ */
+.journal-recherche { margin-bottom: 18px; max-width: 480px; }
+.journal { display: flex; flex-direction: column; gap: 6px; max-width: 980px; padding-bottom: 60px; }
+.journal-jour { margin: 16px 0 4px; font-family: var(--serif); font-size: 16px; color: var(--encre-vive); }
+.journal-jour::first-letter { text-transform: uppercase; }
+.journal-entree { display: grid; grid-template-columns: 46px 52px 1fr auto; gap: 12px; align-items: center;
+  padding: 8px 12px; border-radius: 10px; border: 1px solid var(--trait); background: var(--surface); cursor: pointer; }
+.journal-entree:hover, .journal-entree.ouverte { border-color: var(--laiton); }
+.journal-heure { font-family: var(--mono); font-size: 12px; color: var(--discret); }
+.journal-vignette { width: 52px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
+.journal-vignette-vide { background: var(--hachure); }
+.journal-corps { min-width: 0; }
+.journal-ligne { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.journal-ligne .numero { font-family: var(--mono); font-size: 11px; color: var(--laiton); }
+.journal-titre { font-family: var(--serif); font-size: 15px; color: var(--encre-vive); }
+.journal-resume { font-size: 12.5px; color: var(--encre); }
+.journal-qui { font-size: 11px; color: var(--discret); }
+.journal-detail { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.journal-champ { display: flex; flex-direction: column; gap: 1px; font-size: 13px; color: var(--encre-vive);
+  white-space: pre-wrap; word-break: break-word; }
+.journal-avant { color: var(--discret); text-decoration: line-through; }
+.journal-absente { font-size: 11px; color: var(--discret); font-style: italic; }
+.journal-entree > .bouton-neutre { padding: 5px 11px; font-size: 12px; }
+.journal-plus { align-self: center; margin-top: 10px; }
+
 /* --- corbeille ---------------------------------------------------------------- */
 .carte-corbeille { cursor: default; }
 .carte-corbeille:hover { transform: none; }
