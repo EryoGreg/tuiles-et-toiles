@@ -179,7 +179,20 @@ module.exports = {
   existsSync, statSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, rmSync,
   renameSync, copyFileSync, accessSync, unlinkSync,
   constants: { W_OK: 2, R_OK: 4, F_OK: 0 },
-  promises: {},
+  // Versions asynchrones (transport-dossier.ecrireAtomique, utilise aussi par le
+  // transport Drive pour ranger les images recues).
+  promises: {
+    mkdir: async (p, o) => mkdirSync(p, o),
+    writeFile: async (p, d, e) => writeFileSync(p, d, e),
+    readFile: async (p, e) => readFileSync(p, e),
+    rename: async (a, b) => renameSync(a, b),
+    readdir: async (p) => readdirSync(p),
+    rm: async (p, o) => rmSync(p, o),
+    unlink: async (p) => rmSync(p),
+    stat: async (p) => statSync(p),
+    access: async (p) => accessSync(p),
+    copyFile: async (a, b) => copyFileSync(a, b)
+  },
   // propres au mobile
   charger, sauver, _fichiers: fichiers
 };

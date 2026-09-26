@@ -119,7 +119,10 @@ function traduire(url, { garder = false } = {}) {
   const nom = brut.replace(/^mini\//, '').split('/').pop();
   const locale = dossierLocales + '/' + nom;
   if (fs.existsSync(locale)) return urlBlob('l:' + nom, fs.readFileSync(locale));
-  if (mini || !manifeste.images[nom]) return vignette(nom);
+  // Photo d'une tuile creee ailleurs, pas encore recue : rien plutot qu'une
+  // image cassee (la carte montre alors sa zone vide).
+  if (!manifeste.images[nom]) return '';
+  if (mini) return vignette(nom);
   if (pretes.get(nom)) return pretes.get(nom);
   if (enCache.has(nom)) { preparer(nom); return vignette(nom); }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return vignette(nom);

@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.4",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",

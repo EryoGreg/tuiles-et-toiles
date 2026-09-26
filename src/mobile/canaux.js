@@ -139,7 +139,11 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
   g('raccourcis:perimes', () => []);
   g('maj:verifier', () => ({ aJour: true }));
   g('copie:etat', () => null);
-  g('app:quitter', () => true);
+  // « Quitter » sur Android = passer en arriere-plan (l'appli reste prete).
+  g('app:quitter', async () => {
+    try { await require('@capacitor/app').App.minimizeApp(); } catch { /* navigateur : rien */ }
+    return true;
+  });
 
   // --- Google Drive et synchro (memes modules que le PC) ------------------------
   synchro.configurer({ dossierUser: '/data', imagesLocales: dossierImagesLocales, surProgression: (p) => emettre('synchro:progression', p) });

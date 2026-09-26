@@ -371,7 +371,9 @@ function listeAppareils() {
   const out = connus.map((f) => ({
     ...f, moi: f.id === a.id, retireIci: locaux.has(f.id), retire: f.id !== a.id && (locaux.has(f.id) || !!f.retire)
   }));
-  if (!out.some((f) => f.moi)) out.push({ id: a.id, nom: a.nom, prefixe: a.prefixe_ref, vu_le: null, moi: true, retire: false });
+  // Pas encore synchronise : sa lettre n'est pas encore attribuee (elle l'est en
+  // rejoignant, selon celles deja prises) -> pas de lettre provisoire affichee.
+  if (!out.some((f) => f.moi)) out.push({ id: a.id, nom: a.nom, prefixe: null, vu_le: null, moi: true, retire: false });
   return out.sort((x, y) => (x.moi ? -1 : y.moi ? 1 : String(y.vu_le || '').localeCompare(String(x.vu_le || ''))));
 }
 

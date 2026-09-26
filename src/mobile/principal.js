@@ -26,6 +26,7 @@ const appareil = require('../main/synchro/appareil');
 const imagesUrl = require('./images-url');
 const canaux = require('./canaux');
 const drive = require('./drive');
+const { App: AppNative } = require('@capacitor/app');
 
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
 const DATA = '/data';
@@ -106,6 +107,20 @@ require('../main/preload');
 window.api.urlTuile = (nom) => imagesUrl.traduire('tuile://' + nom);
 // Poignee de diagnostic (console, tests) : jamais utilisee par l'interface.
 window.__tt = { db, synchro: require('../main/synchro/service'), fs, pret };
+
+// Bouton retour d'Android : d'abord fermer ce qui est ouvert par-dessus
+// (boite, apercu, formulaire : ils se ferment sur Echap), sinon page
+// precedente (meme chemin que les boutons lateraux de la souris sur PC) ;
+// depuis la premiere page, le rendu appelle app:quitter -> arriere-plan.
+if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+  AppNative.addListener('backButton', () => {
+    if (document.querySelector('.recouvrement, .recouvrement-apercu, .recouvrement-image')) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      return;
+    }
+    electron.emettre('app:nav', 'reculer');
+  });
+}
 
 // Mise en veille / fermeture de l'onglet : tout ecrire tout de suite.
 document.addEventListener('visibilitychange', () => {

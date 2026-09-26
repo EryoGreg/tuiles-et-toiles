@@ -2033,7 +2033,7 @@ function Options({ etat, onEtat, aller }) {
           disabled={totalMarques === 0}
           style={totalMarques === 0 ? { opacity: 0.4, cursor: 'default' } : undefined}
         >
-          <I.Croix t={14} /> Effacer toutes les marques livre / étoile / à revoir
+          <I.Croix t={14} /> Effacer toutes les marques
         </button>
         {effacementFait != null && (
           <div className="options-confirmation">
@@ -2042,8 +2042,8 @@ function Options({ etat, onEtat, aller }) {
         )}
         <div className="options-note">
           {totalMarques > 0
-            ? `${totalMarques} tuile${totalMarques > 1 ? 's' : ''} actuellement marquée${totalMarques > 1 ? 's' : ''}.`
-            : 'Aucune tuile marquée pour l’instant.'}
+            ? `${totalMarques} tuile${totalMarques > 1 ? 's' : ''} actuellement marquée${totalMarques > 1 ? 's' : ''} (livre, étoile, à revoir).`
+            : 'Aucune tuile marquée (livre, étoile, à revoir) pour l’instant.'}
         </div>
       </section>
 
@@ -2410,7 +2410,9 @@ function SectionAppareils({ syn, drv }) {
               <span className="appareil-prefixe">{a.prefixe || '?'}</span>
               <span className="appareil-nom">{a.nom || a.id}{a.moi ? ' (cet appareil)' : ''}</span>
               <span className="appareil-vu">
-                {a.retire ? (a.retireIci ? 'retiré' : 'retiré par un autre appareil') : 'dernière synchro : ' + jour(a.vu_le)}
+                {a.retire ? (a.retireIci ? 'retiré' : 'retiré par un autre appareil')
+                  : a.moi && !a.prefixe ? 'lettre attribuée à la première synchro'
+                  : 'dernière synchro : ' + jour(a.vu_le)}
               </span>
               {!a.moi && (a.retire
                 ? (a.retireIci ? <button className="bouton-neutre" onClick={() => basculer(a, false)}>Remettre</button> : <span />)
@@ -3208,7 +3210,11 @@ export default function App() {
     // D'abord fermer l'état interne de la page (aperçu, éditeur…) s'il y en a.
     if (retourInterneRef.current && retourInterneRef.current()) return;
     const h = histoRef.current;
-    if (h.pos <= 0) return;
+    if (h.pos <= 0) {
+      // Mobile : retour depuis la premiere page = l'appli passe en arriere-plan.
+      if (SUR_MOBILE) window.api.quitter();
+      return;
+    }
     h.pos -= 1;
     window.api.log('page <- ' + h.pile[h.pos] + ' (souris4)');
     setPage(h.pile[h.pos]);
