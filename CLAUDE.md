@@ -212,6 +212,11 @@ hors-ligne (règle 1).
   auto envoie ce qui reste avant de céder la place. Vérification discrète 4 s après le lancement
   (réglage `maj_auto`), rien n'est téléchargé sans clic, hors ligne → silencieux (règle 1).
   Raccourcis visant l'ancien exe : détection de raccourcis périmés.
+- **Icône des raccourcis** : jamais lue dans l'exe (la MAJ silencieuse le retire quelques
+  secondes → Windows cache une icône vide, persistante). `resources/icone.ico` copiée dans
+  `%APPDATA%\Tuiles et Toiles\icone.ico` ; au démarrage, `raccourcis.reparerIcones` repointe
+  tout .lnk visant l'exe (bureau, menu, barre — y compris les épinglages faits par Windows,
+  nommés d'après la description de l'exe) puis `ie4uinit.exe -show`.
 - Noms d'assets attendus par l'updater : `Tuiles-et-Toiles-x.y.z.exe` (`MOTIF_EXE`) et
   `Tuiles-et-Toiles-Setup-x.y.z.exe` (`MOTIF_SETUP`). Les changer casse la mise à jour des
   installations existantes.

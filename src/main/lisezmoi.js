@@ -195,6 +195,7 @@ const TEXTES = {
     'images-locales/    Images des tuiles que tu as créées.',
     'logs/              Journal de fonctionnement (utile pour signaler un bug).',
     'drive-jeton.bin    Accès Google Drive, chiffré (si tu l\'as connecté).',
+    'icone.ico          Icône des raccourcis (bureau, barre des tâches).',
     'utilisateur.db.avant-…',
     '                   Copies de sécurité faites avant un import.',
     '                   Supprimables une fois vérifié que tout va bien.',

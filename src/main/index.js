@@ -191,6 +191,12 @@ app.whenReady().then(() => {
     lisezmoi.deposer(DOSSIER_USER, 'donnees');
     lisezmoi.deposer(DOSSIER_IMAGES_LOCALES, 'images_locales');
     lisezmoi.deposer(path.join(DOSSIER_USER, 'logs'), 'logs');
+    // Icone des raccourcis hors de l'exe (voir raccourcis.js), puis raccourcis
+    // existants repointes, quelques secondes apres l'affichage.
+    raccourcis.preparerIcone(DOSSIER_USER, path.join(process.resourcesPath, 'icone.ico'));
+    setTimeout(() => {
+      try { raccourcis.reparerIcones(journal); } catch (e) { journal.erreur('app', 'raccourcis-icone', e); }
+    }, 3000);
     // Version installee : dossier du programme (remis a neuf a chaque mise a jour).
     if (maj.mode() === 'installee') lisezmoi.deposer(path.dirname(process.execPath), 'installation');
   }
