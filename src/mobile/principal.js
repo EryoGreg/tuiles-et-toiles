@@ -25,6 +25,7 @@ const etat = require('../main/synchro/etat');
 const appareil = require('../main/synchro/appareil');
 const imagesUrl = require('./images-url');
 const canaux = require('./canaux');
+const drive = require('./drive');
 
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
 const DATA = '/data';
@@ -89,7 +90,13 @@ pret.catch((e) => {
     + String(e && e.message || e) + '</p>';
 });
 
-canaux.enregistrer({ version: VERSION, dossierImagesLocales: IMAGES_LOCALES, surEcriture: planifierSauvegarde });
+drive.configurer({ webClientId: typeof __GOOGLE_WEB_CLIENT_ID__ !== 'undefined' ? __GOOGLE_WEB_CLIENT_ID__ : '' });
+const auto = canaux.enregistrer({
+  version: VERSION, dossierImagesLocales: IMAGES_LOCALES, surEcriture: planifierSauvegarde, emettre: electron.emettre
+});
+// Synchro automatique : au lancement, apres une modification, toutes les
+// 15 min tant que l'appli est ouverte, et au retour au premier plan.
+pret.then(() => auto.demarrer()).catch(() => {});
 // Tuile affichee en grand : sa grande image est gardee pour le hors-ligne.
 const EN_GRAND = new Set(['jeu:tirer', 'jeu:apercu', 'jeu:reveler']);
 electron.configurer({ attendre: pret, transformer: (canal, r) => imagesUrl.traduireTout(r, { garder: EN_GRAND.has(canal) }) });
@@ -97,7 +104,16 @@ electron.configurer({ attendre: pret, transformer: (canal, r) => imagesUrl.tradu
 // window.api : le meme preload que sur PC.
 require('../main/preload');
 window.api.urlTuile = (nom) => imagesUrl.traduire('tuile://' + nom);
+// Poignee de diagnostic (console, tests) : jamais utilisee par l'interface.
+window.__tt = { db, synchro: require('../main/synchro/service'), fs, pret };
 
 // Mise en veille / fermeture de l'onglet : tout ecrire tout de suite.
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sauverTout(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    sauverTout();
+    pret.then(() => auto.avantFermeture()).then(() => sauverTout()).catch(() => {});
+  } else {
+    pret.then(() => auto.declencher('premier-plan')).catch(() => {});
+  }
+});
 window.addEventListener('pagehide', () => { sauverTout(); });

@@ -229,7 +229,7 @@ async function tenter(corpsJson) {
   let txt;
   try {
     res = await cfg.fetch(cfg.config.url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corpsJson, signal: ctl.signal
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpsJson, signal: ctl.signal
     });
     txt = await res.text();
   } catch (e) {

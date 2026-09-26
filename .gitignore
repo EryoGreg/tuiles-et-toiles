@@ -15,6 +15,7 @@ client_secret*.json
 
 # Client OAuth Google (embarque dans l exe, pas dans le depot)
 src/main/oauth-client.json
+src/mobile/google-config.json
 
 # Fichiers temporaires SQLite et journaux d'execution
 *.db-wal

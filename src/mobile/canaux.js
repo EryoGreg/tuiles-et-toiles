@@ -15,11 +15,14 @@ const annuler = require('../main/annuler');
 const journal = require('../main/journal');
 const images = require('./images-import');
 const imagesUrl = require('./images-url');
+const drive = require('./drive');
+const synchro = require('../main/synchro/service');
+const { creerAuto } = require('../main/synchro/auto');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
   'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions']);
 
-function enregistrer({ version, dossierImagesLocales, surEcriture }) {
+function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
   // Journalise comme gerer() du PC, puis signale une ecriture possible (la
   // base est sauvegardee en differe).
   const g = (canal, fn) => gerer(canal, async (...args) => {
@@ -136,16 +139,52 @@ function enregistrer({ version, dossierImagesLocales, surEcriture }) {
   g('raccourcis:perimes', () => []);
   g('maj:verifier', () => ({ aJour: true }));
   g('copie:etat', () => null);
-  g('drive:etat', () => ({ configure: false, connecte: false }));
-  g('synchro:etat', () => ({
-    dossier: null, appareil: { id: etat.appareil().id, nom: etat.appareil().nom, prefixe: etat.appareil().prefixe_ref },
-    derniere: null, derniereDrive: null, progression: { enCours: false }, conflits: etat.conflits().length,
-    enCours: false, auto: { actif: false, pauseDrive: null }
-  }));
-  g('appareils:liste', () => []);
-  g('conflits:liste', () => []);
-  g('conflits:actualiser', () => ({ conflits: [], synchro: false }));
   g('app:quitter', () => true);
+
+  // --- Google Drive et synchro (memes modules que le PC) ------------------------
+  synchro.configurer({ dossierUser: '/data', imagesLocales: dossierImagesLocales, surProgression: (p) => emettre('synchro:progression', p) });
+  const auto = creerAuto({
+    actif: () => db.reglage('synchro_auto', '1') === '1',
+    cibles: () => (drive.etat().connecte && !db.etatSync('drive_pause_auto') ? ['drive'] : []),
+    lancer: async () => {
+      const r = await synchro.synchroniserDrive(null, null, { auto: true });
+      if (r && r.jetonMort) db.definirEtatSync('drive_pause_auto', new Date().toISOString());
+      surEcriture();
+      return r;
+    },
+    aEnvoyer: () => db.instance().prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
+    conflitsOuverts: () => db.instance().prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
+    journal
+  });
+  const etatAuto = () => ({ actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: db.etatSync('drive_pause_auto') || null });
+
+  g('drive:etat', () => drive.etat());
+  g('drive:connecter', async () => {
+    const r = await drive.connecter();
+    if (r.connecte) db.definirEtatSync('drive_pause_auto', '');
+    return { ...drive.etat(), ...r };
+  });
+  g('drive:deconnecter', () => { drive.deconnecter(); return drive.etat(); });
+  g('synchro:etat', () => ({ ...synchro.etat(), auto: etatAuto() }));
+  g('synchro:drive', async () => {
+    const r = await synchro.synchroniserDrive(() => journal.evt('drive', 'reconnexion-auto'));
+    if (!r.erreur && db.etatSync('drive_pause_auto')) db.definirEtatSync('drive_pause_auto', '');
+    return r;
+  });
+  g('appareils:liste', () => synchro.listeAppareils());
+  g('appareils:retirer', ({ id, retirer }) => synchro.retirerAppareil(id, retirer !== false));
+  g('conflits:liste', () => synchro.listeConflits());
+  g('conflits:trancher', ({ id, choix }) => {
+    annuler.action('Choix dans un conflit', () => synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant'));
+    const reste = synchro.listeConflits();
+    auto.differer(reste.length ? 'conflit-tranche' : 'conflits-resolus', reste.length ? 3000 : 0).catch(() => {});
+    return reste;
+  });
+  g('conflits:actualiser', async () => {
+    const r = await auto.declencher('ecran-conflits', { forcer: true });
+    return { conflits: synchro.listeConflits(), synchro: !!r };
+  });
+  return auto;
 }
 
 module.exports = { enregistrer };

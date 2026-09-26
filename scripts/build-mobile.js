@@ -29,15 +29,24 @@ const version = require(path.join(RACINE, 'package.json')).version;
 
   // 2. Pont + modules du processus principal
   const remplacer = {
-    'src/main/images.js': path.join(RACINE, 'src', 'mobile', 'images-import.js')
+    'src/main/images.js': path.join(RACINE, 'src', 'mobile', 'images-import.js'),
+    'src/main/drive.js': path.join(RACINE, 'src', 'mobile', 'drive.js')
   };
+  // Client OAuth Google « Web » (sa connexion native Android s'appuie dessus) :
+  // src/mobile/google-config.json { "webClientId": "…" }, hors depot.
+  let google = {};
+  try { google = JSON.parse(fs.readFileSync(path.join(RACINE, 'src', 'mobile', 'google-config.json'), 'utf8')); }
+  catch { console.log('(src/mobile/google-config.json absent : connexion Drive desactivee)'); }
   await esbuild.build({
     entryPoints: [path.join(RACINE, 'src', 'mobile', 'principal.js')],
     outfile: path.join(SORTIE, 'principal.js'),
     bundle: true, format: 'iife', platform: 'browser', target: 'es2020',
     minify: true, sourcemap: false, legalComments: 'none',
     inject: [shim('globaux.js')],
-    define: { __VERSION__: JSON.stringify(version), 'process.env.NODE_ENV': '"production"' },
+    define: {
+      __VERSION__: JSON.stringify(version), 'process.env.NODE_ENV': '"production"',
+      __GOOGLE_WEB_CLIENT_ID__: JSON.stringify(google.webClientId || '')
+    },
     alias: {
       'better-sqlite3': shim('sqlite.js'),
       fs: shim('vfs.js'),
