@@ -66,6 +66,18 @@ async function demarrer() {
   edition.configurer(IMAGES_LOCALES);
   await imagesUrl.configurer({ manifeste, locales: IMAGES_LOCALES });
   imagesUrl.surArrivee(() => {});
+  require('../main/rapport').configurer({
+    dossier: DATA + '/rapports', version: VERSION, fetch: (u, o) => fetch(u, o),
+    infos: () => ({
+      appareil: { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref }, mobile: true, agent: navigator.userAgent,
+      ecran: window.innerWidth + 'x' + window.innerHeight, oeuvres: db.compterOeuvres(), tags: db.comptesTags(),
+      images: imagesUrl.etat()
+    })
+  });
+  setTimeout(() => {
+    const rapport = require('../main/rapport');
+    if (rapport.listerAttente().length) rapport.renvoyerEnAttente().catch(() => {});
+  }, 8000);
   planifierSauvegarde();
   journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres() });
 }

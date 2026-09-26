@@ -117,6 +117,20 @@ function enregistrer({ version, dossierImagesLocales, surEcriture }) {
   g('images:etat', () => ({ ...imagesUrl.etat(), horsLigne: db.reglage('images_hors_ligne', '0') === '1' }));
   g('images:toutTelecharger', () => imagesUrl.toutTelecharger((p) => require('electron').emettre('images:progression', p)));
 
+  // --- rapport d'erreur (meme script de reception que le PC) -------------------
+  const rapport = require('../main/rapport');
+  g('rapport:choix', () => rapport.choix());
+  g('rapport:apercu', (f) => rapport.apercu(f || {}));
+  g('rapport:envoyer', async (f) => {
+    const r = await rapport.envoyer(f || {});
+    if (r.secours && r.mailto) window.location.href = r.mailto;
+    return r;
+  });
+  g('rapport:copier', async (f) => {
+    try { await navigator.clipboard.writeText(rapport.texteACopier(f || {})); return { ok: true }; }
+    catch (e) { return { erreur: 'Copie impossible : ' + e.message }; }
+  });
+
   // --- propres au poste : absents sur mobile ------------------------------------
   g('raccourcis:etat', () => null);
   g('raccourcis:perimes', () => []);

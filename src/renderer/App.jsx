@@ -662,6 +662,8 @@ function EnChantier({ nom }) {
 // a-revoir — le meme que le rail du jeu.
 // Adresse d'une image de tuile : protocole tuile:// sur PC ; le pont mobile
 // fournit sa propre traduction (pas de protocole personnalise en WebView).
+// Appli mobile : le pont mobile fournit urlTuile (voir src/mobile/principal.js).
+const SUR_MOBILE = !!(typeof window !== 'undefined' && window.api && window.api.urlTuile);
 const urlTuile = (nom) => (window.api && window.api.urlTuile ? window.api.urlTuile(nom) : 'tuile://' + nom);
 
 const PIPS = [
@@ -1318,9 +1320,9 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
               ) : (
                 <div className="editeur-image-vide">
                   <I.OeilBarre t={24} />
-                  <span>{imgEnCours ? 'import…' : 'Glisser une image ici ou cliquer'}</span>
+                  <span>{imgEnCours ? 'import…' : SUR_MOBILE ? 'Toucher pour une photo ou une image' : 'Glisser une image ici ou cliquer'}</span>
                   <span style={{ textTransform: 'none', letterSpacing: 0, opacity: 0.7 }}>
-                    {imgErreur || 'fichier ou image d’une page web · redimensionnée ≤ 500 Ko'}
+                    {imgErreur || (SUR_MOBILE ? 'appareil photo ou galerie · redimensionnée ≤ 500 Ko' : 'fichier ou image d’une page web · redimensionnée ≤ 500 Ko')}
                   </span>
                 </div>
               )}
@@ -2047,9 +2049,12 @@ function Options({ etat, onEtat, aller }) {
 
       <div className="filet" />
 
-      <SectionMaj etat={etat} definir={definir} />
-
-      <div className="filet" />
+      {etat.forme !== 'mobile' && (
+        <>
+          <SectionMaj etat={etat} definir={definir} />
+          <div className="filet" />
+        </>
+      )}
 
       <SectionImages />
 
@@ -2149,6 +2154,9 @@ function Options({ etat, onEtat, aller }) {
         </>
       )}
 
+      {/* Dossier partage et sauvegarde .zip : propres au PC (dialogues de fichiers). */}
+      {etat.forme !== 'mobile' && (
+      <>
       <div className="filet" />
 
       <section>
@@ -2247,6 +2255,9 @@ function Options({ etat, onEtat, aller }) {
           </div>
         )}
       </section>
+
+      </>
+      )}
 
       <div className="filet" />
 

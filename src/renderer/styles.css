@@ -1214,3 +1214,82 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .lien-discret { background: none; border: none; padding: 0; font: inherit; color: var(--laiton); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .lien-discret:hover { color: var(--encre-vive); }
 .maj-migration { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+/* === Telephone (appli mobile, fenetre etroite) ============================ */
+/* Le PC ne descend jamais sous 1024 px : ces regles ne le concernent pas. */
+@media (max-width: 700px) {
+  body { -webkit-tap-highlight-color: transparent; }
+
+  /* Barre laterale -> barre d'onglets en bas, icones seules. */
+  .appli { flex-direction: column; }
+  .contenu { order: 1; flex: 1 1 0; min-height: 0; }
+  .barre, .barre.repliee {
+    order: 2; width: 100%; height: auto; flex: none;
+    flex-direction: row; align-items: center; gap: 0;
+    padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+    border-right: none; border-top: 1px solid var(--trait);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .barre::-webkit-scrollbar { display: none; }
+  .barre > span[style] { display: none; }                 /* espaceur vertical */
+  .barre > .entree:first-child { display: none; }          /* replier la barre */
+  .barre > .entree:last-child { display: none; }           /* Quitter */
+  .barre .entree, .barre.repliee .entree {
+    flex: 1 0 44px; width: auto; height: 46px; min-width: 44px; padding: 0;
+    justify-content: center; position: relative;
+  }
+  .barre .libelle { display: none; }
+  .barre .compte, .barre.repliee .compte {
+    display: block; position: absolute; top: 3px; right: 4px; margin: 0;
+    font-size: 9px; line-height: 1; color: var(--discret);
+  }
+  .barre .compte.alerte { color: var(--revoir); }
+  .entree.active { box-shadow: inset 0 -2px 0 var(--laiton); }
+  .synchro-en-cours .libelle { display: none; }
+
+  /* Menu : cartes sur 2 colonnes. */
+  .cartes { grid-template-columns: repeat(2, 1fr); width: 100%; }
+  .carte { min-height: 118px; }
+
+  /* Jeu : marques en ligne au-dessus de la tuile, tuile pleine largeur. */
+  .jeu {
+    padding: 0 10px; --rail-largeur: 42px; --rail-gap: 10px; --tete-part: 46px;
+    --image-h: clamp(150px, 34vh, 320px);
+    grid-template-rows: 8px minmax(0, 1fr) 8px auto 10px;
+  }
+  .rangee-tuiles { flex-direction: column; }
+  .rail { flex-direction: row; justify-content: center; align-self: center; top: 0; width: auto; margin: 0 0 8px; }
+  .suivante { display: none; }
+  .tuile { flex: 1 1 0; min-height: 0; }
+  .tuile .tete { flex: 0 0 var(--tete-part); padding: 0 14px; }
+  .tuile .corps { padding: 12px 14px 14px; }
+  .grille2 { gap: 8px 10px; }
+  .ligne-actions, .apercu-jeu .ligne-actions { margin-left: 0; width: 100%; }
+  .ligne-actions { row-gap: 8px; }
+  .actions-gauche { gap: 10px; }
+  .actions-gauche .bouton-neutre { padding: 7px 12px; }
+  .actions-droite { width: 100%; gap: 6px; flex-wrap: nowrap; justify-content: space-between; }
+  .actions-droite > button { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+  .bouton-valide, .bouton-neutre { padding: 10px 10px; font-size: 13px; gap: 6px; }
+
+  /* Apercu, editeur : plein ecran. */
+  .recouvrement-apercu { padding: 0; }
+  .apercu-jeu { border-radius: 0; border: none; padding-left: 10px; padding-right: 10px; }
+  .editeur-jeu.apercu-jeu { padding: 0 10px; }
+
+  /* Pages : marges reduites. */
+  .galerie { padding: 18px 14px 24px; }
+  .galerie-tete { margin-bottom: 16px; gap: 12px; }
+  .galerie-tete h2 { font-size: 22px; }
+  .galerie-grille { gap: 10px; }
+  .options { padding: 20px 16px 32px; max-width: none; }
+  .nouvelle-partie { padding: 18px 14px; }
+  .edition-choix .carte { width: 100%; }
+  .edition-retour { bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .bandeau-synchro, .edition-toast { bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
+  .bandeau-annulation { bottom: calc(126px + env(safe-area-inset-bottom)); }
+  .journal-entree { grid-template-columns: 40px 44px 1fr; }
+  .journal-entree > .bouton-neutre, .journal-absente { grid-column: 3; justify-self: start; }
+  .appareil { grid-template-columns: 26px 1fr auto; }
+  .appareil-vu { grid-column: 2; }
+}
