@@ -56,8 +56,13 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   `headRevisionId` distant retenu dans la table `sync` (`drive_rev`, `drive_synchro_le`).
   Jeton (refresh_token) chiffré `safeStorage` → `%APPDATA%\Tuiles et Toiles\drive-jeton.bin`.
   Client OAuth : `src/main/oauth-client.json` (gitignoré, embarqué dans l'asar). Projet Google
-  Cloud `tuiles-et-toiles`, écran de consentement en **Testing** → chaque testeur à ajouter en
-  *test user*, ou publier l'app (sinon le jeton expire tous les 7 jours : `invalid_grant`).
+  Cloud **`dislike-334115`** (nom affiché « Dislike » ; le projet `tuiles-et-toiles` n'est PAS
+  celui du client). Écran de consentement **en production** depuis le 26/09/2026 (Google Auth
+  Platform → Audience) : nom « Tuiles et Toiles », accueil et confidentialité sur GitHub Pages
+  (`docs/`, `https://eryogreg.github.io/tuiles-et-toiles/`), domaine autorisé
+  `eryogreg.github.io`, pas de logo (un logo imposerait une vérification). Seul scope
+  `drive.file` (non sensible) → pas de vérification. Jetons obtenus en mode test : expiraient à
+  7 jours (`invalid_grant`) ; reconnecter une fois après la publication.
   **Sauvegarder / Restaurer (zip complet sur Drive) retirés en 0.3** : la synchro fait mieux, et
   Restaurer remplaçait la base. `utilisateur.zip` et `historique/` restent sur les Drive
   existants, importables (fusion). Options → « Google Drive » : Synchroniser / Déconnecter.
