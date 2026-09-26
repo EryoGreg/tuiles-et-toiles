@@ -27,6 +27,7 @@ const imagesUrl = require('./images-url');
 const canaux = require('./canaux');
 const drive = require('./drive');
 const { App: AppNative } = require('@capacitor/app');
+const reseau = require('./reseau');
 
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
 const DATA = '/data';
@@ -61,6 +62,9 @@ async function demarrer() {
   ]);
   fs.writeFileSync(PACK, new Uint8Array(pack));
   journal.configurer(DATA + '/logs', { version: VERSION, mobile: true, agent: navigator.userAgent }, { console: false });
+  // Fichier illisible dans le stockage (appli tuee en pleine ecriture) : ignore
+  // plutot que de bloquer le demarrage ; la synchro retablit les donnees.
+  if (fs.illisibles().length) journal.avertir('app', 'fichiers-illisibles', { fichiers: fs.illisibles() });
 
   const moi = appareil.charger(DATA, { nom: os.hostname() });
   etat.configurer({ appareil: moi });
@@ -97,7 +101,10 @@ const auto = canaux.enregistrer({
 });
 // Synchro automatique : au lancement, apres une modification, toutes les
 // 15 min tant que l'appli est ouverte, et au retour au premier plan.
-pret.then(() => auto.demarrer()).catch(() => {});
+pret.then(() => reseau.demarrer()).then(() => auto.demarrer()).catch(() => {});
+// En donnees mobiles, une grande image affichee n'est pas telechargee une
+// seconde fois pour le cache.
+imagesUrl.cachePermis(() => reseau.wifi());
 // Tuile affichee en grand : sa grande image est gardee pour le hors-ligne.
 const EN_GRAND = new Set(['jeu:tirer', 'jeu:apercu', 'jeu:reveler']);
 electron.configurer({ attendre: pret, transformer: (canal, r) => imagesUrl.traduireTout(r, { garder: EN_GRAND.has(canal) }) });
@@ -127,8 +134,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     sauverTout();
     pret.then(() => auto.avantFermeture()).then(() => sauverTout()).catch(() => {});
-  } else {
-    pret.then(() => auto.declencher('premier-plan')).catch(() => {});
   }
+  // Retour au premier plan : pas de synchro systematique (donnees mobiles).
+  // La surveillance d'auto.js la lancera si la derniere a plus de 15 min.
 });
 window.addEventListener('pagehide', () => { sauverTout(); });

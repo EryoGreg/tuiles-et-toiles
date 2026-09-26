@@ -232,6 +232,22 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   client Android « Tuiles et Toiles - Android (debug) ». `MainActivity.java` implémente
   `ModifiedMainActivityForSocialLoginPlugin` et relaie `onActivityResult` au module : sans ça, le
   module refuse l'autorisation Drive (« You CANNOT use scopes without modifying the main activity »).
+- **Stockage (vfs)** : chaque fichier en **morceaux de < 60 Ko** dans IndexedDB (clé = `{ mtime,
+  taille, n }`, morceaux `clé␀#i`, une transaction par sauvegarde). Au-delà, Chromium range la
+  valeur dans un fichier annexe qui peut manquer si l'appli est tuée en pleine écriture →
+  « Failed to read large IndexedDB value », plus rien ne démarrait (vu sur l'émulateur). Un
+  fichier illisible est ignoré (`fs.illisibles()`, journalisé) au lieu de bloquer ; ancien
+  format relu puis réécrit. `fs.promises` existe (le transport Drive range les images reçues
+  par `transport-dossier.ecrireAtomique`, asynchrone).
+- **Données mobiles** : réglage `synchro_wifi` (« Seulement en Wi-Fi », actif par défaut,
+  `@capacitor/network` via `src/mobile/reseau.js`) → `auto.reseauPermis` : rien d'automatique
+  hors Wi-Fi, un geste explicite passe. Pas de synchro au retour au premier plan (la
+  surveillance la lance si la dernière a plus de 15 min). Hors Wi-Fi, une grande image affichée
+  n'est pas re-téléchargée pour le cache.
+- **Photo** : `edition:prendrePhoto` (mobile) → `@capacitor/camera` `takePhoto`, puis même import ;
+  boutons « Prendre une photo » / « Galerie » dans l'éditeur. Retour Android (`@capacitor/app`
+  `backButton`) : Échap si une boîte est ouverte, sinon `app:nav` « reculer » ; à la racine,
+  `app:quitter` = `minimizeApp`. Icônes : `node scripts/icones-android.js`.
 - `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
   `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
 

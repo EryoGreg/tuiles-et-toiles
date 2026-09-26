@@ -26,6 +26,7 @@ const enCache = new Set();
 const urls = new Map();       // cle -> URL blob
 const enVol = new Map();
 const ecouteurs = new Set();  // notifies quand une grande image arrive
+let cacheOk = () => true;     // mobile : faux en donnees mobiles
 const pretes = new Map();     // nom -> URL blob d'une grande image en cache
 
 function ouvrirIdb() {
@@ -126,7 +127,7 @@ function traduire(url, { garder = false } = {}) {
   if (pretes.get(nom)) return pretes.get(nom);
   if (enCache.has(nom)) { preparer(nom); return vignette(nom); }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return vignette(nom);
-  if (garder) telecharger(nom).then((ok) => { if (ok) preparer(nom); });
+  if (garder && cacheOk()) telecharger(nom).then((ok) => { if (ok) preparer(nom); });
   return distante(nom);
 }
 
@@ -163,4 +164,7 @@ async function toutTelecharger(surProgression) {
   return { faites, echecs, restantes: Object.keys(manifeste.images).filter((n) => !enCache.has(n)).length };
 }
 
-module.exports = { configurer, traduire, traduireTout, etat, toutTelecharger, surArrivee: (f) => ecouteurs.add(f) };
+module.exports = {
+  configurer, traduire, traduireTout, etat, toutTelecharger,
+  surArrivee: (f) => ecouteurs.add(f), cachePermis: (f) => { cacheOk = f; }
+};

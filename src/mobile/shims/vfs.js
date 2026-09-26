@@ -59,21 +59,59 @@ function ouvrirIdb() {
 }
 let idb = null;
 
+// Chaque fichier est range en MORCEAUX de moins de 60 Ko : au-dela, Chromium
+// (WebView d'Android) range la valeur dans un fichier annexe, qui peut manquer
+// si l'appli est tuee pendant l'ecriture -> « Failed to read large IndexedDB
+// value » et plus rien ne se lit. Cle du fichier = { mtime, taille, n } ;
+// morceaux = cle + SEP + i. Ancien format (un seul enregistrement { octets }) :
+// relu, puis reecrit en morceaux.
+const MORCEAU = 60000;
+const SEP = '\u0000#';
+const nbMorceaux = new Map();   // chemin -> n ecrit en base (pour effacer les restes)
+const illisibles = [];          // fichiers ignores au chargement (journalises ensuite)
+
+function lireCle(store, cle) {
+  return new Promise((ok) => {
+    const r = store.get(cle);
+    r.onsuccess = () => ok({ valeur: r.result });
+    // preventDefault : un enregistrement illisible ne doit pas annuler la
+    // transaction (et donc la lecture de tous les autres).
+    r.onerror = (e) => { e.preventDefault(); e.stopPropagation(); ok({ erreur: r.error }); };
+  });
+}
+
 /** Charge en memoire tous les fichiers sauvegardes. A attendre avant tout. */
 async function charger() {
   idb = await ouvrirIdb();
-  await new Promise((ok, ko) => {
-    const t = idb.transaction(MAGASIN, 'readonly');
-    const req = t.objectStore(MAGASIN).openCursor();
-    req.onsuccess = () => {
-      const c = req.result;
-      if (!c) { ok(); return; }
-      const { octets, mtime } = c.value;
-      ecrireMemoire(String(c.key), new Uint8Array(octets), mtime);
-      c.continue();
-    };
-    req.onerror = () => ko(req.error);
+  const t = idb.transaction(MAGASIN, 'readonly');
+  const store = t.objectStore(MAGASIN);
+  const cles = await new Promise((ok, ko) => {
+    const r = store.getAllKeys();
+    r.onsuccess = () => ok(r.result.map(String));
+    r.onerror = () => ko(r.error);
   });
+  for (const cle of cles) {
+    if (cle.includes(SEP)) continue;
+    const { valeur, erreur: err } = await lireCle(store, cle);
+    if (err || !valeur) { illisibles.push({ chemin: cle, erreur: String(err && err.message || 'vide') }); continue; }
+    if (valeur.octets) {                           // ancien format : a reecrire
+      ecrireMemoire(cle, new Uint8Array(valeur.octets), valeur.mtime);
+      aSauver.add(cle);
+      continue;
+    }
+    const tout = new Uint8Array(valeur.taille || 0);
+    let ok = true;
+    for (let i = 0, pos = 0; i < valeur.n; i++) {
+      const m = await lireCle(store, cle + SEP + i);
+      if (m.erreur || !m.valeur) { ok = false; break; }
+      const o = new Uint8Array(m.valeur);
+      tout.set(o, pos); pos += o.length;
+    }
+    if (!ok) { illisibles.push({ chemin: cle, erreur: 'morceau manquant' }); continue; }
+    ecrireMemoire(cle, tout, valeur.mtime);
+    nbMorceaux.set(cle, valeur.n);
+  }
+  if (aSauver.size) planifier([...aSauver][0]);   // migration vers les morceaux
 }
 
 /** Sauvegarde ce qui a change (appele en differe ; aussi a la mise en veille). */
@@ -84,10 +122,23 @@ function sauver() {
   return new Promise((ok) => {
     const t = idb.transaction(MAGASIN, 'readwrite');
     const s = t.objectStore(MAGASIN);
-    for (const p of ecrire) { const f = fichiers.get(p); if (f) s.put({ octets: f.octets, mtime: f.mtime }, p); }
-    for (const p of effacer) s.delete(p);
+    const avant = new Map(nbMorceaux);
+    for (const p of ecrire) {
+      const f = fichiers.get(p);
+      if (!f) continue;
+      const n = Math.max(1, Math.ceil(f.octets.length / MORCEAU));
+      for (let i = 0; i < n; i++) s.put(f.octets.slice(i * MORCEAU, (i + 1) * MORCEAU), p + SEP + i);
+      for (let i = n; i < (avant.get(p) || 0); i++) s.delete(p + SEP + i);
+      s.put({ mtime: f.mtime, taille: f.octets.length, n }, p);
+      nbMorceaux.set(p, n);
+    }
+    for (const p of effacer) {
+      for (let i = 0; i < (avant.get(p) || 0); i++) s.delete(p + SEP + i);
+      s.delete(p);
+      nbMorceaux.delete(p);
+    }
     t.oncomplete = () => ok();
-    t.onerror = () => { for (const p of ecrire) aSauver.add(p); ok(); };
+    t.onerror = () => { for (const p of ecrire) aSauver.add(p); for (const [k, v] of avant) nbMorceaux.set(k, v); ok(); };
   });
 }
 
@@ -194,5 +245,5 @@ module.exports = {
     copyFile: async (a, b) => copyFileSync(a, b)
   },
   // propres au mobile
-  charger, sauver, _fichiers: fichiers
+  charger, sauver, _fichiers: fichiers, illisibles: () => illisibles.slice()
 };

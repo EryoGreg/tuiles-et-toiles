@@ -1236,6 +1236,14 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
     catch (err) { echecImage('selecteur', err); }
     finally { setImgEnCours(false); }
   };
+  // Mobile : photo prise sur le moment (au musee), sans passer par la galerie.
+  const photographier = async () => {
+    if (imgEnCours || champs.image) return;
+    setImgEnCours(true);
+    try { poser(await window.api.edition.prendrePhoto()); }
+    catch (err) { echecImage('appareil-photo', err); }
+    finally { setImgEnCours(false); }
+  };
   const deposer = async (e) => {
     e.preventDefault();
     setSurvol(false);
@@ -1299,7 +1307,7 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
           <div className="corps">
             <div
               className={'cadre-image editeur-image' + (survol ? ' survol' : '')}
-              onClick={choisir}
+              onClick={SUR_MOBILE ? undefined : choisir}
               onDragOver={(e) => { e.preventDefault(); setSurvol(true); }}
               onDragLeave={() => setSurvol(false)}
               onDrop={deposer}
@@ -1320,7 +1328,13 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
               ) : (
                 <div className="editeur-image-vide">
                   <I.OeilBarre t={24} />
-                  <span>{imgEnCours ? 'import…' : SUR_MOBILE ? 'Toucher pour une photo ou une image' : 'Glisser une image ici ou cliquer'}</span>
+                  <span>{imgEnCours ? 'import…' : SUR_MOBILE ? 'Image de la tuile' : 'Glisser une image ici ou cliquer'}</span>
+                  {SUR_MOBILE && !imgEnCours && (
+                    <span className="editeur-image-boutons">
+                      <button className="bouton-valide" onClick={photographier}><I.Appareil t={16} /> Prendre une photo</button>
+                      <button className="bouton-neutre" onClick={choisir}>Galerie</button>
+                    </span>
+                  )}
                   <span style={{ textTransform: 'none', letterSpacing: 0, opacity: 0.7 }}>
                     {imgErreur || (SUR_MOBILE ? 'appareil photo ou galerie · redimensionnée ≤ 500 Ko' : 'fichier ou image d’une page web · redimensionnée ≤ 500 Ko')}
                   </span>
@@ -2139,6 +2153,23 @@ function Options({ etat, onEtat, aller }) {
               {syn.auto && syn.auto.actif ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
               Synchroniser automatiquement
             </button>
+            {syn.auto && syn.auto.mobile && (
+              <button
+                className={'raccourci-bouton' + (syn.auto.wifiSeulement ? ' pose' : '')}
+                onClick={async () => {
+                  await window.api.reglages.definir('synchro_wifi', syn.auto.wifiSeulement ? '0' : '1');
+                  setSyn(await window.api.synchro.etat());
+                }}
+              >
+                {syn.auto.wifiSeulement ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
+                Seulement en Wi-Fi
+              </button>
+            )}
+            {syn.auto && syn.auto.mobile && syn.auto.wifiSeulement && !syn.auto.wifi && (
+              <div className="options-note">
+                En données mobiles : la synchro automatique attend le Wi-Fi. « Synchroniser » reste disponible.
+              </div>
+            )}
             {syn.auto && syn.auto.pauseDrive && drv.connecte && (
               <div className="options-note" style={{ color: 'var(--revoir)' }}>
                 Session Google expirée : la synchro automatique avec Drive est en pause. Clique

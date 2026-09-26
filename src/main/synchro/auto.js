@@ -37,6 +37,7 @@ const DELAIS = {
  *   lancer: (cible, raison) => Promise<object>,   // resultat de service.synchroniser*
  *   aEnvoyer: () => number,                 // ops locales pas encore parties
  *   conflitsOuverts?: () => number,
+ *   reseauPermis?: () => boolean,           // mobile : faux en donnees mobiles si « Wi-Fi seulement »
  *   journal?: { evt, avertir },
  *   maintenant?: () => number,
  *   delais?: object
@@ -53,8 +54,11 @@ function creerAuto(o) {
   let changeLe = 0;            // quand ce nombre a bouge
   let minuteurs = [];
 
-  async function executer(raison) {
+  async function executer(raison, { forcer = false } = {}) {
     if (enCours) return enCours;
+    // Pas de synchro automatique hors Wi-Fi si l'utilisateur l'a demande ; un
+    // geste explicite (conflit tranche…) passe quand meme.
+    if (!forcer && o.reseauPermis && !o.reseauPermis()) return null;
     const cibles = o.cibles();
     if (!cibles.length) return null;
     enCours = (async () => {
@@ -112,7 +116,7 @@ function creerAuto(o) {
   async function declencher(raison, { forcer = false } = {}) {
     if (!forcer && (!o.actif() || maintenant() < reprendreApres)) return null;
     if (forcer && enCours) { try { await enCours; } catch { /* sans importance */ } }
-    return executer(raison);
+    return executer(raison, { forcer });
   }
 
   let minuteurDiffere = null;

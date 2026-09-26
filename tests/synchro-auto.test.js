@@ -17,12 +17,13 @@ async function test(nom, fn) {
 }
 
 function monde(o = {}) {
-  const m = { t: 1e12, attente: 0, conflits: 0, actif: true, cibles: ['drive'], appels: [], reponse: () => ({}) };
+  const m = { t: 1e12, attente: 0, conflits: 0, wifi: true, actif: true, cibles: ['drive'], appels: [], reponse: () => ({}) };
   m.auto = creerAuto({
     actif: () => m.actif,
     cibles: () => m.cibles,
     aEnvoyer: () => m.attente,
     conflitsOuverts: () => m.conflits,
+    reseauPermis: () => m.wifi,
     lancer: async (cible, raison) => {
       m.appels.push(cible + ':' + raison);
       const r = await m.reponse(cible, raison);
@@ -149,6 +150,20 @@ function monde(o = {}) {
     assert.deepEqual(m.appels, ['drive:conflit-tranche']);
     await m.auto.differer('conflits-resolus', 0);
     assert.deepEqual(m.appels, ['drive:conflit-tranche', 'drive:conflits-resolus']);
+  });
+
+  await test('Wi-Fi seulement : rien d\'automatique en donnees mobiles, un geste explicite passe', async () => {
+    const m = monde();
+    m.wifi = false;
+    m.attente = 3;
+    await m.avancer(20 * 60e3);
+    assert.deepEqual(m.appels, [], 'ni modification ni periodique');
+    await m.auto.declencher('conflit-tranche', { forcer: true });
+    assert.deepEqual(m.appels, ['drive:conflit-tranche']);
+    m.wifi = true;
+    m.attente = 1;
+    await m.avancer(45e3);
+    assert.equal(m.appels[m.appels.length - 1], 'drive:modification', 'le Wi-Fi revenu, tout repart');
   });
 
   await test('fermeture : envoie ce qui reste, attend au plus le delai', async () => {

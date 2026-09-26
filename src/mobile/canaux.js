@@ -18,6 +18,7 @@ const imagesUrl = require('./images-url');
 const drive = require('./drive');
 const synchro = require('../main/synchro/service');
 const { creerAuto } = require('../main/synchro/auto');
+const reseau = require('./reseau');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
   'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions']);
@@ -112,6 +113,21 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
     input.oncancel = () => ok(null);
     input.click();
   }));
+  // Appareil photo (@capacitor/camera) : la photo prise est lue puis passe par
+  // le meme import (redimensionnee, <= 500 Ko) qu'une image choisie.
+  g('edition:prendrePhoto', async () => {
+    let r;
+    try { r = await require('@capacitor/camera').Camera.takePhoto({ quality: 90, correctOrientation: true }); }
+    catch (e) {
+      if (/cancel|annul/i.test(String(e && e.message))) return null;   // l'utilisateur a renonce
+      journal.erreur('image', 'appareil-photo', e);
+      return { erreur: 'Appareil photo indisponible : ' + (e && e.message || e) };
+    }
+    const chemin = r && (r.webPath || r.uri);
+    if (!chemin) return null;
+    const octets = new Uint8Array(await (await fetch(chemin)).arrayBuffer());
+    return images.importer(octets, dossierImagesLocales, { origine: 'appareil-photo', octets: octets.length });
+  });
   g('edition:importerImage', (octets, meta) => images.importer(new Uint8Array(octets), dossierImagesLocales, { origine: 'depot', ...(meta || {}) }));
   g('edition:importerImageUrl', () => ({ erreur: 'Sur mobile, choisis l’image dans ta galerie ou prends une photo.' }));
   g('edition:oublierImage', (nom) => edition.oublierImage(nom));
@@ -158,9 +174,14 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
     },
     aEnvoyer: () => db.instance().prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
     conflitsOuverts: () => db.instance().prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
+    // « Wi-Fi seulement » (actif par defaut) : rien d'automatique en donnees mobiles.
+    reseauPermis: () => db.reglage('synchro_wifi', '1') !== '1' || reseau.wifi(),
     journal
   });
-  const etatAuto = () => ({ actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: db.etatSync('drive_pause_auto') || null });
+  const etatAuto = () => ({
+    actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: db.etatSync('drive_pause_auto') || null,
+    wifiSeulement: db.reglage('synchro_wifi', '1') === '1', wifi: reseau.wifi(), mobile: true
+  });
 
   g('drive:etat', () => drive.etat());
   g('drive:connecter', async () => {
