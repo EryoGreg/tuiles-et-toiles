@@ -287,11 +287,12 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 .appli { display: flex; height: 100%; }
 
-/* % de la fenetre entiere (.appli), pas de .contenu : depliee 15%, repliee
+/* % de la fenetre entiere (.appli), pas de .contenu : depliee 15% (plancher
+   190px : en dessous, « Bibliotheque » + son compteur debordaient), repliee
    4% — .contenu (flex: 1 1 auto) recupere automatiquement le reste, donc
    grandit exactement de ce que la barre perd. */
 .barre {
-  width: 15%;
+  width: clamp(190px, 15%, 320px);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -317,7 +318,8 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .barre.repliee .entree { width: 42px; height: 42px; padding: 0; justify-content: center; }
 .entree:hover { background: rgba(255, 255, 255, 0.03); color: var(--encre); }
 .entree.active { background: var(--surface-2); color: var(--encre-vive); box-shadow: inset 2px 0 0 var(--laiton); }
-.entree .libelle { font-size: 13.5px; }
+.entree .libelle { font-size: 13.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entree > svg { flex: none; }
 .entree .compte { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--efface); }
 
 .contenu { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
