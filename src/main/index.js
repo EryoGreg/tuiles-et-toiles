@@ -29,6 +29,7 @@ const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
 const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
+const imagesDistantes = require('./images-distantes');
 const annuler = require('./annuler');
 
 // Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
@@ -42,8 +43,12 @@ const DATA_LIVRE = DEV
   ? path.resolve(__dirname, '..', '..', 'data')
   : path.join(process.resourcesPath, 'data');
 
-// Images du pack : servies telles quelles depuis le paquet, jamais recopiees.
+// Images du pack (images-distantes.js) : vignettes embarquees, grandes images
+// telechargees a la demande dans un cache. En dev, data/images/ sert de source
+// locale (TT_SANS_IMAGES=1 pour tester le telechargement).
 const DOSSIER_IMAGES = path.join(DATA_LIVRE, 'images');
+const DOSSIER_VIGNETTES = path.join(DATA_LIVRE, 'vignettes');
+const MANIFESTE_IMAGES = path.join(DATA_LIVRE, 'images-manifest.json');
 
 // Emplacement inscriptible : %APPDATA%\Tuiles et Toiles (pas a cote de l'exe,
 // pas dans le cache temporaire du stub portable). En dev : le depot.
@@ -201,18 +206,27 @@ app.whenReady().then(() => {
     if (maj.mode() === 'installee') lisezmoi.deposer(path.dirname(process.execPath), 'installation');
   }
 
-  protocol.handle('tuile', (requete) => {
-    const brut = decodeURIComponent(new URL(requete.url).hostname
-      + new URL(requete.url).pathname).replace(/^\/+/, '');
+  imagesDistantes.configurer({
+    cache: path.join(DOSSIER_USER, 'images-cache'),
+    vignettes: DOSSIER_VIGNETTES,
+    embarquees: process.env.TT_SANS_IMAGES ? null : DOSSIER_IMAGES,
+    manifeste: MANIFESTE_IMAGES,
+    fetch: (url, opts) => net.fetch(url, opts),
+    journal, lisezmoi
+  });
+  // tuile://<nom> : image entiere ; tuile://mini/<nom> : vignette (grilles).
+  // Image d'une tuile creee d'abord (images-locales), puis image du pack.
+  protocol.handle('tuile', async (requete) => {
+    const u = new URL(requete.url);
+    const brut = decodeURIComponent(u.hostname + u.pathname).replace(/^\/+/, '');
+    const mini = brut.startsWith('mini/');
     const nom = path.basename(brut);
-    // Image locale d'abord (tuile creee), puis image du pack.
-    for (const dossier of [DOSSIER_IMAGES_LOCALES, DOSSIER_IMAGES]) {
-      const cible = path.join(dossier, nom);
-      if (cible.startsWith(dossier) && fs.existsSync(cible)) {
-        return net.fetch(pathToFileURL(cible).toString());
-      }
+    const locale = path.join(DOSSIER_IMAGES_LOCALES, nom);
+    if (locale.startsWith(DOSSIER_IMAGES_LOCALES) && fs.existsSync(locale)) {
+      return net.fetch(pathToFileURL(locale).toString());
     }
-    return new Response('', { status: 404 });
+    const cible = await imagesDistantes.chemin(nom, { mini });
+    return cible ? net.fetch(pathToFileURL(cible).toString()) : new Response('', { status: 404 });
   });
 
   // Identite de l'installation (appareil.json, hors utilisateur.db) : avant
@@ -236,6 +250,16 @@ app.whenReady().then(() => {
     aDesDonnees: () => db.instance().prepare('SELECT COUNT(*) n FROM etat').get().n > 0
   });
   const copier = () => { try { copieSecurite.siBesoin(); } catch (e) { journal.erreur('sauvegarde', 'copie-securite', e); } };
+  // Grandes images pour le hors-ligne (reglage images_hors_ligne, actif par
+  // defaut sur PC) : 90 s apres le lancement, puis toutes les 30 min tant
+  // qu'il en manque (hors ligne : on reessaie plus tard).
+  const imagesHorsLigne = () => {
+    if (db.reglage('images_hors_ligne', '1') !== '1') return;
+    if (!imagesDistantes.etat().nombre || imagesDistantes.etat().presentes >= imagesDistantes.etat().nombre) return;
+    imagesDistantes.toutTelecharger(diffuserImages).catch((e) => journal.erreur('image', 'hors-ligne', e));
+  };
+  setTimeout(imagesHorsLigne, 90e3);
+  setInterval(imagesHorsLigne, 30 * 60e3);
   setTimeout(copier, 60e3);
   setInterval(copier, 6 * 3600e3);
   synchro.configurer({
@@ -336,7 +360,7 @@ function infosRapport() {
 // Chaque canal est journalise : arguments resumes, duree, resultat ou erreur.
 // Lectures appelees en boucle -> DEBUG ; resultat { erreur } -> WARN.
 const ROUTINE = new Set([
-  'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'annuler:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
+  'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'annuler:etat', 'images:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
   'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero',
   'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile'
 ]);
@@ -504,6 +528,8 @@ gerer('sauvegarde:importer', (_e, chemin) => {
 });
 
 gerer('copie:etat', () => copieSecurite.etat());
+gerer('images:etat', () => ({ ...imagesDistantes.etat(), horsLigne: db.reglage('images_hors_ligne', '1') === '1' }));
+gerer('images:toutTelecharger', async () => imagesDistantes.toutTelecharger(diffuserImages));
 gerer('copie:ouvrir', async () => {
   const { dossier } = copieSecurite.etat();
   if (!fs.existsSync(dossier)) return { erreur: 'Aucune copie pour l’instant.' };
@@ -522,6 +548,11 @@ gerer('drive:deconnecter', () => { drive.deconnecter(); journal.evt('drive', 'de
 // Jeton refuse par Google en cours de synchro : drive.js relance le flux
 // OAuth ; le rendu l'apprend par la progression de la synchro (etape reconnexion).
 const surReconnexionDrive = () => () => journal.evt('drive', 'reconnexion-auto');
+
+// Progression du telechargement des images, vers toutes les fenetres.
+function diffuserImages(p) {
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('images:progression', p);
+}
 
 // Synchro automatique (synchro/auto.js) vers chaque cible configuree et
 // joignable : Google Drive (sauf pause apres une session expiree : pas de

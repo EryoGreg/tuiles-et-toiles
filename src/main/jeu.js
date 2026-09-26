@@ -176,6 +176,7 @@ function completer(o, enConflit) {
     ref: o.ref,
     estLocale: !!o.est_locale,
     image: o.image ? 'tuile://' + o.image : null,
+    vignette: o.image ? 'tuile://mini/' + o.image : null,   // grilles
     artiste: o.artiste,
     titre: o.titre,
     date: o.date,

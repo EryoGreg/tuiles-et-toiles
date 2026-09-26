@@ -207,6 +207,17 @@ const TEXTES = {
     'données (.zip) », ou la synchro entre appareils.'
   ],
 
+  images_cache: [
+    ...titre('images-cache/'),
+    'Grandes images des œuvres du pack, téléchargées par Tuiles et Toiles',
+    'depuis son dépôt public (github.com/EryoGreg/tuiles-et-toiles) pour',
+    'les afficher sans connexion. Chaque fichier est vérifié à l\'arrivée.',
+    '',
+    'Tu peux supprimer ce dossier pour gagner de la place : l\'application',
+    'retéléchargera les images au besoin (en attendant, elle montre une',
+    'version réduite).'
+  ],
+
   images_locales: [
     ...titre('images-locales/'),
     'Images des tuiles que tu as créées dans Tuiles et Toiles, sur cet',

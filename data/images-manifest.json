@@ -1,0 +1,1729 @@
+{
+ "ref": "images-1",
+ "images": {
+  "36-vues-de-la-tour-eiffel_1888-1902.jpg": {
+   "octets": 48018,
+   "sha256": "47bc4d89df0e4c9dca39380d8d95b6e87ba86522142d254ba176a643ac36bac5"
+  },
+  "absinthe-robette_1896.jpg": {
+   "octets": 49964,
+   "sha256": "db303ba9b9b9db125f2d2f93920d4ed917d3fcc5b530889956a9fdda0f242f29"
+  },
+  "adelaide-de-france-en-diane_1745.jpg": {
+   "octets": 48421,
+   "sha256": "150e4da36e791251a0398e1bc9a8f00d94af0e1034c9e084e7b402f61da7a6f7"
+  },
+  "affiche-de-la-compagnie-generale-transatlantique_1935.jpg": {
+   "octets": 102336,
+   "sha256": "9bfc31bdc1894c52ff01888f804b12e02b8daac439783e17930024ce82b77fbe"
+  },
+  "aficionado_1912.jpg": {
+   "octets": 194654,
+   "sha256": "1bbda330d97fb6065ff3e3890341801656e941ab2d0781519038c6f7af328a60"
+  },
+  "aigle-de-suger_vers-1130-1140.jpg": {
+   "octets": 48365,
+   "sha256": "c309e1fbb964914728118941e9d45d9ee8de896fb10b8783901fce2329484c18"
+  },
+  "aiguiere-et-bassin-dits-de-charles-quint_1558-1559.jpg": {
+   "octets": 50380,
+   "sha256": "46c6511579073bf886db12cc2052785e02aabbabb26376227a583bd6d980ea57"
+  },
+  "aiguiere-ornementale_vers-1570.jpg": {
+   "octets": 38230,
+   "sha256": "32f3dc5fde5345802a2a8722832c8b975bcd997356b0ff13ac83843bcb350ce5"
+  },
+  "amulette-mahes_700-500-av-j-c.jpg": {
+   "octets": 12674,
+   "sha256": "98d4026a08c2dd9969eb2010bc1c5996cfe995a760bcdc61d565b2cf638a7e60"
+  },
+  "apollon-vainqueur-du-serpent-python_1850-1851.jpg": {
+   "octets": 68696,
+   "sha256": "58a2f572d4425aef004b981f0e388606a1578ce23e4b2b328b9e80ceec939437"
+  },
+  "arc-de-triomphe-du-carrousel_1806-1810.jpg": {
+   "octets": 175245,
+   "sha256": "e01a45690ec6108ccb30d134631cef7cf104095303a6d0464900d13b28f61593"
+  },
+  "arlequin_vers-1740.jpg": {
+   "octets": 32473,
+   "sha256": "3d6a99ddbad16599e7703d2bf8a55e10f3137f9aac597a0bb9f25962bc595b9a"
+  },
+  "assiette-modele-palme_1929.jpg": {
+   "octets": 40407,
+   "sha256": "f6c2d3bdeb29ca154e7290460f3733a23799fbaf3246de7f15977e7e3f69bf7e"
+  },
+  "atelier-rouge_1911.jpg": {
+   "octets": 222633,
+   "sha256": "11283bda00eebf30a8142c9c62171429e34abd44dd436d03316d9b6d28abe1ae"
+  },
+  "athenienne_1801-1804.jpg": {
+   "octets": 40527,
+   "sha256": "feaf107c83ffc5ae42a304e9b6a3c300fdc4293883868af3b1940283a97be27a"
+  },
+  "autoportrait-a-l-index-ou-autoportrait-en-rieur_1737.jpg": {
+   "octets": 41734,
+   "sha256": "c8495fe713a3aac3e0f5e018ea55e4ce24aa1c29d4d1d7d5012f1f93af5adefd"
+  },
+  "autoportrait-a-la-bouche-ouverte_1628-1629.jpg": {
+   "octets": 194105,
+   "sha256": "3f5fafb1fd6590680f0a361f5b54dda2c4a36539f83da239e886501a8e984a7a"
+  },
+  "autoportrait-au-chevalet_1800.jpg": {
+   "octets": 68915,
+   "sha256": "72247f51a0ccce3fb08aad597b51f5a84b480af365b78f3452d7d5365bc57f52"
+  },
+  "autoportrait-dit-aussi-le-desespere_1844-1845.jpg": {
+   "octets": 369159,
+   "sha256": "6ce057c0406749d53c59bf585d321a1f0285e657f139c55926ffd325314928a7"
+  },
+  "autoportrait-en-bugatti-verte_1929.jpg": {
+   "octets": 35874,
+   "sha256": "ea8752a036b1b69e9815be9f766f0725e170244b2d71571d99e585fcdfd90a67"
+  },
+  "autoportrait_1901.jpg": {
+   "octets": 17575,
+   "sha256": "46d73e5190fdd831f5a303ef3e4c58be5e801efa5fe828f67c3172d82e0759d4"
+  },
+  "bague-en-bois-et-resine-epoxy_sans-titre.jpg": {
+   "octets": 38020,
+   "sha256": "6be465a9974939b7acb619829e38d7eaa52e2a2b54a502acb9d585ee9385a594"
+  },
+  "baigneurs-sur-la-plage-de-trouville_1869.jpg": {
+   "octets": 45508,
+   "sha256": "a6db74c38533f730e5e029241e26c732e0d0e6f3f4ab275228f3a57c6b69611d"
+  },
+  "ball-clock_1948.jpg": {
+   "octets": 65795,
+   "sha256": "7f8a0bf027c9d4623fb41e8a961df6dbe7c452e7406df6a08f9c78f70eea725a"
+  },
+  "balustrade-pour-le-chambre-de-napoleon-aux-tuile_1804.jpg": {
+   "octets": 104699,
+   "sha256": "59608983f666020a5d8cc9b35b431bfac49b74298a013d0eb1fa5914fe8e17c7"
+  },
+  "banc-davioud_annees-1860.jpg": {
+   "octets": 140820,
+   "sha256": "e78624f32e14f251ce38cfe270ae9c86bfa1a249e04829b1f82a1da4992f6a9e"
+  },
+  "barque-de-dante_1822.jpg": {
+   "octets": 182455,
+   "sha256": "391b994eab41688d80a03b95df209b2a7f4ec984418881f6fed30fea15ca9c0c"
+  },
+  "bassin-ovale-aux-rustiques-figulines_1550-1560.jpg": {
+   "octets": 115148,
+   "sha256": "e6fa0eb88183dff25fe5cb464ebaad437cdcf82a64a1ae06def8cb042408bdda"
+  },
+  "belisaire-demandant-l-aumone_1780.jpg": {
+   "octets": 227894,
+   "sha256": "9eacd19438f8e6096a996b25887d132473bf37f657c212c5993b0feb82944f83"
+  },
+  "biberon-a-trois-anses_1540-1560.jpg": {
+   "octets": 163969,
+   "sha256": "9e1efdff4cb889d7fadd4a9d8bbe0c44503369ce056718d7f19aa197bfc966f3"
+  },
+  "bibliotheque-carlton_1983.jpg": {
+   "octets": 116698,
+   "sha256": "077aeb1f6f7efc6533c88b06a3427c81c3b5112d0ea23d0da0bdb85fd4917639"
+  },
+  "boite-a-priser_1766-67.jpg": {
+   "octets": 116603,
+   "sha256": "f5ef151c6f475af3896a24b9c8ef4b6c40945ab9fa288cadc8be81211b2b43ed"
+  },
+  "bouchon-de-radiateur-modele-victoire_1929-1939.jpg": {
+   "octets": 141960,
+   "sha256": "1a7ab371c6cabdc516477abdcf281928a08d868a0395fddb7fa1176c2d185728"
+  },
+  "boucle-de-ceinture_vers-1940.jpg": {
+   "octets": 84164,
+   "sha256": "851ee52a740ea807cbc389ca7a375ef4b470519a99dad797ca706871b24e6f24"
+  },
+  "boucle-de-chaussure-avec-strass_sans-titre.jpg": {
+   "octets": 68463,
+   "sha256": "ee50816592c75c72e0e9f216d8241476b405d6bf0244fe6c3095b485be96ff47"
+  },
+  "boudoir-d-argent-de-marie-antoinette_1787.jpg": {
+   "octets": 354758,
+   "sha256": "da48ba715dec1b25fe49da56963011afee8f2d68ca517c89286dde1406c74d15"
+  },
+  "boudoir-turc-du-comte-d-artois_circa-1780.jpg": {
+   "octets": 40529,
+   "sha256": "6753f53f5db96448dade0049050f58689011481b2a0e89426e0e0eb04676b5f7"
+  },
+  "bracelet-en-cheveux-humains-bijou-de-deuil_xix-siecle.jpg": {
+   "octets": 17827,
+   "sha256": "58e55ec53800a117cc1167cb73fb1cec21197df11e1abe15878c4a88ca603014"
+  },
+  "bracelet-tutti-frutti_1928.jpg": {
+   "octets": 46382,
+   "sha256": "5597afde2972ab55cf9665633a8dd9628b4418ac9b4765418508d289b9d26823"
+  },
+  "broche_vers-1937.jpg": {
+   "octets": 20473,
+   "sha256": "92cb2b7049566175180752c7dfe2141016eb25101601e820322535ee3beb98b1"
+  },
+  "buffet-en-marqueterie-de-paille_1947.jpg": {
+   "octets": 150129,
+   "sha256": "21f12acc45e0048d64515864dce04e6be206f0146b2e4e51b1a725512f66ae0b"
+  },
+  "bureau-cartonnier_1757.jpg": {
+   "octets": 82254,
+   "sha256": "8e6b81ff56dfe4cf6c9588db74edbe6fd66ffd70b1dcc9cd336d28b92e9b5976"
+  },
+  "buste-de-louis-xiv_1665.jpg": {
+   "octets": 246799,
+   "sha256": "18800c94dbf92c1656c408bfb35617bb13f5b1ee9d01aa94068d5ef19f7b7557"
+  },
+  "buste-de-sarah-bernhardt_vers-1895.jpg": {
+   "octets": 22804,
+   "sha256": "c02240cdfd5e63767eb65f2b70cd9d958c2dd6a2391e39f1bfa40c7538637f69"
+  },
+  "buste-de-victor-hugo_1883.jpg": {
+   "octets": 58213,
+   "sha256": "a6b6e37935f2c4e6c07a2502b96b4de98523b474975ffffad103724f8fc00156"
+  },
+  "cabaret-egyptien-de-l-empereur_1810.jpg": {
+   "octets": 51021,
+   "sha256": "1bab3be8e0b99b49a5543010ee893f62ea65ff29f686452d4de1bc41c122a8bc"
+  },
+  "cafe-de-nuit_1888.jpg": {
+   "octets": 331842,
+   "sha256": "f033d459269a76bed8c6a883450144505b2eb3e161eded95e7eb1bb9e3ea8bd1"
+  },
+  "cafe-turc-au-boulevard-du-temple-ou-jardin-turc_1780.jpg": {
+   "octets": 249244,
+   "sha256": "4e1220e8236cb6d2f6ca35f8fd143d26178fc86b0792a408e117014183aca598"
+  },
+  "calendrier-des-tres-riches-heures-du-duc-de-berr_1412-1416.jpg": {
+   "octets": 311078,
+   "sha256": "4d1a717623ddc24cf403f3861b2d5f55b629fc125ec21ac443d8522a41490b34"
+  },
+  "camee-antique-restauree-chasse-au-sanglier_sans-titre.jpg": {
+   "octets": 28817,
+   "sha256": "628f6e560c303f4ccd958f46864bf8e7261ffcdd2f15df539e28bacef5893766"
+  },
+  "canape-bocca_1970.jpg": {
+   "octets": 85914,
+   "sha256": "3dcf6a80c8c4b6324d98cdb978f017e67752b559a88260b687acfe1394a508ab"
+  },
+  "candelabre_1734-1735.jpg": {
+   "octets": 148949,
+   "sha256": "1e1dd110d94aee41e67b730ed1612e6443d2a7f88d3c0114e509abd69d1cc510"
+  },
+  "caprice-architectural-avec-predicateur-dans-des-_1725-1730.jpg": {
+   "octets": 77377,
+   "sha256": "5d8bc29dfe46ec3889deaa17ed5d74f81a7a7b97ad91f0dd65928e8051ebb936"
+  },
+  "carnets-de-dessins_1832.jpg": {
+   "octets": 226481,
+   "sha256": "367c0b2500a29e05abf977b109b75e0fdc41848c9759f0ee96dab984e25dfa04"
+  },
+  "carreau-de-faience-a-decor-de-grotesques_1500-1515.jpg": {
+   "octets": 38805,
+   "sha256": "400407e57fea0cefb0c9200cd4638a2cad7d43ba6238c0e421304d55fd09b0c7"
+  },
+  "cartel-d-applique_1730.jpg": {
+   "octets": 31090,
+   "sha256": "55dfc60baf328211ec3ec9724329b0f1fa74ee5a68b7cf5145c1edbd07dd4b60"
+  },
+  "chaise-a-dossier-en-anneaux_vers-1930.jpg": {
+   "octets": 20476,
+   "sha256": "c263fe712287a40e260c6f075452a9ed2651fa785d0870c8f9edf98f271c87cf"
+  },
+  "chaise-africaine_1921.jpg": {
+   "octets": 46071,
+   "sha256": "92d511d1685608832be175c55b68737a9220f3a371cc9bf78b5fde7d917e0cd2"
+  },
+  "chaise-barcelona_1929.jpg": {
+   "octets": 53288,
+   "sha256": "fad76394c837b25cd9529de4123c14ae77a53dd6fa18acab6c2f41edcea6e2a4"
+  },
+  "chaise-bauche_annees-1950.jpg": {
+   "octets": 33445,
+   "sha256": "c3f660fe3d99fb633247f085a89a70931dc9676c5ad5d6f445f3a5e3290c1eab"
+  },
+  "chaise-cantilever_1926.jpg": {
+   "octets": 79997,
+   "sha256": "a8a2390a2d7d27742fac53be97685800cfe5d991a92cb4b209ea97c0bd40c71d"
+  },
+  "chaise-longue_1925.jpg": {
+   "octets": 25552,
+   "sha256": "999bb307b24a3c94c26f1561c5c21c164536355269db8d596b56e4581636822f"
+  },
+  "chaise-n-14_sans-titre.jpg": {
+   "octets": 85602,
+   "sha256": "ca3f97b87c1f2052982316f018f6fa4aaae1a2a87129f6547772d78a9c1dd661"
+  },
+  "chaise-panton_1958.jpg": {
+   "octets": 30354,
+   "sha256": "322b2ba23c3eb5e56104f4c4ac06209104ebb42f3ea84bcc2e71673d20b69b1c"
+  },
+  "chaise-polyprop_1962-1963.jpg": {
+   "octets": 19432,
+   "sha256": "dc148b3fa4d5e347c5ee1b8186baacaca5625c708f916f2d25e2932a501347aa"
+  },
+  "chaise-prince-imperial_1985.jpg": {
+   "octets": 96086,
+   "sha256": "94483e3266e0e94d1ac3bcd5213ac18ccac8aba23b82a4cf5628de57fad6cdfa"
+  },
+  "chaise-standard_1950.jpg": {
+   "octets": 12807,
+   "sha256": "3a7eb567502835307054aaafb89114d066a7473c409c8cb3d1cbc60f3ad0c1fd"
+  },
+  "chaise-tongue_1963.jpg": {
+   "octets": 13313,
+   "sha256": "cfdb7e3e62e769cce8d17bf67cef7d741c17f3f3ff564654840797606bb30411"
+  },
+  "chandelier-a-venise_1996.jpg": {
+   "octets": 336748,
+   "sha256": "871fce54d0f632da4eaa8172963098a2e39f55eb9561b10e0ac87f279bfa4ff6"
+  },
+  "chanteur-florentin-du-xv-siecle_1865.jpg": {
+   "octets": 25076,
+   "sha256": "0a2919a2e8fad9a68de94fdad3b5912e3329774774df07cbb8379e39fa8c92eb"
+  },
+  "chapelet-a-grains-en-ivoire_avant-1856.jpg": {
+   "octets": 13223,
+   "sha256": "16c70a5dc7320fb5b030e7e0e518c97e99bc6b576d9a995c12db736a2feeaf3c"
+  },
+  "chapelle-du-rosaire_1949-1951.jpg": {
+   "octets": 30339,
+   "sha256": "9f0c4b983370b8e67e631ab1f3c493277fdb3eebf3f547b8899aed09d5482bda"
+  },
+  "chatelaine-en-or-cisele_premier-tiers-du.jpg": {
+   "octets": 13736,
+   "sha256": "41b208d7a439fa5d320539f360d665a814c5544a4e0042356710fb8d01f7b6a0"
+  },
+  "chefs-de-tribus-arabes-se-defiant-en-combat-sing_1852.jpg": {
+   "octets": 121958,
+   "sha256": "0b11633fd260dda54b750368a44c2c6983d9df8b369ba788cf40719a63c08f00"
+  },
+  "chevaux-arabes-se-battant-dans-une-ecurie_1860.jpg": {
+   "octets": 172379,
+   "sha256": "8503e3a70ce57ad9f617ef8638e06b261656b66f7fd32e4975a9aa633c7d3f3d"
+  },
+  "chevaux-de-marly_1743-45.jpg": {
+   "octets": 216615,
+   "sha256": "ef7af6e2be2b6a254dcfe850423451d612ca923090ad59226c4fa2af443fe8f3"
+  },
+  "chiffonnier-anthropomorphe_1925.jpg": {
+   "octets": 17912,
+   "sha256": "063baf62d5e41478d307dd4839462fe518edcee266cad155a32ebb6f90376276"
+  },
+  "chronique-de-die-brucke_1913.jpg": {
+   "octets": 42539,
+   "sha256": "f64baaee87e83d885a720f4359d74ab3440517d80cae8558bf91747b5e0c1042"
+  },
+  "coffret-a-bijoux-de-la-duchesse-de-berry_1829.jpg": {
+   "octets": 67183,
+   "sha256": "b53c12559e9eb0ef1ed5ef89c869eb395c0f5344e4cf99f34cfe34b0caa5220a"
+  },
+  "collection_premiere-moitie-.jpg": {
+   "octets": 21592,
+   "sha256": "5701e3f36aaa7e72bc6b01521feebd70d8163e55cac1f97d35c15f67c369e2f3"
+  },
+  "collier-alternant-navettes-en-or-et-boules-en-ve_v-iv-av-j-c-xix.jpg": {
+   "octets": 24638,
+   "sha256": "21ff4480a770e71755c23743cc48f24bc6a350cded4a792c6384b864c3b1038f"
+  },
+  "collier-de-navettes-graduees-en-bakelite_vers-1950.jpg": {
+   "octets": 111119,
+   "sha256": "f73c58afd1212f91e7fc4f74c7626b6d11bf49d2118559d8a27b6de1b76ba95b"
+  },
+  "colonne-vendome-ou-colonne-de-la-grande-armee_1806.jpg": {
+   "octets": 23897,
+   "sha256": "4682725cea876c4b30487590cb17b692de1daf5f9b9da2e7d4b2459b3588dffd"
+  },
+  "combat-de-cerfs_1861.jpg": {
+   "octets": 250306,
+   "sha256": "461208482b483bc7772154a19512b380e321c3d0b4b16e7999c361f52e575791"
+  },
+  "combat-de-mars-contre-minerve_1771.jpg": {
+   "octets": 108415,
+   "sha256": "e59ae93af1db9f3f48590a60978e1bdf9d905e3b510eac524cbae04ecc87a9ac"
+  },
+  "commode-au-char_c-1930.jpg": {
+   "octets": 71875,
+   "sha256": "b9947217b367aa7dd2e0a1a0d9292d393d1fe7736f4f3ee9240a2e06d6d46daf"
+  },
+  "commode-au-singe_1745.jpg": {
+   "octets": 75406,
+   "sha256": "fa976220c4ce3a9785fe4d7d5cff386dfff2226158c2fad317920b64e6e6b3d1"
+  },
+  "commode-en-vernis-martin_1742.jpg": {
+   "octets": 44173,
+   "sha256": "cde75556ad2c8069dde3b3a7b8ba61684ec835dc6da9bb7e64dbe7641c81d1f9"
+  },
+  "commode-laque-japonaise_1737.jpg": {
+   "octets": 102292,
+   "sha256": "5cf0560b135756c6ae8f732f14efb96cbb71c21df3bc56964222d38241e17ef8"
+  },
+  "commode-transition-de-madame-du-barry_1772.jpg": {
+   "octets": 82161,
+   "sha256": "a853cd62c6c040d0113fc77d6e3719d0ec81c15bcaae5943b8ae54a092f9c25c"
+  },
+  "componibili_1967.jpg": {
+   "octets": 10960,
+   "sha256": "3afad3e44739e2ccf9f96bbb0fe222a7a3b868a70afcc7f808af86fc633b957b"
+  },
+  "continence-de-scipion_1726.jpg": {
+   "octets": 65009,
+   "sha256": "e8bfd86a150765022561ea8ae75729e29bfd05f9ae3efdaff1736b1e33b1a233"
+  },
+  "coupe-des-vendanges_1844.jpg": {
+   "octets": 25389,
+   "sha256": "08fc39235691760b61836e54031789ee47c0b6e07ae2a0da4e0335fb86d1cd2d"
+  },
+  "couverts-aj_1958.jpg": {
+   "octets": 24458,
+   "sha256": "710d0f37a5135a8ea3c62c04d8e4d44bcd311c1c13fe0fb11c9726eb4fbe72bf"
+  },
+  "crystal-palace_1851.jpg": {
+   "octets": 224598,
+   "sha256": "5e50fc110a515457dd0b7ee3be78f25c31d1c88614e045b6b5f8e69cf1811ae4"
+  },
+  "danseuse-au-repos_1885.jpg": {
+   "octets": 301799,
+   "sha256": "c789f8b7e34158dbcf070e89ee9edf2b1a5f9c13f3988884942f8614a76bf50c"
+  },
+  "dejeuner-chinois-reticule-de-la-reine-marie-amel_1840.jpg": {
+   "octets": 30325,
+   "sha256": "51b7f9356257b12b0bbd75731e58ec9edb3bb3686d90abe08d5d15da53ed655a"
+  },
+  "descriptions-des-plantes-de-l-amerique_1693.jpg": {
+   "octets": 113072,
+   "sha256": "bf410cb3e68c5bc57a89559f522e42ac8f39d5af829637b664eead67ce3bb555"
+  },
+  "dessins-du-metro-new-yorkais_1980-1985.jpg": {
+   "octets": 257002,
+   "sha256": "65dcd48f3ee6edfbfc380876022442b958ad00eaa137df9c9a106bef16dcf3f2"
+  },
+  "dessins-parietaux-d-aurochs_v-17-000-av-j-c.jpg": {
+   "octets": 147119,
+   "sha256": "d65395a73615e06e5d59c3ca3ceb326bb0b176088951a978e48ea4aa030ab754"
+  },
+  "diane-au-repos_1726.jpg": {
+   "octets": 160512,
+   "sha256": "4a79aa68683e3b03aae86b861a736c496f88c9fcd7d738b83940b1c3df40c9b5"
+  },
+  "dictionnaire-raisonne-d-archi-fr-du-xi-au-xvi-s_1854-1868.jpg": {
+   "octets": 50255,
+   "sha256": "6798bda64328a0df42b09631449c4775f9941f9cccd2fa1d225608e10ccb90a6"
+  },
+  "discours-prononces-dans-les-conferences-de-l-aca_1721.jpg": {
+   "octets": 11121,
+   "sha256": "88859949205960dc2a25f6b0363a36f1d6a0d0cdd7ee3ff407b1bc70630c29ef"
+  },
+  "eglise-de-pelerinage_1745-54.jpg": {
+   "octets": 370613,
+   "sha256": "8c273692d85841109738ab7f10bb04a5c80a97bad74d5d44122702fa181a56c2"
+  },
+  "enlevement-des-sabines_1579-1583.jpg": {
+   "octets": 49800,
+   "sha256": "46cbe610cda4288845334c507c7462bc664a99ec326489a429f8ef5b7b56f2da"
+  },
+  "ensemble-de-mobilier-de-chambre-a-coucher_1827.jpg": {
+   "octets": 182228,
+   "sha256": "1d6e6322e3e13924b9750aa789468b483fdefd4ccf4a31cd9933d6c467ef3041"
+  },
+  "entree-du-metropolitain_1900.jpg": {
+   "octets": 57064,
+   "sha256": "83a601b56a9834ecd6153b833058b94b94b8ade051cdd08c342d935a2959d6d0"
+  },
+  "etude-de-mains-de-femme-sur-papier-prepare_1490.jpg": {
+   "octets": 103388,
+   "sha256": "33b640f24092d17be288401f245af4de856a807360769b1a975c49532bf7f0b8"
+  },
+  "exposition-internationale-des-arts-et-techniques_1937.jpg": {
+   "octets": 18137,
+   "sha256": "9cb3f9eff92fb36b2d9060c16f4367dde2fc49b6a7bc9e26eeb6a5c846f57aef"
+  },
+  "fabricant-de-mobilier-design_1938.jpg": {
+   "octets": 8387,
+   "sha256": "ba83fce4e58bdc4116858ec2b5eb2f1d3757a48c89f22782a8596b16ce46d1d2"
+  },
+  "facade-de-l-eglise-notre-dame-lors-du-bapteme-du_1821.jpg": {
+   "octets": 63852,
+   "sha256": "b0eeb983f92d04ea59181cc832156b3f5d1ad59b09fb35e707b8bcb924d6526b"
+  },
+  "facade-du-theatre-des-folies-bergeres_1926-a-1928.jpg": {
+   "octets": 49174,
+   "sha256": "03548bed7982d9044d87aa3015f5e02b7da99f1d32abc72da5a3cc89a7d5740f"
+  },
+  "fauteuil-du-salon-de-madame-juliette-recamier_vers-1800.jpg": {
+   "octets": 28433,
+   "sha256": "45e4d9aed63fb22c69e2ffdbf3d6313212a25f64d402ce2a0860cf17078e3f4e"
+  },
+  "fauteuil-du-trone-de-napoleon-1er-aux-tuileries_1804.jpg": {
+   "octets": 46382,
+   "sha256": "7dceea1d7148d9a2e6fe3c11531e7b1332a9f31f08df17cc8725e16b8c4ee36a"
+  },
+  "fauteuil-egg_1958.jpg": {
+   "octets": 66254,
+   "sha256": "f5663fd72351fc915db8f64e0cef85efa52cea66f99223049ccc64136af64053"
+  },
+  "fauteuil-lc4_1928.jpg": {
+   "octets": 25264,
+   "sha256": "16eaab3eedc98bb9a2131a943a46bd83b25e4f5ae4ff2d9f2cc4d3fdfae95d58"
+  },
+  "fauteuil-lc4_1940.jpg": {
+   "octets": 41801,
+   "sha256": "5da0533d335f5c796c9e25a17e01966919d33a7c393d490968a0d80fe574a21d"
+  },
+  "fauteuil-louis-ghost_2001.jpg": {
+   "octets": 64194,
+   "sha256": "4dbb6154b2b8bb7d831fddf47a6ad41e1cad9c0b9263e98ecac2725d764de06f"
+  },
+  "fauteuil-lounge_1956.jpg": {
+   "octets": 235191,
+   "sha256": "940615ead48d61e785fbdda3728a7bbcf0238f9410fadc1ca11d9f0fd24313a0"
+  },
+  "fauteuil-rouge-et-bleu_1917-1923.jpg": {
+   "octets": 171979,
+   "sha256": "1df047f943f469a108e5338ea83a4942e91fe78b0446ff32e3abd54a32ba4954"
+  },
+  "fauteuil-wassily_1925-1926.jpg": {
+   "octets": 50055,
+   "sha256": "c57d2d1dcce1d8e2ee6c2e8a4f1322ba22303c43a66e1408a4d5950a9e2810e8"
+  },
+  "femme-aux-levriers_entre-1920-et-19.jpg": {
+   "octets": 89506,
+   "sha256": "138240eb5e575d78781b18fdc69cc2382fd0af96fba2476ae24df09ed75f2587"
+  },
+  "femme-nue-allongee_1740.jpg": {
+   "octets": 24347,
+   "sha256": "7b47461e1f7ac3d1d18a9e01443ea3d336eb98cc661f66b7842dc36a6563a8e6"
+  },
+  "femme-piquee-par-un-serpent_1848.jpg": {
+   "octets": 206620,
+   "sha256": "328b399c9b06623093aa74039f8c22883d3e29e91d87acc5be7f2c7bf1349fd7"
+  },
+  "femmes-d-alger-dans-leur-appartement_1833.jpg": {
+   "octets": 180378,
+   "sha256": "6594cf8ca8dbc7008a8e9f35c9bb754f8d07d939ab5ae3c3c1cd07b0e2a1f243"
+  },
+  "feu-ou-le-petit-forgeron_1916.jpg": {
+   "octets": 149574,
+   "sha256": "83945d9d3a80990c637a7a84b55ee6f9361bc99b72738318f59bd1a14630458c"
+  },
+  "figures-exotiques-i_1911.jpg": {
+   "octets": 50123,
+   "sha256": "fd32dbd49f0b397d790356324af703fa607d5f2af9985eebd00ec47d545b20c4"
+  },
+  "fillette-courant-sur-un-balcon_1912.jpg": {
+   "octets": 518448,
+   "sha256": "bd984fac43652c2cd03691befe3215a5933cb7ff3d6bf087e8f206673f9a4588"
+  },
+  "flambeau_vers-1740.jpg": {
+   "octets": 16545,
+   "sha256": "59787cf772564f1444ec57ced4373925e438498bb2bf81812d99a41569c6009e"
+  },
+  "fontaine-de-trevi_1732-1762.jpg": {
+   "octets": 213722,
+   "sha256": "99982d9c1157d436b9a32feb94fb0a01c9f29f8858cc8d77b153c7f3f6ee1069"
+  },
+  "fontaine-wallace_1872.jpg": {
+   "octets": 346093,
+   "sha256": "4aa21f40ed93e063d6f7c115536030f3340b73ec78a2f6a353abd6fae12d954a"
+  },
+  "formes-uniques-de-la-continuite-dans-l-espace_1913.jpg": {
+   "octets": 176416,
+   "sha256": "5ed11947fe9dc441410a0d05ab99e4d8abdba7889a065c67ac2e19b320df703b"
+  },
+  "franzi-devant-une-chaise-sculptee_1910.jpg": {
+   "octets": 512649,
+   "sha256": "53c8701744898ac9c137b01186efb846ac26e51cdaf76e46f087255fa4b0f5ac"
+  },
+  "free-edge-table_1958.jpg": {
+   "octets": 17728,
+   "sha256": "4ef57defdfe6133483067b87dcc8f8138b44a3fc1e3bf3bf4b189f76830c8a5a"
+  },
+  "fresque-du-plafond-de-l-escalier-d-honneur_1751.jpg": {
+   "octets": 83806,
+   "sha256": "4e88b6b3e33ad3081643f587d0911b49fc48853aabcf6e747d79da43f53c3aff"
+  },
+  "fresques-de-la-chapelle-royale_1699-1710.jpg": {
+   "octets": 332871,
+   "sha256": "9537baf29e3f76334664eaa5fe14194d77a9dd8cec9555c21433e0367a465a0d"
+  },
+  "gaine-de-style-louis-xiv_v-1860.jpg": {
+   "octets": 33332,
+   "sha256": "06f53ac5067bf5e0c39a3c2cd2aca32f573d958e2c1f63f556589eb2d2143344"
+  },
+  "galerie-de-vues-de-la-rome-antique_1750-1760.jpg": {
+   "octets": 336942,
+   "sha256": "633b17e93f5386679665cb39297ab3faa81a2a228481b8a3742d56b8ef42dffa"
+  },
+  "gondoles-sur-la-lagune_1765.jpg": {
+   "octets": 330314,
+   "sha256": "38530cb6395df088757c9a3e8c3e2003838a469a78723a8132a77163688aadbd"
+  },
+  "grand-paysan_1904.jpg": {
+   "octets": 89941,
+   "sha256": "4e8c23a3d34e8a57c8219e46838bf86e888a82a925457cc2007b34d0dd5b1598"
+  },
+  "grand-vase-medicis_1826.jpg": {
+   "octets": 49152,
+   "sha256": "7eebf306d8dc683b8e64b05c69c22e1387c105bfd5e2828aecf6bc2ceb5b07ca"
+  },
+  "great-red-dragon_1804-1810.jpg": {
+   "octets": 381552,
+   "sha256": "344290939b5d7178981ad29ac23f04158612bffb65370ec648331630aeb5ccf3"
+  },
+  "guerre-aux-demolisseurs_1832.jpg": {
+   "octets": 28483,
+   "sha256": "fd700359dbe060f4e6a325e925c44a11c110fc2af47b5579b2fd86fe004d4471"
+  },
+  "helene-et-paris_1788.jpg": {
+   "octets": 238601,
+   "sha256": "d23c745cb0f5d9997366aa4a073ce36dc5d40c9281a1ca1555b4869be1af5ba4"
+  },
+  "henri-iv-enfant_1824.jpg": {
+   "octets": 17313,
+   "sha256": "9205b40cffc1b252f5f2b38bdda0f1c4edd2d6b63e99649ccaa132f1aeedd008"
+  },
+  "herakles-archer_1909-1925.jpg": {
+   "octets": 64363,
+   "sha256": "1cce2de9366ae500998a38bcdd2b4b67b3c0c1dd5b4788bd2d98b8f458201d4f"
+  },
+  "hernani_1830.jpg": {
+   "octets": 18846,
+   "sha256": "031b3e96dde69507f2585b64360d5e67995ff1934f05fa722c184ab282a20c82"
+  },
+  "hommage-a-delacroix_1864.jpg": {
+   "octets": 105830,
+   "sha256": "18ecd2e27e60157918dca1a022bcb6a921c01491ff5e900f42cc9a95d2000590"
+  },
+  "hommage-a-picasso_1912.jpg": {
+   "octets": 12100,
+   "sha256": "2233abb2b43419e1f9f7dd11e02c62003a4b19d73b85245dd9301de6c5453963"
+  },
+  "homme-accroupi-mangeant-des-prunes_xixs.jpg": {
+   "octets": 10340,
+   "sha256": "a7f855671f8399405ced6cef53c1ae4989b43e6fee84b6f8b43912ee90305fcb"
+  },
+  "homme-assis-a-la-guitare_1920.jpg": {
+   "octets": 37217,
+   "sha256": "f14dfe0bda58740a3a0d83894107af0f4c7c20e6a2e8b11b468ae3cb8e479b24"
+  },
+  "homme-qui-marche_1905.jpg": {
+   "octets": 77730,
+   "sha256": "e2e53951cade79e162796c924bd8dcbf4ff0b826e0b241fd3d645ce8a79adf0e"
+  },
+  "homme-soudanais-en-costume-algerien_1856-57.jpg": {
+   "octets": 25510,
+   "sha256": "1be04f8180fb2172151fc013a1315b72c938f5dbe1f8f95be32274e701cf95cc"
+  },
+  "honore-de-balzac_1898.jpg": {
+   "octets": 107157,
+   "sha256": "9bb34a2404d95ddbd0e1cd7b0c4a5058d0cd4f5fb7de477cf5cbf2e1473d5c4b"
+  },
+  "horloge-de-table-en-forme-de-tour-carre-aux-arme_vers-1580.jpg": {
+   "octets": 49902,
+   "sha256": "5a59f3e92d8c5853a514f80c008e85ad2edd32ab488312e908fd5b2adedbf010"
+  },
+  "hydrie-a-decor-de-satyre-poursuivant-une-menade_450-av-j-c.jpg": {
+   "octets": 23236,
+   "sha256": "664393078e931ef7fa59c55093e28dc9aa74d98b84239e71141fafb881631895"
+  },
+  "inspection-generale-des-monuments-historiques-av_1830.jpg": {
+   "octets": 85666,
+   "sha256": "ac01291d2bbda549ff68b4e2e6d9afdfeb2dcb3d22dbaff5cb99865c5f5ddc92"
+  },
+  "jazz_1943.jpg": {
+   "octets": 55929,
+   "sha256": "a306487ddfaf1c4c59f5871275f918b8ac42068113fc4903d0f25f2837253d81"
+  },
+  "jeanne-d-arc-a-cheval_1872-1874.jpg": {
+   "octets": 63537,
+   "sha256": "8f7c68e4963aa3d821627f1a337be4c267ca88914ce04c56a33cf6a30e1ced37"
+  },
+  "jeanne-d-arc-a-domremy_1872.jpg": {
+   "octets": 161518,
+   "sha256": "3737bd1c142fe9d6e4a499041040233f0d545c1d015bb370e9a5df36062a1330"
+  },
+  "jeunes-grecs-faisant-battre-des-coqs_1846.jpg": {
+   "octets": 263831,
+   "sha256": "0199b93a267b32b902d47b5cbab78708dfbaddfcf1884ad5602af4f7296f724b"
+  },
+  "joueuse-de-tympanon_vers-1780.jpg": {
+   "octets": 149468,
+   "sha256": "50f54ad354602b47dbf3909b789858c65284aa04f027a47db030a04479035ffa"
+  },
+  "l-accordee-du-village_1761.jpg": {
+   "octets": 233802,
+   "sha256": "92636cf3c6fae7f695a6711e331dde7fd3b3b8aa16522e98b148f0d51e80df7d"
+  },
+  "l-age-d-airain_1877.jpg": {
+   "octets": 78672,
+   "sha256": "7d364cf39b01ef3a9b7d4e971f2e9cf5171311ae9c658be1f6a9295d6e0c21bd"
+  },
+  "l-age-mur_1897.jpg": {
+   "octets": 96014,
+   "sha256": "31c8e97f57c8f2049e9cac3962aef7bf0f67dfcbc057802cca8b227e33174142"
+  },
+  "l-amour-menacant_1757.jpg": {
+   "octets": 24249,
+   "sha256": "9fffcfd6f1b3fb5a2d6c45c142488471024887640a08104ec940033389adaadd"
+  },
+  "l-amour-se-taillant-un-arc-dans-la-masse-d-hercu_1750.jpg": {
+   "octets": 190797,
+   "sha256": "95a8cb4517ecc59d4b2ed7df0f2bb48f3e7b724b7e931151fd9abea326e9c40c"
+  },
+  "l-apotheose-d-homere_1827.jpg": {
+   "octets": 49083,
+   "sha256": "7c831aa863e7b24bfc560f314b5d952f84a471a47b8780941802939ce319fa79"
+  },
+  "l-apres-dinee-a-ornan_1849.jpg": {
+   "octets": 245038,
+   "sha256": "a960ee00c575f814833d9845fbc8e6366c001cf9094fbb32d98f32969fc8f3e7"
+  },
+  "l-araignee-qui-pleure-serie-des-noirs_1881.jpg": {
+   "octets": 158601,
+   "sha256": "5970c6181e755bf10dbba82014a771f770223c210f1e68be722024ed4f6ca686"
+  },
+  "l-atelier-du-peintre_1855.jpg": {
+   "octets": 245067,
+   "sha256": "8b47cc5950c84c93fb7f19ffbb77d93c687a98689203755a591278f68a9257a5"
+  },
+  "l-eglise-sainte-genevieve-futur-pantheon_1757-1790.jpg": {
+   "octets": 150800,
+   "sha256": "7f7d2a6230f4cc05054ae1a75adc4e225eac15ce02d71acf04a0fcb4482b9b6d"
+  },
+  "l-enlevement-d-europe_1747.jpg": {
+   "octets": 281182,
+   "sha256": "2ed93436f93cac4c1870e8fbf5d43cdecf2b09320d1308eff7df0c3b2d789d47"
+  },
+  "l-enlevement-des-sabines_1799.jpg": {
+   "octets": 334636,
+   "sha256": "f4b112e97e9c1ac7428610b77dcce5128e8444e9ac6354fbf9e28b3906cc2bac"
+  },
+  "l-esprit-des-morts-veille_1892.jpg": {
+   "octets": 55830,
+   "sha256": "fa2a7b07921e83197e69ff15440c4e1040c3dd177a2b087ace1b4102875b1a76"
+  },
+  "l-estaque_1906.jpg": {
+   "octets": 170382,
+   "sha256": "1f5bf0730cb1035ea534fb049715716f384daa1460076b4d5615865972a10586"
+  },
+  "l-histoire-du-romantisme_1872.jpg": {
+   "octets": 145369,
+   "sha256": "53b664b651a5f69955a6e65c3a7fec7990eb23d10f5b6c6f4978e93b5dac4509"
+  },
+  "l-hiver_1890.jpg": {
+   "octets": 14082,
+   "sha256": "6a7b7506d8f2b13c7e3a79575fead8c54ffca9127ad5a595e1c968489e398afc"
+  },
+  "l-incendie-de-moscou-au-panorama-de-paris_1791.jpg": {
+   "octets": 171031,
+   "sha256": "e7190c108faefa1fab5cc7636b217699e08db2afa2c62826677e3109f6254ffa"
+  },
+  "l-oiseau-dans-l-espace_1925.jpg": {
+   "octets": 9381,
+   "sha256": "725826da20a816e31efe826e1add780e5bb3a0becf4e56e8a256ff15db73a89f"
+  },
+  "l-origine-du-monde_1866.jpg": {
+   "octets": 37118,
+   "sha256": "ff6b454820686fee758419f866329cf287b9c4ab9e0279cc0f28d24d7390eb1a"
+  },
+  "l-ouvrier-et-la-kolkhozienne_1937.jpg": {
+   "octets": 14380,
+   "sha256": "bf4c7193b62c9692aea84c1fc2fb59c819e5440397744e432a405720d442dc80"
+  },
+  "la-baigneuse_1757.jpg": {
+   "octets": 10756,
+   "sha256": "4c6633f2c21d22803b755963416b59ad248bb9f55868b06497c931f24a2af53a"
+  },
+  "la-charge_vers-1902.jpg": {
+   "octets": 116180,
+   "sha256": "e13b37ba1a8aac2d0f15a9e1e232342e1901a8e1b26fa25928925b8a8a89e9c0"
+  },
+  "la-charmeuse-de-serpent_1907.jpg": {
+   "octets": 71349,
+   "sha256": "d30355701914b137c0ba00c5d740a235069f6066d201bbe6ccbdb1e135544874"
+  },
+  "la-charrette-de-foin_1824.jpg": {
+   "octets": 262300,
+   "sha256": "1fcfa83d4f63f07ec818e0883ecb02685e2b54abab05a61d2a1203327fb4c07b"
+  },
+  "la-comtesse-d-haussonville_1845.jpg": {
+   "octets": 92736,
+   "sha256": "9f1ec9ef6fbfc3f883cbf0ff4e2285d29234323b35006ba07ae366f51115cb6c"
+  },
+  "la-danse-au-moulin-rouge_1895.jpg": {
+   "octets": 250768,
+   "sha256": "9b24cea9a16e3b73b0588da84f385cbf4f40ae238276004cd73a6dd010be68ea"
+  },
+  "la-danse_1869.jpg": {
+   "octets": 200583,
+   "sha256": "d0748a1b543093d7588719bc9036f519704eca8369540826adefca44959d477c"
+  },
+  "la-danse_1909-1910.jpg": {
+   "octets": 227860,
+   "sha256": "a4829fdc47a773fe46251334bc13d8ef04f91ba5aac9503c3d986bc7a12d4127"
+  },
+  "la-falaise-d-etretat-apres-l-orage_1870.jpg": {
+   "octets": 117524,
+   "sha256": "2ff22e8f588f67bd5fde136b5bbd402e4ef2b05ff072bbba3bb5b92566abc09d"
+  },
+  "la-famille-de-charles-iv_1800.jpg": {
+   "octets": 134199,
+   "sha256": "554187d1f9d54bc501338d5e3b60616a419e363c48187b3111d8e696dbf48e37"
+  },
+  "la-famille-forestier_1806.jpg": {
+   "octets": 177780,
+   "sha256": "3c244459b582cecc5fe4c43aad2a8a4570b72dcebd999312cb4ee2f0960c90c2"
+  },
+  "la-femme-au-chapeau_1905.jpg": {
+   "octets": 43032,
+   "sha256": "42dc4cd02114ec3f43d0fd95f18a2c049952efcbdad392612f85bacc9ae6d245"
+  },
+  "la-foule_1915.jpg": {
+   "octets": 17324,
+   "sha256": "eaeab41ba7255995d698f37bde67632018e509df2377b48ebcae49accf958715"
+  },
+  "la-grande-odalisque_1814.jpg": {
+   "octets": 193404,
+   "sha256": "e761e23fb1a0810d47cc00e97eb033f5d031020c94a7a87d5472fe506e49bd73"
+  },
+  "la-joie-de-vivre_1906.jpg": {
+   "octets": 40693,
+   "sha256": "15183f4432b92a63d0ae1c44c61886e1798d38e13907534adcfefb5f3493cfd0"
+  },
+  "la-liberte-eclairant-le-monde_1886.jpg": {
+   "octets": 55282,
+   "sha256": "fe612b746a5ed73e74778b54c1d67b10b3b39449e76ccf1248b875bf4a899759"
+  },
+  "la-liberte-guidant-le-peuple_1830.jpg": {
+   "octets": 289938,
+   "sha256": "8ad5754b8466008fe5f701668e76f61c2e90438fbd11320fca52d10fd4512273"
+  },
+  "la-maison-chinoise-du-chateau-de-sanssouci_1754-1764.jpg": {
+   "octets": 261701,
+   "sha256": "92fb86ec4b10e7f6fafc866a0cc308f4ba18591571372af16321f4d5939058f4"
+  },
+  "la-maja-desnuda_1800.jpg": {
+   "octets": 20009,
+   "sha256": "3dbbe26e5219084b101551bea202a7e990a8512588290d217dba4ba619a33f86"
+  },
+  "la-marchande-d-amour_1763.jpg": {
+   "octets": 241109,
+   "sha256": "801bebe8e1b7804e961b311b80042df1f2c83f870ffa751b5c27a4d2cea3f07b"
+  },
+  "la-marseillaise_1836.jpg": {
+   "octets": 566467,
+   "sha256": "b8c9a181b65068adb2ccc05e6a291160b13389bd50410bedf92ea43e7b7f3e44"
+  },
+  "la-mort-de-la-vierge_1601-1606.jpg": {
+   "octets": 227540,
+   "sha256": "e61ce84a72afde461caa73330d8ad1caf3e2cd4ed5f893897a9c3f2bd8b43b7b"
+  },
+  "la-mort-de-leonard-de-vinci_1818.jpg": {
+   "octets": 205503,
+   "sha256": "f5059aeed42bf0e70b6baa55c8c2a4e8d31b3f645d4a63ac90526228739cf191"
+  },
+  "la-mort-de-sardanapale_1827.jpg": {
+   "octets": 101588,
+   "sha256": "ab026fa25602bff9371dcbfc49844dbd5a81fb3f4576a47c09de77d66228f9bd"
+  },
+  "la-naissance-de-venus_1863.jpg": {
+   "octets": 40235,
+   "sha256": "59c5dd67bd2a86e6724deeaef30831041812776d56cf848478c4580f6af719b2"
+  },
+  "la-nymphe-de-fontainebleau_c-1542-1545.jpg": {
+   "octets": 44833,
+   "sha256": "345131483da45abd41b7c6f2664f1bdb6f6b7f0d656d575763f4a7c43d6a29a6"
+  },
+  "la-parabole-des-vierges-folles-et-sages_v1813.jpg": {
+   "octets": 239162,
+   "sha256": "71231c840a1719bb8dfd494d0e70e00d358366783ac644635f2496cda9d40dcc"
+  },
+  "la-parisienne_1907.jpg": {
+   "octets": 102787,
+   "sha256": "9053356cc6bdb02a5f5d050838c280b036b237bb315796c607f32e774b981801"
+  },
+  "la-pudeur_1749-1752.jpg": {
+   "octets": 121412,
+   "sha256": "45b20d63c3efda92820cc31bcf0e99949e875031dc36d5dbc9ac009bd80cef5f"
+  },
+  "la-raie_1728.jpg": {
+   "octets": 284476,
+   "sha256": "ef0683414f89b499dc19a18d4a9b8f4697a8080301ae25804479674c955471c9"
+  },
+  "la-renommee-a-cheval-sur-pegase_1700.jpg": {
+   "octets": 72649,
+   "sha256": "6449c8481f119e14b916da1c635510ba152f52bb449fc6d086ffa9476b017686"
+  },
+  "la-route-tournante-a-l-estaque_1906.jpg": {
+   "octets": 285252,
+   "sha256": "67b3a01e90274e2220d549bda60a267bbce161bca5af760f243c41c33fb31bfd"
+  },
+  "la-table-de-cuisine_1888-1890.jpg": {
+   "octets": 133573,
+   "sha256": "5fc51b059d40af7eb56e4ccf1369f425f0348ee2652a17c3ff42b02b3e899d51"
+  },
+  "la-tour-dans-le-parc_1910-1912.jpg": {
+   "octets": 281577,
+   "sha256": "bd0979ea95cc36a92dd5d73989c2e0ecbe2e17f0accf1c99bbc649a8ead41545"
+  },
+  "la-vision-apres-le-sermon_1888.jpg": {
+   "octets": 86360,
+   "sha256": "2de0b10977e20d4e3497dd4a0bbef893adfb201fc28b26121bda82d33f86f5d4"
+  },
+  "la-voiture-fondue-gentilly_1947.jpg": {
+   "octets": 214738,
+   "sha256": "f9e6b6bbbf2ccec4e9bd72462e743f8cc34f364eeddb726f1b38904e860e9363"
+  },
+  "labourage-nivernais_1849.jpg": {
+   "octets": 30251,
+   "sha256": "960bf6cf5c399df2eafba10da6bc0f8b2148c50673e709378692cde11c86d127"
+  },
+  "lampe-akari_1951.jpg": {
+   "octets": 32439,
+   "sha256": "08976b88d02228867db3707c412c232530012f491e9cbe64a664e1f73c7e9a0e"
+  },
+  "lampe-astro_1963.jpg": {
+   "octets": 80416,
+   "sha256": "60d4752926ea81910e88d6305958dbf01373cb82e0df9ca78ac99ef243fcbdcd"
+  },
+  "lampe-de-bureau-modele-n144_1928.jpg": {
+   "octets": 42731,
+   "sha256": "718e10b86232856f3a768a0652d9a37a6cee88b73c12d9b3d3ba88623a2479a2"
+  },
+  "lampe-tahiti_1981.jpg": {
+   "octets": 52035,
+   "sha256": "9192e3c37c4a2b6214a25bcf1fb0ee1ac4c8137abc715c420fd8189b7d536935"
+  },
+  "le-baiser_1923-1925.jpg": {
+   "octets": 62826,
+   "sha256": "5a2c2cd338c75c22798830dac775f40fcd0355359ef78a668fb6920a97dd293a"
+  },
+  "le-bonheur-de-vivre_1905-1906.jpg": {
+   "octets": 108751,
+   "sha256": "47eb172803462b0124e4f009ef8428022671be4a82c4fdc38e2de018043053c7"
+  },
+  "le-cauchemar_1790.jpg": {
+   "octets": 290307,
+   "sha256": "5b3eef43ad310ad68c2aa02b2320eb0f25bfbb74b2abd82ff5528be89f27717f"
+  },
+  "le-char-conduit-par-la-paix_1828.jpg": {
+   "octets": 142796,
+   "sha256": "4320a5d315ebebd16fbd89feba1517760f7e0756885bbf63228e552b9286dd98"
+  },
+  "le-chateau-de-carte_1740.jpg": {
+   "octets": 102672,
+   "sha256": "fa802dfa20b00348342a106d9a24edf05e510e7229a67e16c6e33671dcb3cf61"
+  },
+  "le-chef-d-uvre-inconnu_1831.jpg": {
+   "octets": 106004,
+   "sha256": "a8156b58f3817a6ab311d26979d9e1db4f1a783d42014cae5cdd333b15dfeacf"
+  },
+  "le-cheval-majeur_1914.jpg": {
+   "octets": 29717,
+   "sha256": "ebcf45f0f094801e4d8c099127815579264b70150cb671e85d24e9fd39a5e154"
+  },
+  "le-christ-en-croix-adore-par-deux-donateurs_c-1590.jpg": {
+   "octets": 136955,
+   "sha256": "c242274dc64b16236f3c6f80343686d717b3f6678b891fb157bc4e244c2a0975"
+  },
+  "le-debarquement-de-la-reine-a-marseille-cycle-de_1620.jpg": {
+   "octets": 318500,
+   "sha256": "55632d3ae314cde25c749961d6760698bdb065eba29787f5c359b42db000b6ca"
+  },
+  "le-dejeuner_1739.jpg": {
+   "octets": 251537,
+   "sha256": "0e3cc281b7eae3c11a4332918a5836cecd7d60fa317ef7025fcda0b345162d79"
+  },
+  "le-feu-aux-poudres_1765.jpg": {
+   "octets": 400741,
+   "sha256": "db37c778a340db0b68633a07ab5bc3f23ad4e0e3796f37af96d9e74a9090f111"
+  },
+  "le-hameau-de-la-reine_1783-1786.jpg": {
+   "octets": 244977,
+   "sha256": "8021eefbabea761ebbf27b18cee03a6c0455a1306cb47e1bc9bb9edd9e3abed3"
+  },
+  "le-japon-artistique_1888-1891.jpg": {
+   "octets": 214381,
+   "sha256": "ad55d29001c13de1743f05c92d0dbdcec746503ee4cc1076be4420f4138b279d"
+  },
+  "le-jeune-mendiant_v-1645-1648.jpg": {
+   "octets": 228753,
+   "sha256": "c4433c553861217973d46bacc247faa226bc9a35026e75886a12cfcb38203564"
+  },
+  "le-jour-de-la-visite-a-l-hopital_1889.jpg": {
+   "octets": 97504,
+   "sha256": "edcc234aed393e0eb18acf2194c20dbf96bf36a5f53297d69e3ce4ff18947096"
+  },
+  "le-lion-de-belfort_1875-1880.jpg": {
+   "octets": 228458,
+   "sha256": "173728f283f271d5cf31b13c07c65c02f817fc702db28f1edc66d70ebfc24af5"
+  },
+  "le-marche-aux-chevaux_1852-1855.jpg": {
+   "octets": 153173,
+   "sha256": "b7b7aea83e3f8e2aff4ec202ef9265aa1c3a2543c157810b65523d528979e108"
+  },
+  "le-missionnaire_1912.jpg": {
+   "octets": 54935,
+   "sha256": "19fa8d8b5dfc8068938c4e6df08864004283d0780f43c1ab99b3dd8c6948a771"
+  },
+  "le-parasol_1777.jpg": {
+   "octets": 202561,
+   "sha256": "cfac6f182015e9b99fe6ba1dc20bdaec792031e70ef73676a511f508d718e72a"
+  },
+  "le-parnasse_1761.jpg": {
+   "octets": 57012,
+   "sha256": "8b5d07b29a09220c7cebdeb612faa31f9d8b47da55f4e36b77ca7d69124574ec"
+  },
+  "le-pauvre-pecheur_1881.jpg": {
+   "octets": 50689,
+   "sha256": "eba597c49f335b643eb416c36225b524785a4bba768410e7c1fa41005bcb4d25"
+  },
+  "le-peignoir_1892.jpg": {
+   "octets": 112263,
+   "sha256": "b33c7c1ed3b21bc1775e96a73cbeb8d23eb241844557ccc424766741e1ebf398"
+  },
+  "le-pere-tanguy_1887.jpg": {
+   "octets": 201070,
+   "sha256": "0a50381987ddf0d69632943c38350b6462f949a36c475c4a37d287b593acbb99"
+  },
+  "le-prince-imperial-et-le-chien-nero_1865.jpg": {
+   "octets": 20833,
+   "sha256": "84f324d80f0184438b2e79960decc27e8adf0cbc998dee215842c5e7e7f0493a"
+  },
+  "le-radeau-de-la-meduse_1819.jpg": {
+   "octets": 319735,
+   "sha256": "e9f7ad8b229c30c5949bf714cae01f626d603e9b4a7a37e9208d167ed39c1b93"
+  },
+  "le-rappel-des-glaneuses_1859.jpg": {
+   "octets": 161325,
+   "sha256": "aefdf877a83259b92bfeca0d1405dad5d6b301dad2e38c5212ddcaf08292e466"
+  },
+  "le-repas-de-l-empereur-de-chine_1742.jpg": {
+   "octets": 89798,
+   "sha256": "8f3d693026ecb9ebda9ac69d53cf071f68647d21c04a94c1f9c7f750e3706fb3"
+  },
+  "le-retour-de-marcus-sextus_1799.jpg": {
+   "octets": 244670,
+   "sha256": "a304cf659158647cb5cba718f123f24fce93b53e24c5ae412383aa137d44db6c"
+  },
+  "le-rhinoceros-clara_1749.jpg": {
+   "octets": 26198,
+   "sha256": "c30b2225ea20bd6beab3fcba0af591f914249685a31606aa054c1e04d190ad04"
+  },
+  "le-rire_1911.jpg": {
+   "octets": 218143,
+   "sha256": "d6bd68d1f146eb92d11d03d4b73705da4f20dbfa7ca54f083f77c7d198ccce4c"
+  },
+  "le-sacre-de-nap_1805-1807.jpg": {
+   "octets": 288008,
+   "sha256": "ee356277335ebbcbb83fde7fde2b5fe4f626b65c9be4aa0e646bda525ee566a6"
+  },
+  "le-salon-de-la-princesse-marie-d-orleans-au-pala_1842.jpg": {
+   "octets": 48116,
+   "sha256": "6d87a5623a8369e748f9547851b7d3d61177e07f68a87e53525aa1c7ec68de39"
+  },
+  "le-serment-des-horaces_1785.jpg": {
+   "octets": 263103,
+   "sha256": "f508801753afd0f65d368441a92e66efb4dcc3ddb056f023c13f248d37a421d5"
+  },
+  "le-songe-d-ossian_1813.jpg": {
+   "octets": 256014,
+   "sha256": "d770d7f189dc9c10688e6e9235a8fbe38b584dd830d4e19a35f00bd9193befe9"
+  },
+  "le-verrou_1777.jpg": {
+   "octets": 235331,
+   "sha256": "46bc17bea46fbf2e03113cf2973c3f2bfe49a177060781bd32221b05e13bb155"
+  },
+  "le-voeu-de-louis-xiii_1824.jpg": {
+   "octets": 37391,
+   "sha256": "39e4c1845b2d9f39976722f070e83b6b4430409fb1112f27fa5aa9557fada4e7"
+  },
+  "le-voyageur_1878-1890.jpg": {
+   "octets": 36102,
+   "sha256": "c6102803b5476222b04ec360c35b930dcdfb740a3fb209961620e702cbd631d3"
+  },
+  "les-affiches-a-trouville_1906.jpg": {
+   "octets": 105173,
+   "sha256": "099bdd81412709005873fdf025e9b666dad290f0a1adf97f8dce95b80c86f87c"
+  },
+  "les-baigneuses_1853.jpg": {
+   "octets": 281155,
+   "sha256": "2877899c1102a42d9fa13d0cfd49618d78bbeadeaaf21e5a78c903dfb49a3fef"
+  },
+  "les-demoiselles-d-avignon_1907.jpg": {
+   "octets": 121918,
+   "sha256": "2d1e11d244f23b28851d48bddc1621d111c3482b2cb5a0a3193fbd06a9aac6b1"
+  },
+  "les-dessins-de-lumiere_1949.jpg": {
+   "octets": 117175,
+   "sha256": "aeeab1f4ec94a578125149af42e9796c0ef878d7b49d0a9f961f6c929c6e04e0"
+  },
+  "les-glaneuses_1857.jpg": {
+   "octets": 307302,
+   "sha256": "bf7c59409171dd4f188719354f8dd0b0f5237aff9f68d2d0eeeb220a8735d99d"
+  },
+  "les-grandes-baigneuses_1906.jpg": {
+   "octets": 37850,
+   "sha256": "b2b7cd6a6055863382e89e8852c2be035c109c5e52626c5f70f6272c4868e74c"
+  },
+  "les-mangeurs-de-pomme-de-terre_1885.jpg": {
+   "octets": 20521,
+   "sha256": "0fe6a141c6aba3b312e35087e014d3b37e1c3e94e63055e5905cfd3b719152b3"
+  },
+  "les-mangeurs-de-raisin_1752.jpg": {
+   "octets": 20324,
+   "sha256": "8a99788bb67cb31b49e509ff436cbb0bb7103a3e73176fa40183782a2f76fd7d"
+  },
+  "les-massacres-de-scio_1824.jpg": {
+   "octets": 270826,
+   "sha256": "7842cd875a163853c646f7b5c63f3fb092c4898269c262f56ba1a7a7e57068ad"
+  },
+  "les-pestiferes-de-jaffa_1804.jpg": {
+   "octets": 310196,
+   "sha256": "84156e86951f817a6a1237e93346fa1c80df1022f1e5a2b9adaca0e6e11ba478"
+  },
+  "les-quatre-parties-du-monde-soutenant-la-sphere-_1872.jpg": {
+   "octets": 96394,
+   "sha256": "4c70e0ed9074d5e33de1bdecc24623e6c01cbf9e3eab87f6fc7ca2dd856a8084"
+  },
+  "les-romains-de-la-decadence_1847.jpg": {
+   "octets": 101574,
+   "sha256": "245a49548e20884934fb3f30748cc5b92a7408d40161f7549fefdc4a608bd196"
+  },
+  "les-souffrances-du-jeune-werther_1774.jpg": {
+   "octets": 109243,
+   "sha256": "b13edb8c715c9e67df65a19a420d6867c9d0a43d812375fd53d62c419840afde"
+  },
+  "les-trois-graces_1831.jpg": {
+   "octets": 177795,
+   "sha256": "d2b4312a3c8eac505778d89c56e93995bde3497442bad8a27723b64e8400ba11"
+  },
+  "ligne-de-production-dans-les-usines-renault-a-bi_1934-1939.jpg": {
+   "octets": 148270,
+   "sha256": "b4e4497f9b55d2d256143cef84419505a5716b7da3b58cb3171c7be8bf5879ce"
+  },
+  "lit-de-charles-x-aux-tuileries_1817-1819.jpg": {
+   "octets": 280941,
+   "sha256": "37d4c42e15aaeae0d406b87a75c769fb9a02d5f296c71ab2ac9d229adff904a5"
+  },
+  "lit-de-madame-juliette-recamier_vers-1800.jpg": {
+   "octets": 211458,
+   "sha256": "81da8105d62f5053211fc46918c4d55c351e4035f9e936634bae0a2428472436"
+  },
+  "livres_1924.jpg": {
+   "octets": 170583,
+   "sha256": "aca3511caeb87b52b6940eb9ca5a822306571b01571ad8cd050ffbd53fb89014"
+  },
+  "louis-xiv-en-costume-de-sacre_1701.jpg": {
+   "octets": 328489,
+   "sha256": "83bc3fa9404d1c30b92ee15b95fa2e830f82b7aba72cb5ea6a29fea4852fc1cb"
+  },
+  "luxe-calme-et-volupte_1904.jpg": {
+   "octets": 167965,
+   "sha256": "29617270154053e0d3327d7138deb1862c43b3d2770bc214d2c03445643d962b"
+  },
+  "madame-hessel-lisant-le-journal-devant-la-chemin_1917.jpg": {
+   "octets": 25873,
+   "sha256": "bafa81882d06ccba6888b70d13e26ec070c043908e96284eb1f9e1ade52add19"
+  },
+  "madame-monet-en-costume-japonais_1876.jpg": {
+   "octets": 220077,
+   "sha256": "e13282394987f1db06150a6068caf79360cfb29217f347c59338967f92854b4d"
+  },
+  "magazine_fevrier-1928.jpg": {
+   "octets": 204165,
+   "sha256": "61fc2a74c27d629bc566b9d3b10ac8324429bdcc3ac0663640730589678dcba4"
+  },
+  "maison-de-l-art-nouveau_1895.jpg": {
+   "octets": 41060,
+   "sha256": "1d19598805edd7a7fb1b60f07be2d9699f31db33204af8ceb232a03c0bb7be84"
+  },
+  "maisons-a-l-estaque_1908.jpg": {
+   "octets": 327126,
+   "sha256": "e2eb98a53dee5f5691919a0b5d1fa26b08ecef1706d72561253e076e16e9ce08"
+  },
+  "majolique-de-la-scene-de-la-manne_1540-1550.jpg": {
+   "octets": 59410,
+   "sha256": "d2d4ddeeb565c5a39cb3d335d79c5b0c9c3dd8adc5e371c1bef09fc5069c45b9"
+  },
+  "marat-assassine_1793.jpg": {
+   "octets": 183621,
+   "sha256": "ccabbc6ba5dc4a06c763f3ff1ee3e7b47079755e0d109663b9fe398a773f24c0"
+  },
+  "medaille-de-l-ordre-de-la-legion-d-honneur_1802.jpg": {
+   "octets": 36031,
+   "sha256": "3ee1fed7de9b24e1b7606ac18087e7b12b47809c9bf6d1afaed991b8106c7f2c"
+  },
+  "medaille-en-bronze-avec-le-profil-de-lionel-d-es_1ere-moitie-xvs.jpg": {
+   "octets": 51848,
+   "sha256": "6b8d4c6469f25570c6421ad25bbe8922dfdddf686f3d269765368e863d55fb5a"
+  },
+  "medaille-en-bronze-la-salle-du-laocoon-au-musee-_1804.jpg": {
+   "octets": 85298,
+   "sha256": "83e5e8a1e58fc40c2c9c4ea6d1714bb0434f6609d0f432191e819461e057f4b2"
+  },
+  "medaillon-en-or-et-email-cloisonne_vers-1869.jpg": {
+   "octets": 25132,
+   "sha256": "b69ed55f8713575afdeba4d2e85d8b9fd1bbc5e47dd3f470f43bc9775dc6edd8"
+  },
+  "mediterranee_1923-1927.jpg": {
+   "octets": 226395,
+   "sha256": "da6a88a6f89f9dce7927d110bff97a68c94b8c5ebc45713cf1befde26163754d"
+  },
+  "misere_1886.jpg": {
+   "octets": 37022,
+   "sha256": "c5b9475dfa6754c2cc3e079d8775a0c9aa53010c9e16f1556ec7ad46c9039f53"
+  },
+  "mobilier-aux-epis_1787.jpg": {
+   "octets": 101320,
+   "sha256": "a90d4c73102dc0e0ede7a11a3c89c686181611ff3234095dc5dbe20c478d9cc4"
+  },
+  "mobilier-d-argent-massif-de-louis-xiv_annees-1680.jpg": {
+   "octets": 67994,
+   "sha256": "eb82ae2fe34d644a720a43d0966ad825ce813ca29a21f19f6cd4b7b13db8b0c9"
+  },
+  "montagne-sainte-victoire_1904.jpg": {
+   "octets": 403735,
+   "sha256": "00edc05b6130f22de783e6c8e12444e62add603e1a38f185132bdae8d46b8dee"
+  },
+  "motif-gabon_1981.jpg": {
+   "octets": 117384,
+   "sha256": "fd8a84fe6d11ecc5394f0c31de290941ebb7864234b2e468644d6c6e2f25e9bf"
+  },
+  "naissance-de-venus_1879.jpg": {
+   "octets": 47202,
+   "sha256": "d187c6add06a56ff2997024df3bfc2868a44ce368e9e93670e6aab26d1beb1d5"
+  },
+  "napoleon-1er-en-empereur-romain_1863-1865.jpg": {
+   "octets": 200807,
+   "sha256": "e3839012ed8c186657f22cce227ed690c088167841c481616517e1a52c1e003d"
+  },
+  "napoleon-franchissant-le-col-du-grand-saint-bern_1800-1802.jpg": {
+   "octets": 281736,
+   "sha256": "36f41451837b1f94d8cec751e635339ff68da7e190f7ba0eebfaade1fa790711"
+  },
+  "napoleon-sur-le-trone-imperial_1806.jpg": {
+   "octets": 169736,
+   "sha256": "df3bfc3071394d1a3b6463a5d1b238800049834625352b0d6d07289849846b2c"
+  },
+  "nature-morte-a-la-chaise-cannee_1912.jpg": {
+   "octets": 47054,
+   "sha256": "0254ae1e53981f4c375675c1d2ccd367b8f3a365e09f3a1f8ba0aa553074a606"
+  },
+  "nature-morte-au-trophee-de-gibier-fruit-et-perro_1716.jpg": {
+   "octets": 260315,
+   "sha256": "986309bd48a35d7e80025d5100a56f9711e2f8704d0cca3290c9b7cfe23a38d2"
+  },
+  "necessaire-de-campagne-de-napoleon-1er_1806.jpg": {
+   "octets": 44860,
+   "sha256": "928c16b2ed76f2eea5b559861c160d3aac58901287bff02f6c55faba6f837d2e"
+  },
+  "nu-descendant-l-escalier_1912.jpg": {
+   "octets": 23291,
+   "sha256": "b2163af53e76d1152c09f9fc5cde470bbc94000212b1de199a251aa6f6ccd020"
+  },
+  "nu-sur-fond-rouge_1905-1906.jpg": {
+   "octets": 81711,
+   "sha256": "aa55ec828226bda150946f42176bf6329072dc935729add2b77832a850877db8"
+  },
+  "nuit-etoilee_1889.jpg": {
+   "octets": 473742,
+   "sha256": "808d91633c399ce0a03b3969f67fdae7df9c9d0cb808872f55cfe27e2f22d82c"
+  },
+  "nus-dans-la-foret_1909-1910.jpg": {
+   "octets": 162546,
+   "sha256": "af0c8cd2c17d84a5624b63bddd71024e6c4531827bc9f79af93f2f8aa777026b"
+  },
+  "obelisque-de-louxor_1834.jpg": {
+   "octets": 118150,
+   "sha256": "34a5e76313c04e62668ee44ea839c8db046d49921eb206d3ba29571336fe4ef4"
+  },
+  "odalisque-brune_1745.jpg": {
+   "octets": 69205,
+   "sha256": "668717bd30d1608ac87fba9a55a49c5667ec2cb8e9753fccdfd29db1b6529d93"
+  },
+  "officier-de-chasseur-a-cheval-chargeant_1812.jpg": {
+   "octets": 331558,
+   "sha256": "bbc142ad06fe755dad716e7e11b8c428708b85155f54657f7e293d97c846ec58"
+  },
+  "olympia_1865.jpg": {
+   "octets": 124407,
+   "sha256": "336a1c98d900ca1a911fda759323bcbfb9910c41db6c26e53d570174cc887671"
+  },
+  "opera-garnier_1860-75.jpg": {
+   "octets": 332941,
+   "sha256": "30f397a0b3252bc31849e19849aaa332f1f404feddc38d958a8ca03122785ddc"
+  },
+  "ophelie_1842.jpg": {
+   "octets": 25336,
+   "sha256": "cc8d50151e2ed9165795e9474935850f5bd17ab9280e9db30baeef656900b6a2"
+  },
+  "orphee_1865.jpg": {
+   "octets": 304430,
+   "sha256": "b861e9bf1a9d75e87e5b33da8c5da1001fabcdb884c66f95d1e4fbfa93483c7c"
+  },
+  "ours-blanc_1922-1923.jpg": {
+   "octets": 202308,
+   "sha256": "7d89240a79ec4d3dc93d749cd2deea314137f3eff3df0886c8747ae41cd7726a"
+  },
+  "papier-peint-jardin-d-hiver_1853.jpg": {
+   "octets": 521290,
+   "sha256": "44e04e7b85b6bf101228b391f079561237e589cfe26fbfd7c7254c08502c4d3a"
+  },
+  "paravent-fortissimo_1925.jpg": {
+   "octets": 176305,
+   "sha256": "d78b1b5a2c9f46e55a0a137e82f047ff6e2722232603304c6cd84f5ddad910b6"
+  },
+  "paravent-screen-100_1936.jpg": {
+   "octets": 40260,
+   "sha256": "73776370eecac2c4e38f0967d0754bfdc4bbb123d4bcb5b22bd63e02b0ed9a7f"
+  },
+  "parc-monceau_1773-1778.jpg": {
+   "octets": 137416,
+   "sha256": "7e1ace4f0d6f8d946e115d4792149933d479b94c8935821a38ac126f57c5d3cd"
+  },
+  "parure-en-corail-sculpte-pour-la-reine-farida-d-_xix-siecle.jpg": {
+   "octets": 197204,
+   "sha256": "a4339cb49a712b225aea875427bfb6ab52107aa485b3c1a96aaf1d94f9b54cd8"
+  },
+  "pauline-borghese-en-venus-victrix_1804-1808.jpg": {
+   "octets": 51994,
+   "sha256": "5620a7cad3149655051bca6d047068375eeca1c23b786edb0fab80cc9f1b318b"
+  },
+  "pavillon-allemand-de-l-exposition-internationale_1929.jpg": {
+   "octets": 175310,
+   "sha256": "c3a83920bdde65de0b1423efc49d44d895545d6a436b70eebaf708b053ee0e83"
+  },
+  "paysage-aux-arbres-verts_1893.jpg": {
+   "octets": 47328,
+   "sha256": "d5f569b7f9b51744346a4285efcd5e03ae043ce85f50cb5cd4107fdb11a4d965"
+  },
+  "paysage-avec-riviere-et-pont_1676.jpg": {
+   "octets": 232529,
+   "sha256": "d0279f90f1dc790cfcebcfe3218763fc78835dee0e1c63d4f167724ff669f41a"
+  },
+  "paysage-enneige_1904.jpg": {
+   "octets": 78630,
+   "sha256": "24bed1846e32bfe51b544ac304caf2fe6458c7c5fc486199709212a33300b30f"
+  },
+  "peacock-room_1876-77.jpg": {
+   "octets": 288170,
+   "sha256": "ce06564b8dbbfceca68ee2d9900ba1ff4721cc304eb3a453fc9fedf76db4762a"
+  },
+  "peigne-muguet-en-corne_1900.jpg": {
+   "octets": 24777,
+   "sha256": "7cedddd8ef22c4031d1531bae742e37bf74ce6beec7c1fbc00e087ee402e8b1c"
+  },
+  "pelerinage-a-l-ile-de-cythere_1717.jpg": {
+   "octets": 316316,
+   "sha256": "621c99eb4086bf6f1ac0e7334fb58abf797732fabeb11e2d3c2cafe534698d2f"
+  },
+  "pelican_1732.jpg": {
+   "octets": 134435,
+   "sha256": "211009f581de45d88de8d77fc213c3b97dc7f82102cdedd2a855c4cff4c7829f"
+  },
+  "pendentif-vaisseau_xvi-siecle.jpg": {
+   "octets": 22453,
+   "sha256": "26f0b79f00219abd6ddeb81d7822572a4777fd4f64aad0163170ce948dd417e4"
+  },
+  "pendentif-visage-de-faune_vers-1980.jpg": {
+   "octets": 247322,
+   "sha256": "1096a69dc3093abb33ffb2a4b67ccc898cc67f02daf20e5c2c8cd883042f8aec"
+  },
+  "petit-trianon_annees-1760.jpg": {
+   "octets": 225194,
+   "sha256": "dab006914bf0cbef9d3fe9398a16de9d4420727fa12929d3cb81b1b61555452c"
+  },
+  "piece-centrale-du-surtout-des-100-couverts_1852-58.jpg": {
+   "octets": 118267,
+   "sha256": "540258230d760b3f087b01be57264996ad8ddd0c1e45737995b7cabfb3c5f760"
+  },
+  "plaquette-en-bronze-de-saint-georges-terrassant-_c-1500.jpg": {
+   "octets": 31218,
+   "sha256": "df3dd472a34852d724d1839f9bbd32c5d536d71da26d7378578e1529863ac943"
+  },
+  "portail-aux-danseurs_1925.jpg": {
+   "octets": 232798,
+   "sha256": "2c185ece70ed2fe8ce8f5b9dae0f4d53b8133ffcb29667d7172ecfe854fe5cc8"
+  },
+  "porte-des-enfers_1880-1917.jpg": {
+   "octets": 51891,
+   "sha256": "4aa5168889453d7d34d96d8badb606a41b975220bf5e8b2ddafc58cf571c94df"
+  },
+  "porte-fenetre-a-collioure_1914.jpg": {
+   "octets": 49245,
+   "sha256": "9ebdb8af9d8fec34e1f3f13070193c497992c8f7d935a8214835be911f70278b"
+  },
+  "porte-torchere-au-tambourin_1873.jpg": {
+   "octets": 169903,
+   "sha256": "35a9a26ca021e5fef3f7657bd339c8278a3009e8ffa2bc9448e7e3390c1635eb"
+  },
+  "portrait-d-ambroise-vollard_1899.jpg": {
+   "octets": 283708,
+   "sha256": "8039e52f863b1f8621a16e9b879317f640370da8a6141a1014edc9b034c60f49"
+  },
+  "portrait-d-emile-zola_1868.jpg": {
+   "octets": 36655,
+   "sha256": "160aa9205c113d5ff1c7a3911c24011431f6cb1ec23378db3d5b1b47b5600c80"
+  },
+  "portrait-d-eugenie-de-montijo-imperatrice-des-fr_1857.jpg": {
+   "octets": 184534,
+   "sha256": "66fa394c3502d20ee11ed6a23b91d074412fa947cc2fefc79f569f0ca937b79b"
+  },
+  "portrait-d-un-homme-pensif_1918.jpg": {
+   "octets": 262849,
+   "sha256": "2dbb50ff25d737fd3ffa72939ffc2d9d4b4b6a3872ce01aea37c04c40fc8c125"
+  },
+  "portrait-de-gertrude-stein_1906.jpg": {
+   "octets": 37067,
+   "sha256": "8070aca2c1f5e4b167a4e8f7cab1cf16bea8aa934ddf53f816cd26bff4b25a92"
+  },
+  "portrait-de-jeanne-hebuterne_1919.jpg": {
+   "octets": 314685,
+   "sha256": "d2f6e052dcca21dd0196621a57ce60eaacedbbc31b61e87fce8114addad91b1a"
+  },
+  "portrait-de-l-abbe-saint-non_1769.jpg": {
+   "octets": 128906,
+   "sha256": "587ce4e5e4f2d401d1585b9b04acda0ac519019dff99338ff0402605561ea76a"
+  },
+  "portrait-de-louis-xv-enfant_1720.jpg": {
+   "octets": 33966,
+   "sha256": "5d09e4371fd55ef1c76bf3fd173b30887e2746905781234914b529fd90cd9b56"
+  },
+  "portrait-de-madame-de-pompadour_1749-1755.jpg": {
+   "octets": 305409,
+   "sha256": "3e88966e5d21af61989d0274d88e1bf16d2302ce87075f7666891463d17b53fb"
+  },
+  "portrait-de-madame-de-pompadour_1756.jpg": {
+   "octets": 37542,
+   "sha256": "7f1711fadeb76c790dc2ca98c347946af27054e372d211f3b29f46d1b62b8d43"
+  },
+  "portrait-de-madame-recamier_1800.jpg": {
+   "octets": 249086,
+   "sha256": "b6bd4545e7ae10a52e22516587febfabbf76bd4e224d5639ea3e15c30254dfc0"
+  },
+  "portrait-de-marie-antoinette-avec-ses-enfants_1787.jpg": {
+   "octets": 264418,
+   "sha256": "d80e6175e56b97aa389568625d093c2909437162855eae6a1b959c5af6443105"
+  },
+  "portrait-des-enfants-du-peintre-chassant-un-papi_vers-1756.jpg": {
+   "octets": 178517,
+   "sha256": "01d205916db4ce595b826955f347adc7d6672b5b22cc60259ec30f66f2c8c37d"
+  },
+  "portraits-charges-de-deputes-de-la-monarchie-de-_1832-1835.jpg": {
+   "octets": 207214,
+   "sha256": "959b7cfc9542fefe8e2bee188abba45e644751095ccdc38ba13270ba2362bdc7"
+  },
+  "prise-de-la-smala-d-abd-del-kader_1843.jpg": {
+   "octets": 96255,
+   "sha256": "ea1d105e05625741bdfab86d5002f5fdb2a52f82473aa01ad5876315bf1aace6"
+  },
+  "projet-esquisse-pour-le-decor-de-la-coupole-du-p_1812.jpg": {
+   "octets": 41527,
+   "sha256": "a8bb5c7b74ba9cea6cac5e7964245152ebc8701afae7216a2f20d7068a32538e"
+  },
+  "psyche-reanimee-par-le-baiser-de-l-amour_1793.jpg": {
+   "octets": 190690,
+   "sha256": "473b0cc14679b245927af2d844574a3d2b761e63d5d4cd197671d4759c0ac579"
+  },
+  "radio-tourne-disque_1956.jpg": {
+   "octets": 35089,
+   "sha256": "c1378e7002f109450a7e763b280f9d87ceab8cabe6bcb7170a3a4127c209d066"
+  },
+  "rafraichissoir_1819-1823.jpg": {
+   "octets": 170175,
+   "sha256": "04aeae43003c2c08434439de85712d1705919dada83ddbacb122253116e3b19f"
+  },
+  "ravachol_1904.jpg": {
+   "octets": 39405,
+   "sha256": "b9fa2a8be046382d6549093daf647dccd68eea01a08fbf539ed9001e652890fa"
+  },
+  "reliquaire-de-sainte-foy_v-xvi.jpg": {
+   "octets": 185775,
+   "sha256": "3c2e1b38a11de5c3c21bb16a9ca0619a62d389feebcdfab3c44f7f5221994eb5"
+  },
+  "restaurant-de-la-machine-a-bougival_1905.jpg": {
+   "octets": 164139,
+   "sha256": "654e4506827f300b44d1d76cc27e8e94ef4d3c5f2015f247ffaba68456ecc277"
+  },
+  "rhinocretaire-ii_1966.jpg": {
+   "octets": 156047,
+   "sha256": "463e3733b509879b58dbfc8b78c7907f9bb9445ba8d4f8c750e1664c9b17be99"
+  },
+  "ringstrasse-destruction-des-remparts_1857.jpg": {
+   "octets": 234755,
+   "sha256": "0ee4db66468bd1cc638a7ad005cfde2097fa779d40adda074c0aed70ac13a128"
+  },
+  "rythme-n-1_1938.jpg": {
+   "octets": 179874,
+   "sha256": "25f0c369f8983169a75c144c0d0ba9b0dd83eb1c93ef374bab94de407c9319e4"
+  },
+  "saint-bruno_1745.jpg": {
+   "octets": 143196,
+   "sha256": "b509b0f05cfef850979a1b675319b8fee73f11914098bf19622f2c7c068c4fe6"
+  },
+  "saliere-poivriere-de-francois-1er_1540-1543.jpg": {
+   "octets": 284589,
+   "sha256": "57b0e75a9271603736be4aef6f3e248353015238e1a4ae0c796ff53dd0d9b9a2"
+  },
+  "saliere-poivriere-du-service-penthievre-orleans_1734-1740.jpg": {
+   "octets": 117292,
+   "sha256": "bf617e377078be085990fa95be259cbdfcc2fce2f5eb8582c92944395feb77eb"
+  },
+  "salon-d-automne-au-grand-palais_1905.jpg": {
+   "octets": 95407,
+   "sha256": "6fa101ac0901a7c87069accf1bfc0054f558939551db121303bb91cb6df8b320"
+  },
+  "salon-ovale-de-l-hotel-de-rohan-soubise_1737-1740.jpg": {
+   "octets": 102368,
+   "sha256": "2ac2b96aaff18691bcae2698bd4a983a4799df100862718cf87b92112783c21b"
+  },
+  "sans-titre_1923-1983.jpg": {
+   "octets": 327330,
+   "sha256": "9140e6face7d043049d2428e4ca7c1325ee1151671a5b28e8d9a19e57ba4e29d"
+  },
+  "sarah-siddons-en-muse-de-la-tragedie_1789.jpg": {
+   "octets": 159703,
+   "sha256": "6749f67ffe3f074c2ad44c62a4d6faddb970bd18d53245db2a6dc7e1f060a5f4"
+  },
+  "saturne-devorant-ses-enfants_1821-23.jpg": {
+   "octets": 46698,
+   "sha256": "fc8eae44cda04589ec045d00c4a7f7c093f622616e78e409966c6641f822e641"
+  },
+  "secret_1894.jpg": {
+   "octets": 16522,
+   "sha256": "34ea3f466d9df7362093a222bf7b93c89414d65596887a160eae8968735c6b4f"
+  },
+  "septime-severe-reprochant-a-caracalla-d-avoir-vo_1769.jpg": {
+   "octets": 86752,
+   "sha256": "2d0af4fc84c20c0491b8f725a69091ec0ea43c21e0eedebaa7ec9bd7095fd6bd"
+  },
+  "serie-de-gravure-des-prisons-imaginaires_a-partir-de-1750.jpg": {
+   "octets": 246296,
+   "sha256": "d17352a056be3c346088dc8780939d958e975f0da603b6643a6cce03df5018f0"
+  },
+  "series-des-ipad-drawings_depuis-2009.jpg": {
+   "octets": 196525,
+   "sha256": "4fce05ef03700455180cd9eb5e736007e7628b489ce28b4d478effad1722f420"
+  },
+  "serre-bijoux-de-l-imperatrice-josephine-dit-gran_1809.jpg": {
+   "octets": 92374,
+   "sha256": "4ab7ba5b1c40bc042a576b52aace505daeb5c49f347145af40767b8d96440665"
+  },
+  "service-encyclopedique_1805-1806.jpg": {
+   "octets": 137847,
+   "sha256": "27b200cd1ce92b722917a838386c2970bb900458ca0875e73df4302d556a58a1"
+  },
+  "service-rousseau_1866.jpg": {
+   "octets": 48495,
+   "sha256": "58cf0d3c7921e707fda1f8c4a54d3923d6b48e8eebab981b08ea647a7f167a41"
+  },
+  "shark_2013.jpg": {
+   "octets": 82551,
+   "sha256": "3f18c9266c6847d8fd5f99d4aa44fb02eff3381892131374fcbf663e9309de70"
+  },
+  "siege-sacco_1968.jpg": {
+   "octets": 40663,
+   "sha256": "689d9258e515e354dfd256018b555b7bb73139ee0101c8b605b469aa21c993ae"
+  },
+  "siege-sella_1957.jpg": {
+   "octets": 14842,
+   "sha256": "caadb69fd205149f5c8897767393d9b5fac2094e4931213a983b02da1f513085"
+  },
+  "sir-gregory-page-turner_1768.jpg": {
+   "octets": 136576,
+   "sha256": "c792adc1656eb75afe5a26565c4eb4da4acbf12d1b20de3bf52f717eebb34124"
+  },
+  "soupiere-et-presentoir_1925.jpg": {
+   "octets": 40845,
+   "sha256": "4b28364a05ea049224510a4181ae70cbe0475e1cc75953c801dd8bfa0d584f05"
+  },
+  "statuette-de-daphne_1570-75.jpg": {
+   "octets": 86815,
+   "sha256": "f9e90f991125f2f9706bcc6c1bf1d95d321038c54b9cb23dd6a781c22ef01c8f"
+  },
+  "suite-femmes-a-la-mandoline_1908-1910.jpg": {
+   "octets": 37687,
+   "sha256": "c2cf571c2e3bbd6c02075a8a284f5bc4c94c5f5c832889f3f4eaea71a3db986b"
+  },
+  "supplications-aux-orfevres-dans-le-mercure-de-fr_1754.jpg": {
+   "octets": 16558,
+   "sha256": "60eea109264830461f7513d15a8787547be8ac14fce879d3936b2509c4b54079"
+  },
+  "surtout-du-duc-de-bourbon_1736.jpg": {
+   "octets": 129710,
+   "sha256": "713efc4eb57f1f1edea93583a0544646b72a9317aa136323920143cd22a13b43"
+  },
+  "symphonie-fantastique_1830.jpg": {
+   "octets": 44629,
+   "sha256": "997f5f7922845414e8527e1cc3d0604a877b877b4912e82b48a3ec1e42aaedd4"
+  },
+  "tabatiere-de-louis-xv_1725.jpg": {
+   "octets": 72978,
+   "sha256": "dbd4880f6ca7020285869b779189f04f54b1fc3e3873d34323bce28ea4e15517"
+  },
+  "table-basse-attila_1999.jpg": {
+   "octets": 22346,
+   "sha256": "5391d313050c1a3cc2b30e4774f20970581b5c1884c5b9d1bcdc2e2c5cdd356a"
+  },
+  "table-basse-noguchi_1947.jpg": {
+   "octets": 76084,
+   "sha256": "70fb6c961ff136d7a1e464c2376c35748648ff2dba8b2bd123a5ea9d7e18ffb3"
+  },
+  "table-compas_1948.jpg": {
+   "octets": 65783,
+   "sha256": "040a8010a689a4e6719508e29aeab4bedbfc96ebe77350d1f492ca7aefbb57c8"
+  },
+  "table-de-toilette-de-la-duchesse-de-berry_vers-1819.jpg": {
+   "octets": 34487,
+   "sha256": "627c74fdda19eb6da2562c75edecb295f0c5f3160c0f6a41bb4e5881507bb753"
+  },
+  "table-t21_c1970.jpg": {
+   "octets": 20998,
+   "sha256": "2813d652827389bc9eaba79411b6419e5b50ca6e46c440b1ab9f2fd8e4ce47e3"
+  },
+  "tabouret-berger_1953.jpg": {
+   "octets": 92285,
+   "sha256": "39930dd5503afc0d80c3e61921051555d366340897ef99d1e53bfdf7468ee77c"
+  },
+  "tanagra_1890.jpg": {
+   "octets": 22122,
+   "sha256": "29353948e843fb2c56e47e94dc008fa1cc4d671184a2dba166ebcede4bb47d33"
+  },
+  "temple-a-la-gloire-de-la-grande-armee-eglise-de-_1806.jpg": {
+   "octets": 251887,
+   "sha256": "c65729a38a582cf89ef7b71c0c96958596a1aa4a83c20086e9dfe69914444475"
+  },
+  "tenture-les-chasses-de-maximilien-mois-de-mars-c_vers-1530.jpg": {
+   "octets": 140081,
+   "sha256": "52d8b12bac4fd61be899f35a1b44ef5d7439ae7f06898425f910ec9edde8e6e2"
+  },
+  "the-oxbow_1836.jpg": {
+   "octets": 200656,
+   "sha256": "82f8cef4dbe63540c4d931f8ab0d226e2c9521bd0b10b65aa3252c28daa5d297"
+  },
+  "theiere-mt-49_1924.jpg": {
+   "octets": 25271,
+   "sha256": "aa1cccb75e2265ee39987a75735ee8cc1d643e5d224e3337774a6e3109b20937"
+  },
+  "tigre-devorant-un-gavial_1831.jpg": {
+   "octets": 46742,
+   "sha256": "71ef24bd6cdb5159783c57a38ae80d51d33eef49a5d75a58b7e72fe62c702216"
+  },
+  "tii-a-la-coquille_1892.jpg": {
+   "octets": 24968,
+   "sha256": "dcf9d5bc064750c0156cc341ae038a3b02e2b50863b46e890008d9a089794a46"
+  },
+  "tombeau-d-oscar-wilde_1911-1914.jpg": {
+   "octets": 120718,
+   "sha256": "f2c82600e96e316711a3d4fa1498499a17733c6b5a0ad854fe868bde93a46240"
+  },
+  "tournevis-serie-des-hourloupes_1962.jpg": {
+   "octets": 27559,
+   "sha256": "5ce489dde5abd3c2af721a64140b54d78b4733afc499814f4bf2447b647e3373"
+  },
+  "triomphe-de-venus_1740.jpg": {
+   "octets": 244168,
+   "sha256": "10e603719d55f30fcdb6882b85d12a63a157de6cebef59c2d96babcbd042ff2a"
+  },
+  "tulip-chair_1956.jpg": {
+   "octets": 39698,
+   "sha256": "82fea98479ad531ae0b336a41b1a9e71e26f56e29a27a9c1580e73fe08701082"
+  },
+  "un-automne-pastoral_1749.jpg": {
+   "octets": 100797,
+   "sha256": "ae11df3e6418f540c17a160b9e237f3970d41d133bbc517f36aa48d9485e49db"
+  },
+  "un-enterrement-a-ornans_1849-1950.jpg": {
+   "octets": 103786,
+   "sha256": "7cc59df6975a105c40b8d2d3b3df1933321570419b713056155e89898f128967"
+  },
+  "vahine-a-la-fleur_1891.jpg": {
+   "octets": 418613,
+   "sha256": "d4ae01ca4814e5fa093af8776ee355df8c01a9c8ec2159aaf262a311df848f41"
+  },
+  "valentine-de-milan-pleurant-la-mort-de-son-epoux_1802.jpg": {
+   "octets": 144895,
+   "sha256": "3553f53ed0820b11d8120be827c90b48ed237486275010216a8a0998158a2506"
+  },
+  "vase-de-la-renaissance_1835.jpg": {
+   "octets": 213979,
+   "sha256": "2941ac1efc2e7c69a4b8b6cc07be5a682500672b54671def60fcf472d26390f0"
+  },
+  "vase-egyptien_1804-1806.jpg": {
+   "octets": 56432,
+   "sha256": "690fba6e1f6560a59faec292d5c7cea6e9214a19033d598b1d9a43b7d8cd7850"
+  },
+  "vase-ovoide-a-palmettes-stylisees-plume-de-paon_1925.jpg": {
+   "octets": 65847,
+   "sha256": "77ee596db80eeb81ddee4a5a1557af86dda8b461dccb33a8e07d8fedb1192502"
+  },
+  "vase-ovoide_vers-1935.jpg": {
+   "octets": 34314,
+   "sha256": "cc90837e2df812b6970c03a041567f20d674410a916f4266b53d45c4ef9ae51a"
+  },
+  "vente-collection-dessin_1741.jpg": {
+   "octets": 27642,
+   "sha256": "05557b2226b6e80906a1d982463e8035c4fdea69c558518e9f2f89acc30f0fdd"
+  },
+  "verre-d-absinthe_1914.jpg": {
+   "octets": 31344,
+   "sha256": "e411afda9f5b40529dd054ed4ad8049250a8a1de7a1100833b0ec85aeb8ac58d"
+  },
+  "victor-hugo-sur-son-lit-de-mort_1885.jpg": {
+   "octets": 39155,
+   "sha256": "3b86b2c81910bc2f682ae8e0d0f99d76d250f0e84879c8ac3c09ec4bb45e5b76"
+  },
+  "vidrecome-chope-combat-des-centaures-et-des-lapi_vers-1700.jpg": {
+   "octets": 36942,
+   "sha256": "33bf333453aa40228eb52f0e8afe420ef90d7d8e72fec1357b7061ca3f0e051e"
+  },
+  "villa-majorelle_1901-1902.jpg": {
+   "octets": 211521,
+   "sha256": "6aa789f5469107b97baedbc4fdc7c434e21509133f4621e7baab5f35d489092d"
+  },
+  "villa-savoye_1929-1931.jpg": {
+   "octets": 212297,
+   "sha256": "97743fcf6c2dca21e046967348c700b6d16ef76f2e61f9292b847da56fa5f169"
+  },
+  "vite_1560.jpg": {
+   "octets": 421929,
+   "sha256": "93798de551c7b91ca28e9b374b6dce84070d60759615f4ea6fb73a7d6058b30b"
+  },
+  "voltaire-assis_1779.jpg": {
+   "octets": 65746,
+   "sha256": "5f675c000df6ff41429ea790ac6f66c1086592eada67d5f52cfa9e9639c321bf"
+  },
+  "voltaire-nu_1770.jpg": {
+   "octets": 177007,
+   "sha256": "1ee8c180c893a5f4e0c2022349f2107674fa0bc10d6ca4d3b30f189ad6283c75"
+  },
+  "voyage-dans-la-basse-et-haute-egypte_1802.jpg": {
+   "octets": 41888,
+   "sha256": "ccc38885c6331b51b1ec9df76d269f293ec8e81bbfd041e1819ce96596d8c2dd"
+  },
+  "voyage-pittoresque-et-romantique-en-ancienne-fra_1820.jpg": {
+   "octets": 186110,
+   "sha256": "adb004def91d1ddd9c28fa8637815484da13f070f24ecb6ded6aa243bce07419"
+  },
+  "voyageur-devant-la-mer-de-nuages_1818.jpg": {
+   "octets": 187693,
+   "sha256": "0fa72fd9908b38a88446cde384b0f720ef97068f61c1a102119bb6186078f7a4"
+  },
+  "vue-d-une-salle-du-musee-des-monuments-francais-_1798.jpg": {
+   "octets": 44248,
+   "sha256": "89fb24ebbe55c263802b3caa1684aedcbf5cfc27fb0608e75ea231186f9e2c31"
+  },
+  "vue-de-la-grande-galerie-en-ruines_1796.jpg": {
+   "octets": 65811,
+   "sha256": "fba4f3800dec0cae08c9f9c9b924f70254e22fa802422e527af99797a74fb16e"
+  },
+  "vue-du-grand-canal_1726.jpg": {
+   "octets": 218461,
+   "sha256": "0fe6f61d13d352fa496ace7bc9ce2f1f8459e79ce5b586f0720bc6344ed3b754"
+  },
+  "vue-du-port-de-bordeaux-depuis-le-chateau-trompe_1759.jpg": {
+   "octets": 29100,
+   "sha256": "7621f7feeeb878420f7df0b2667f702c78a014b3d07990f76baaeb03b0cae1e3"
+  }
+ }
+}

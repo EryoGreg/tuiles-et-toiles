@@ -21,6 +21,9 @@ src/main/oauth-client.json
 *.db-shm
 data/logs/
 
+# Cache des grandes images telechargees (dev)
+data/images-cache/
+
 # Copies de securite automatiques (en dev ; Documents\ une fois empaquete)
 data/sauvegardes/
 

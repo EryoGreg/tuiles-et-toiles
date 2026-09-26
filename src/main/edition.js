@@ -252,7 +252,7 @@ function corbeille() {
     if (!CHAMPS.some((c) => v(c))) continue;   // contenu deja oublie : plus rien a rendre
     out.push({
       id: r.cle, estLocale: true, ref: v('ref_local'), titre: v('titre'), artiste: v('artiste'), date: v('date'),
-      image: v('image') ? 'tuile://' + v('image') : null,
+      image: v('image') ? 'tuile://mini/' + v('image') : null,
       supprimeeLe: versIso(r.hlc), effaceeLe: compaction.purgeeLe(r.hlc), conflit: enConflit.has(r.cle)
     });
   }
@@ -263,7 +263,7 @@ function corbeille() {
     const corrige = (c) => { const x = etat.valeur('override', r.cle, c); return x && x.valeur ? x.valeur : o[c]; };
     out.push({
       id: r.cle, estLocale: false, ref: o.ref, titre: corrige('titre'), artiste: corrige('artiste'), date: corrige('date'),
-      image: corrige('image') ? 'tuile://' + corrige('image') : null,
+      image: corrige('image') ? 'tuile://mini/' + corrige('image') : null,
       supprimeeLe: versIso(r.hlc), effaceeLe: null
     });
   }
@@ -363,14 +363,14 @@ function journalModifs({ avant = null, limite = 400 } = {}) {
     if (tuiles.has(cle)) return tuiles.get(cle);
     const o = db.oeuvre(cle);
     let t;
-    if (o) t = { ref: o.ref, titre: o.titre, image: o.image ? 'tuile://' + o.image : null, visible: true };
+    if (o) t = { ref: o.ref, titre: o.titre, image: o.image ? 'tuile://mini/' + o.image : null, visible: true };
     else if (cle.startsWith('local:')) {
       const l = etat.lignes('locale', cle);
       const v = (c) => (l[c] && l[c].valeur != null ? String(l[c].valeur) : '');
-      t = { ref: v('ref_local'), titre: v('titre'), image: v('image') ? 'tuile://' + v('image') : null, visible: false };
+      t = { ref: v('ref_local'), titre: v('titre'), image: v('image') ? 'tuile://mini/' + v('image') : null, visible: false };
     } else {
       const p = pack.get(cle);
-      t = { ref: p ? p.ref : '?', titre: p ? p.titre : '(œuvre retirée du pack)', image: p && p.image ? 'tuile://' + p.image : null, visible: false };
+      t = { ref: p ? p.ref : '?', titre: p ? p.titre : '(œuvre retirée du pack)', image: p && p.image ? 'tuile://mini/' + p.image : null, visible: false };
     }
     tuiles.set(cle, t);
     return t;

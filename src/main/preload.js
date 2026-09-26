@@ -70,6 +70,16 @@ contextBridge.exposeInMainWorld('api', {
     importer: (chemin) => ipcRenderer.invoke('sauvegarde:importer', chemin)
   },
 
+  images: {
+    etat: () => ipcRenderer.invoke('images:etat'),
+    toutTelecharger: () => ipcRenderer.invoke('images:toutTelecharger'),
+    onProgression: (fn) => {
+      const ecouteur = (_e, p) => fn(p);
+      ipcRenderer.on('images:progression', ecouteur);
+      return () => ipcRenderer.removeListener('images:progression', ecouteur);
+    }
+  },
+
   copieSecurite: {
     etat: () => ipcRenderer.invoke('copie:etat'),
     ouvrir: () => ipcRenderer.invoke('copie:ouvrir')

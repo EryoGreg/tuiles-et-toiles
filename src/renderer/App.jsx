@@ -690,7 +690,7 @@ function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer }) {
         </button>
       )}
       {o.image
-        ? <img className="carte-galerie-image" src={o.image} alt="" loading="lazy" />
+        ? <img className="carte-galerie-image" src={o.vignette || o.image} alt="" loading="lazy" />
         : <div className="carte-galerie-image carte-galerie-image-vide" />}
       <div className="carte-galerie-corps">
         <span className="numero">#{o.ref}{o.conflit && <PastilleConflit />}</span>
@@ -2047,6 +2047,10 @@ function Options({ etat, onEtat, aller }) {
 
       <div className="filet" />
 
+      <SectionImages />
+
+      <div className="filet" />
+
       <section>
         <div className="etiquette">Google Drive</div>
         {!drv ? (
@@ -2305,6 +2309,63 @@ function Options({ etat, onEtat, aller }) {
         </BoiteConfirmation>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ images */
+
+// Grandes images du pack : telechargees a la demande (vignettes embarquees).
+// Hors ligne complet : tout telecharger d'un coup, ou en tache de fond.
+function SectionImages() {
+  const [e, setE] = useState(null);
+  const [prog, setProg] = useState(null);
+  const relire = () => window.api.images.etat().then(setE);
+  useEffect(() => {
+    relire();
+    return window.api.images.onProgression((p) => { setProg(p); if (p.faites % 20 === 0) relire(); });
+  }, []);
+  if (!e || !e.nombre) return null;
+  const complet = e.presentes >= e.nombre;
+  const lancer = async () => {
+    setProg({ faites: 0, echecs: 0, total: e.nombre - e.presentes });
+    const r = await window.api.images.toutTelecharger();
+    setProg(r.restantes ? { fini: true, ...r } : null);
+    relire();
+  };
+  const basculer = async () => {
+    await window.api.reglages.definir('images_hors_ligne', e.horsLigne ? '0' : '1');
+    relire();
+  };
+  const enCours = prog && !prog.fini;
+  return (
+    <section>
+      <div className="etiquette">Images des œuvres</div>
+      <div className="choix-raccourcis">
+        {!complet && (
+          <button className="bouton-neutre" onClick={lancer} disabled={enCours}>
+            <I.FlecheVert t={16} bas />
+            {enCours ? 'Téléchargement… ' + prog.faites + '/' + prog.total
+              : 'Tout télécharger maintenant (' + enMo(e.octetsTotal - e.octets) + ')'}
+          </button>
+        )}
+        <button className={'raccourci-bouton' + (e.horsLigne ? ' pose' : '')} onClick={basculer}>
+          {e.horsLigne ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
+          Tout garder pour le hors-ligne
+        </button>
+      </div>
+      {prog && prog.fini && prog.restantes > 0 && (
+        <div className="options-note" style={{ color: 'var(--revoir)' }}>
+          {prog.restantes} image(s) n’ont pas pu être téléchargées (connexion ?). Nouvel essai plus tard.
+        </div>
+      )}
+      <div className="options-note">
+        {complet
+          ? 'Toutes les images (' + e.nombre + ', ' + enMo(e.octets) + ') sont sur cet appareil : tout marche hors ligne.'
+          : e.presentes + ' image(s) sur ' + e.nombre + ' en grand format sur cet appareil.'}
+        {' '}Les autres se téléchargent à l’affichage ; sans connexion, une version réduite les
+        remplace. « Tout garder » les récupère toutes en arrière-plan.
+      </div>
+    </section>
   );
 }
 
