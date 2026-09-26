@@ -22,7 +22,9 @@ const lancer = (cmd, cwd = RACINE) => execSync(cmd, { cwd, stdio: 'inherit' });
 
 lancer('node scripts/build-mobile.js');
 lancer('npx cap sync android');
-lancer(process.platform === 'win32' ? 'gradlew.bat assembleDebug' : './gradlew assembleDebug', path.join(RACINE, 'android'));
+// Chemin complet : cmd ne cherche pas toujours dans le dossier courant.
+const android = path.join(RACINE, 'android');
+lancer('"' + path.join(android, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew') + '" assembleDebug', android);
 
 const apk = path.join(RACINE, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 const cible = path.join(RACINE, 'release', 'Tuiles-et-Toiles-' + version + '.apk');
