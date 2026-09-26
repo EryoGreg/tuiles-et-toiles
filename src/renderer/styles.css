@@ -479,6 +479,19 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .valeur { height: 40px; overflow: hidden; display: flex; align-items: center; }
 .valeur .masque { height: 100%; width: 100%; }
 .valeur-titre { height: 54px; }
+/* Textes des champs. Un mot sans espace (tags colles, URL) se coupe au lieu
+   d'elargir toute la tuile : min-width 0 sur toute la chaine flex/grille. */
+.tuile .corps, .corps-reste, .champ, .valeur > div { min-width: 0; }
+.valeur > div { overflow-wrap: anywhere; }
+.texte-titre { font-family: var(--serif); font-size: 22px; line-height: 1.2; }
+.texte-titre.long { font-size: 18px; }
+.texte-titre.tres-long { font-size: 15px; }
+.texte-champ { font-size: 14.5px; color: var(--tuile-ink); }
+.texte-champ.long { font-size: 13px; line-height: 1.3; }
+.texte-champ.tres-long { font-size: 12px; line-height: 1.25; }
+.texte-tags { font-size: 13px; color: var(--attenue); }
+.tete-aide { font-size: 11.5px; color: var(--discret); }
+.marques-tete, .compteur-tete { display: none; }
 
 /* Description : case a hauteur bornee (clamp), texte qui defile a l'interieur
    sans montrer la scrollbar. */
@@ -1105,7 +1118,20 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .boite-rapport { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
 .rapport-champ { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; font-size: 13px; color: var(--attenue); }
 .rapport-champ em { font-style: normal; color: var(--discret); }
-.rapport-champ select.editeur-input { height: 36px; cursor: pointer; }
+.puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.puce {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 34px; padding: 6px 13px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--trait);
+  color: var(--attenue); font: inherit; font-size: 13px; line-height: 1.25; text-align: left;
+  cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.puce:hover { border-color: var(--trait-fort); color: var(--encre); }
+.puce:focus-visible { outline: 2px solid var(--laiton); outline-offset: 2px; }
+.puce.on {
+  background: color-mix(in srgb, var(--laiton) 28%, transparent); font-weight: 600;
+  border-color: var(--laiton); color: var(--encre-vive);
+}
 .rapport-champ .rapport-description { min-height: 96px; resize: vertical; }
 .rapport-apercu { margin: 0 0 16px; font-size: 13px; color: var(--attenue); }
 .rapport-apercu summary { cursor: pointer; margin-bottom: 8px; }
@@ -1256,32 +1282,62 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .menu-quitter { display: none; }   /* on quitte une appli Android par le systeme */
   .carte { min-height: 118px; }
 
-  /* Jeu : marques en ligne au-dessus de la tuile, tuile pleine largeur. */
+  /* Jeu : tout tient dans l'ecran, sans defiler. Les marques passent dans
+     l'en-tete de la tuile (le rail disparait) ; les champs prennent la
+     hauteur de leur texte ; l'IMAGE prend ce qui reste (flex), plancher
+     110px — ce n'est qu'en dessous que .corps defile. */
   .jeu {
-    padding: 0 10px; --rail-largeur: 42px; --rail-gap: 10px; --tete-part: 46px;
+    padding: 0 8px; --rail-largeur: 34px; --rail-gap: 6px; --tete-part: 44px;
     --image-h: clamp(150px, 34vh, 320px);
-    grid-template-rows: 8px minmax(0, 1fr) 8px auto 10px;
+    grid-template-rows: 6px minmax(0, 1fr) 8px auto 8px;
   }
   .rangee-tuiles { flex-direction: column; }
-  .rail { flex-direction: row; justify-content: center; align-self: center; top: 0; width: auto; margin: 0 0 8px; }
-  .suivante { display: none; }
-  .tuile { flex: 1 1 0; min-height: 0; }
-  .tuile .tete { flex: 0 0 var(--tete-part); padding: 0 14px; }
-  .tuile .corps { padding: 12px 14px 14px; }
+  .rail, .suivante, .tete-aide { display: none; }
+  .tuile { flex: 1 1 0; min-height: 0; border-radius: 14px; }
+  .tuile .tete { flex: 0 0 var(--tete-part); padding: 0 8px 0 14px; gap: 8px; }
+  .compteur-tete { display: inline; color: var(--discret); letter-spacing: 0; font-size: 11px; }
+  .marques-tete { display: flex; gap: var(--rail-gap); margin-left: auto; }
+  .marques-tete .marque { border-radius: 9px; }
+  .marques-tete .marque svg { width: 46%; height: 46%; }
+  .tuile .corps { padding: 10px 12px 12px; gap: 10px; }
+  .jeu:not(.editeur-jeu) .corps > .cadre-image,
+  .jeu:not(.editeur-jeu) .corps > .masque.image { flex: 1 1 0; min-height: 110px; height: auto; }
+  .corps-reste { gap: 8px; }
+  .champ { gap: 3px; }
+  .etiquette { font-size: 9px; letter-spacing: 0.16em; }
+  /* Titre et conservation sur toute la largeur ; artiste | date. */
   .grille2 { gap: 8px 10px; }
+  .champ-titre, .champ-lieu { grid-column: 1 / -1; }
+  .valeur, .valeur-titre { height: auto; min-height: 30px; }
+  .valeur .masque { height: 30px; padding: 4px 10px; }
+  .texte-titre { font-size: 19px; line-height: 1.2; }
+  .texte-titre.long { font-size: 16.5px; }
+  .texte-titre.tres-long { font-size: 14.5px; }
+  .texte-champ { font-size: 14px; line-height: 1.3; }
+  .texte-champ.long, .texte-champ.tres-long { font-size: 13px; }
+  .texte-tags { font-size: 12.5px; line-height: 1.35; }
+  /* Description et tags : cases bornees, le texte defile dedans. La
+     description a une hauteur FIXE : la reveler ne fait pas sauter l'image. */
+  .valeur-description { height: clamp(56px, 12vh, 120px); min-height: 0; max-height: none; }
+  .valeur-description .masque { min-height: 0; height: 100%; width: 100%; }
+  .texte-description { font-size: 13px; line-height: 1.45; }
+  .champ-tags .valeur { max-height: 52px; overflow-y: auto; align-items: flex-start; scrollbar-width: none; }
+  .champ-tags .valeur .masque { flex: none; }
   .annee .points { white-space: nowrap; letter-spacing: 0.2em; }
   .annee.cachee .note { display: none; }
   .editeur-image-boutons { display: flex; gap: 10px; margin: 6px 0; text-transform: none; letter-spacing: 0; }
   /* Date longue (« -700 / -500 av J.-C. ») : la case grandit au lieu de deborder. */
-  .annee { height: auto; min-height: 34px; padding: 6px 10px; }
+  .annee { height: auto; min-height: 30px; padding: 4px 10px; }
   .annee span { font-size: 13px !important; line-height: 1.3; }
-  .ligne-actions, .apercu-jeu .ligne-actions { margin-left: 0; width: 100%; }
-  .ligne-actions { row-gap: 8px; }
-  .actions-gauche { gap: 10px; }
-  .actions-gauche .bouton-neutre { padding: 7px 12px; }
-  .actions-droite { width: 100%; gap: 6px; flex-wrap: nowrap; justify-content: space-between; }
-  .actions-droite > button { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
-  .bouton-valide, .bouton-neutre { padding: 10px 10px; font-size: 13px; gap: 6px; }
+  /* Une seule ligne de boutons : Precedente en icone seule. */
+  .ligne-actions, .apercu-jeu .ligne-actions { margin-left: 0; width: 100%; flex-wrap: nowrap; gap: 6px; }
+  .jeu:not(.apercu-jeu) .compteur-sac { display: none; }
+  .actions-gauche { gap: 6px; flex: none; }
+  .actions-droite { flex: 1 1 auto; gap: 6px; flex-wrap: nowrap; }
+  .jeu:not(.apercu-jeu) .actions-droite > button { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+  .actions-droite .libelle-bouton { display: none; }
+  .bouton-valide, .bouton-neutre { padding: 10px 12px; font-size: 13px; gap: 6px; }
+  .ligne-actions .bouton-valide, .ligne-actions .bouton-neutre { padding: 10px 9px; gap: 5px; min-width: 0; }
 
   /* Apercu, editeur : plein ecran. */
   .recouvrement-apercu { padding: env(safe-area-inset-top, 0px) 0 calc(6px + env(safe-area-inset-bottom, 0px)); }
@@ -1293,6 +1349,18 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .galerie-tete { margin-bottom: 16px; gap: 12px; }
   .galerie-tete h2 { font-size: 22px; }
   .galerie-grille { gap: 10px; }
+  /* 3 ou 4 cartes par ligne : texte resserre, titre sur 3 lignes au plus. */
+  [data-grille="3"] .galerie-grille, [data-grille="4"] .galerie-grille { gap: 7px; }
+  [data-grille="3"] .carte-galerie-corps, [data-grille="4"] .carte-galerie-corps { padding: 6px 7px 7px; gap: 2px; }
+  [data-grille="3"] .carte-galerie-titre, [data-grille="4"] .carte-galerie-titre {
+    font-size: 12px; line-height: 1.2; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  }
+  [data-grille="3"] .carte-galerie-artiste { font-size: 10px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+  [data-grille="4"] .carte-galerie-titre { font-size: 11px; -webkit-line-clamp: 2; }
+  [data-grille="4"] .carte-galerie-artiste { display: none; }
+  [data-grille="4"] .carte-galerie-corps .numero { font-size: 9px; }
+  [data-grille="4"] .carte-galerie { border-radius: 9px; }
   .options { padding: 20px 16px 32px; max-width: none; }
   .nouvelle-partie { padding: 18px 14px; }
   .edition-choix .carte { width: 100%; }

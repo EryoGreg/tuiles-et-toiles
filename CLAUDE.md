@@ -214,9 +214,14 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
 - Images : pas de protocole `tuile://` en WebView → `images-url.js` traduit les résultats
   (vignettes livrées, grandes images depuis GitHub puis cache IndexedDB, photos locales en URL
   blob) ; seules les tuiles affichées en grand (`jeu:*`) déclenchent la mise en cache.
-- Interface : `@media (max-width: 700px)` dans `styles.css` (barre d'onglets en bas, marques
-  au-dessus de la tuile, marges `safe-area`), sans effet sur le PC. `SUR_MOBILE` (App.jsx) pour
-  les textes.
+- Interface : `@media (max-width: 700px)` dans `styles.css` (barre d'onglets en bas, marges
+  `safe-area`), sans effet sur le PC. `SUR_MOBILE` (App.jsx) pour les textes. **Jeu sans
+  défilement** : marques dans l'en-tête de la tuile (`.marques-tete`, le rail est masqué), champs
+  à la hauteur de leur texte, description à hauteur fixe, l'**image prend le reste** (flex,
+  plancher 110 px) ; une ligne de boutons. Police selon la longueur (`long` / `tres-long`) pour
+  titre, artiste, lieu ; tags affichés « a, b, c » (des tags collés sans espace élargissaient la
+  tuile). Galeries : 2 / 3 / 4 par ligne (PC 5 / 7 / 9, `DENSITES`), `data-grille` sur `<html>`.
+  Rapport : puces (`Puces`) au lieu de `<select>` (liste native Android datée).
 - Construire : `node scripts/build-mobile.js` (→ `dist-mobile/`, servi par `.claude/launch.json`
   « mobile-web » pour tester dans un navigateur), puis `npx cap sync android` et
   `cd android && gradlew assembleDebug`. Émulateur : AVD `Medium_Phone_API_36.0`

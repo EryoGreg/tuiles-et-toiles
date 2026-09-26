@@ -4,7 +4,11 @@ import * as I from './icones.jsx';
 // Densite de la grille des galeries (tuiles visibles par ligne). Reglage
 // global, cycle 5 -> 7 -> 9 -> 5, pilote par le bouton de BarreFiltres.
 const GrilleContext = createContext({ colonnes: 5, cycler: () => {} });
-const DENSITES = [5, 7, 9];
+// Tuiles par ligne dans les galeries. Mobile : 2 / 3 / 4 (un telephone ne
+// lit rien a 5). `window.api.urlTuile` n'existe que dans l'appli mobile.
+const DENSITES = (typeof window !== 'undefined' && window.api && window.api.urlTuile) ? [2, 3, 4] : [5, 7, 9];
+// Reglage hors de la liste (ancienne valeur, ou venue de l'autre forme) : la plus proche.
+const densiteValide = (n) => DENSITES.reduce((m, d) => (Math.abs(d - n) < Math.abs(m - n) ? d : m), DENSITES[0]);
 
 // Retour « intra-page » : une page ayant un état interne (aperçu ouvert,
 // éditeur, partie en cours) enregistre ici un gestionnaire. souris4 le
@@ -150,6 +154,30 @@ function Tuile({
   // pas la verite de la valeur.
   const voit = (c) => apercu || !!revele || sur.has(c) || tuile.champs[c] != null;
   const ou = (v) => (v == null || String(v).trim() === '' ? '—' : v);
+  // Police qui diminue avec la longueur : un titre long reste lisible d'une
+  // traite (#399, #214) au lieu d'etre rogne par sa case.
+  const long = (v, a, b) => {
+    const n = v == null ? 0 : String(v).length;
+    return n > b ? ' tres-long' : n > a ? ' long' : '';
+  };
+  // « a,b, c » -> « a, b, c » : des tags colles sans espace formaient un seul
+  // mot insecable qui elargissait toute la tuile (#L3 sur mobile).
+  const tags = (v) => (v == null ? v : String(v).split(/\s*,\s*/).filter(Boolean).join(', '));
+
+  const Marques = ({ classe }) => (
+    <div className={classe}>
+      {MARQUES.map(([tag, Icone, cl]) => (
+        <button
+          key={tag}
+          className={'marque ' + cl + (tuile.tagsUtilisateur.includes(tag) ? ' on' : '')}
+          onClick={() => onMarquer(tag)}
+          title={tag}
+        >
+          <Icone t={32} />
+        </button>
+      ))}
+    </div>
+  );
 
   const Cache = ({ champ, label }) => (
     <button className="masque" onClick={() => onReveler(champ)}>
@@ -163,27 +191,21 @@ function Tuile({
           alignement haut/bas, un seul et meme intervalle entre elles. Le
           rail des marques est cale en haut a gauche de la tuile centrale. */}
       <div className="rangee-tuiles">
-        <div className="rail">
-          {MARQUES.map(([tag, Icone, classe]) => (
-            <button
-              key={tag}
-              className={'marque ' + classe + (tuile.tagsUtilisateur.includes(tag) ? ' on' : '')}
-              onClick={() => onMarquer(tag)}
-              title={tag}
-            >
-              <Icone t={32} />
-            </button>
-          ))}
-        </div>
+        <Marques classe="rail" />
 
         <div className="tuile">
           <div className="tete">
-            <span className="numero">#{tuile.ref}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--discret)' }}>
+            <span className="numero">
+              #{tuile.ref}
+              {!apercu && <span className="compteur-tete"> · {tuile.restant} restantes</span>}
+            </span>
+            <span className="tete-aide">
               {apercu
                 ? 'Tuile complète — rien n’est masqué'
                 : 'Clic sur une zone masquée pour la révéler'}
             </span>
+            {/* Mobile : les marques passent dans l'en-tete (le rail y est masque). */}
+            <Marques classe="marques-tete" />
           </div>
 
           {/* Image a hauteur fluide (clamp) ; chaque champ garde une hauteur
@@ -204,11 +226,11 @@ function Tuile({
 
             <div className="corps-reste">
               <div className="grille2">
-                <div className="champ">
+                <div className="champ champ-titre">
                   <div className="etiquette">Titre</div>
                   <div className="valeur valeur-titre">
                     {voit('titre')
-                      ? <div style={{ fontFamily: 'var(--serif)', fontSize: 22, lineHeight: 1.2 }}>{ou(d.titre)}</div>
+                      ? <div className={'texte-titre' + long(d.titre, 32, 64)}>{ou(d.titre)}</div>
                       : <Cache champ="titre" />}
                   </div>
                 </div>
@@ -217,7 +239,7 @@ function Tuile({
                   <div className="etiquette">Artiste</div>
                   <div className="valeur">
                     {voit('artiste')
-                      ? <div style={{ fontSize: 14.5, color: 'var(--tuile-ink)' }}>{ou(d.artiste)}</div>
+                      ? <div className={'texte-champ' + long(d.artiste, 28, 48)}>{ou(d.artiste)}</div>
                       : <Cache champ="artiste" />}
                   </div>
                 </div>
@@ -237,11 +259,11 @@ function Tuile({
                       </button>}
                 </div>
 
-                <div className="champ">
+                <div className="champ champ-lieu">
                   <div className="etiquette">Conservation</div>
                   <div className="valeur">
                     {voit('lieu')
-                      ? <div style={{ fontSize: 14.5, color: 'var(--tuile-ink)' }}>{ou(d.lieu)}</div>
+                      ? <div className={'texte-champ' + long(d.lieu, 40, 70)}>{ou(d.lieu)}</div>
                       : <Cache champ="lieu" />}
                   </div>
                 </div>
@@ -259,11 +281,11 @@ function Tuile({
                 </div>
               </div>
 
-              <div className="champ">
+              <div className="champ champ-tags">
                 <div className="etiquette">Tags</div>
                 <div className="valeur">
                   {voit('tags')
-                    ? <div style={{ fontSize: 13, color: 'var(--attenue)' }}>{ou(d.tags)}</div>
+                    ? <div className="texte-tags">{ou(tags(d.tags))}</div>
                     : <Cache champ="tags" label={(tuile.tagVisible ? tuile.tagVisible + ' · ' : '') + 'tags masqués'} />}
                 </div>
               </div>
@@ -292,7 +314,7 @@ function Tuile({
             <div className="actions-gauche">
               {onChanger && (
                 <button className="bouton-neutre" onClick={onChanger} title="Choisir un autre mode de tirage">
-                  <I.Fleche t={16} retour /> Mode
+                  <I.Fleche t={16} retour /> <span className="libelle-bouton">Mode</span>
                 </button>
               )}
               <span className="compteur-sac">{tuile.restant} tuiles restantes dans le sac</span>
@@ -305,7 +327,7 @@ function Tuile({
                 style={peutRevenir ? undefined : { opacity: 0.35, cursor: 'default' }}
                 title="Tuile précédente (flèche gauche)"
               >
-                <I.Fleche t={18} retour /> Précédente
+                <I.Fleche t={18} retour /> <span className="libelle-bouton">Précédente</span>
               </button>
               <button className="bouton-valide" onClick={() => onReveler(null)}>
                 <I.Coche /> Tout révéler
@@ -2682,6 +2704,38 @@ function PageCorbeille({ onEtat }) {
 // Un clic : le rapport (formulaire + journaux masques) part directement au
 // script de reception, qui le transmet par mail. Apercu depliable avant envoi.
 // Hors ligne : mis en attente, renvoye au prochain lancement.
+// Choix unique en puces (remplace <select> : la liste native d'Android
+// avait un air d'un autre temps). Groupe radio accessible, fleches comprises.
+function Puces({ etiquette, liste, valeur, onChoix }) {
+  const clavier = (e, i) => {
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const k = (i + d + liste.length) % liste.length;
+    onChoix(liste[k].cle);
+    const suivant = e.currentTarget.parentNode.children[k];
+    if (suivant) suivant.focus();
+  };
+  return (
+    <div className="puces" role="radiogroup" aria-labelledby={etiquette}>
+      {liste.map((x, i) => (
+        <button
+          key={x.cle}
+          type="button"
+          role="radio"
+          aria-checked={valeur === x.cle}
+          tabIndex={valeur === x.cle || (!valeur && i === 0) ? 0 : -1}
+          className={'puce' + (valeur === x.cle ? ' on' : '')}
+          onClick={() => onChoix(x.cle)}
+          onKeyDown={(e) => clavier(e, i)}
+        >
+          {valeur === x.cle && <I.Coche t={12} />} {x.libelle}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FormulaireRapport({ onFermer }) {
   const [choix, setChoix] = useState(null);
   const [f, setF] = useState({ sujet: '', depuis: '', reproductible: '', description: '', email: '' });
@@ -2698,6 +2752,7 @@ function FormulaireRapport({ onFermer }) {
   }, [onFermer]);
 
   const set = (k) => (e) => { setF((x) => ({ ...x, [k]: e.target.value })); setApercu(null); };
+  const choisir = (k) => (v) => { setF((x) => ({ ...x, [k]: v })); setApercu(null); };
   const complet = f.sujet && f.depuis && f.reproductible;
   const voir = async (e) => { if (e.target.open && !apercu) setApercu(await window.api.rapport.apercu(f)); };
 
@@ -2739,27 +2794,18 @@ function FormulaireRapport({ onFermer }) {
         <h3>Envoyer le log pour rapport d’erreur</h3>
         {!choix ? <p>Chargement…</p> : (
           <>
-            <label className="rapport-champ">
-              <span>Quel est le problème ?</span>
-              <select className="editeur-input" value={f.sujet} onChange={set('sujet')} autoFocus>
-                <option value="">— choisir —</option>
-                {choix.sujets.map((x) => <option key={x.cle} value={x.cle}>{x.libelle}</option>)}
-              </select>
-            </label>
-            <label className="rapport-champ">
-              <span>Depuis quand ?</span>
-              <select className="editeur-input" value={f.depuis} onChange={set('depuis')}>
-                <option value="">— choisir —</option>
-                {choix.depuis.map((x) => <option key={x.cle} value={x.cle}>{x.libelle}</option>)}
-              </select>
-            </label>
-            <label className="rapport-champ">
-              <span>Le problème se reproduit-il ?</span>
-              <select className="editeur-input" value={f.reproductible} onChange={set('reproductible')}>
-                <option value="">— choisir —</option>
-                {choix.reproductible.map((x) => <option key={x.cle} value={x.cle}>{x.libelle}</option>)}
-              </select>
-            </label>
+            <div className="rapport-champ">
+              <span id="rapport-sujet">Quel est le problème ?</span>
+              <Puces etiquette="rapport-sujet" liste={choix.sujets} valeur={f.sujet} onChoix={choisir('sujet')} />
+            </div>
+            <div className="rapport-champ">
+              <span id="rapport-depuis">Depuis quand ?</span>
+              <Puces etiquette="rapport-depuis" liste={choix.depuis} valeur={f.depuis} onChoix={choisir('depuis')} />
+            </div>
+            <div className="rapport-champ">
+              <span id="rapport-reproductible">Le problème se reproduit-il ?</span>
+              <Puces etiquette="rapport-reproductible" liste={choix.reproductible} valeur={f.reproductible} onChoix={choisir('reproductible')} />
+            </div>
             <label className="rapport-champ">
               <span>Que s’est-il passé ? Qu’attendais-tu ? <em>(facultatif)</em></span>
               <textarea className="editeur-textarea rapport-description" value={f.description} onChange={set('description')}
@@ -3107,7 +3153,7 @@ export default function App() {
   const [confirmerFermeture, setConfirmerFermeture] = useState(false);
   const [racPerimes, setRacPerimes] = useState(null);
   const [proposerRaccourcis, setProposerRaccourcis] = useState(false);
-  const [colonnes, setColonnes] = useState(5);
+  const [colonnes, setColonnes] = useState(DENSITES[0]);
 
   // Historique de navigation (souris4 = reculer, souris5 = avancer). `nonce`
   // rejoue le montage de la page : cliquer l'onglet parent depuis une
@@ -3162,12 +3208,13 @@ export default function App() {
   }, [etat, maj.verifier]);
 
   // Densite de grille : chargee du reglage, appliquee en var CSS globale,
-  // cyclee 5 -> 7 -> 9 par le bouton de BarreFiltres.
+  // cyclee dans DENSITES par le bouton de BarreFiltres.
   useEffect(() => {
-    if (etat && etat.grilleColonnes) setColonnes(etat.grilleColonnes);
+    if (etat && etat.grilleColonnes) setColonnes(densiteValide(etat.grilleColonnes));
   }, [etat && etat.grilleColonnes]);
   useEffect(() => {
     document.documentElement.style.setProperty('--grille-cols', colonnes);
+    document.documentElement.dataset.grille = colonnes;   // cartes plus sobres a 3-4 (mobile)
   }, [colonnes]);
   const cyclerColonnes = useCallback(() => {
     setColonnes((c) => {
