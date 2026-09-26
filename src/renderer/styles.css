@@ -1183,14 +1183,20 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   color: var(--attenue); font: inherit; font-size: 13px; line-height: 1.3; cursor: pointer;
 }
 .cartel-ligne.nouveau-bloc { margin-top: 6px; }
+.cartel-ligne-rang {
+  flex: none; align-self: center; width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--laiton); color: var(--surface); font-family: var(--mono); font-size: 11px; font-weight: 600;
+}
+.puce-retirer { border-color: color-mix(in srgb, var(--revoir) 50%, var(--trait)); color: var(--revoir); }
 .cartel-ligne.choisie { border-color: var(--laiton); background: color-mix(in srgb, var(--laiton) 16%, transparent); color: var(--encre-vive); }
 .cartel-ligne-texte { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .cartel-ligne-role { flex: none; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--discret); }
 .cartel-ligne.role-titre .cartel-ligne-role, .cartel-ligne.role-artiste .cartel-ligne-role,
 .cartel-ligne.role-date .cartel-ligne-role, .cartel-ligne.role-texte .cartel-ligne-role,
 .cartel-ligne.role-technique .cartel-ligne-role { color: var(--laiton); }
-.cartel-ligne.role-provenance, .cartel-ligne.role-numero, .cartel-ligne.role-traduction,
-.cartel-ligne.role-doublon, .cartel-ligne.role-vie { opacity: 0.6; }
+.cartel-ligne:not(.rangee):not(.choisie) { opacity: 0.6; }
+.cartel-ligne.rangee .cartel-ligne-role { color: var(--laiton); }
 .cartel-cibles {
   position: sticky; bottom: 66px; z-index: 1;
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;

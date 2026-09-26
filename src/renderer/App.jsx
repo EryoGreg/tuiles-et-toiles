@@ -1467,6 +1467,8 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
 
 const CHAMPS_CARTEL = ['titre', 'artiste', 'date', 'description', 'tags'];
 // Ce que l'analyse (src/main/cartel-analyse.js) a reconnu dans chaque ligne.
+// Role -> champ ou l'analyse range la ligne.
+const ROLE_CHAMP = { titre: 'titre', artiste: 'artiste', date: 'date', texte: 'description', technique: 'tags' };
 const ROLES_CARTEL = {
   artiste: 'artiste', titre: 'titre', date: 'date', texte: 'description', technique: 'tags',
   vie: 'dates de vie', provenance: 'provenance', numero: 'numéro', traduction: 'traduction',
@@ -1496,8 +1498,14 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
     const v = (lecture.proposition || {})[c];
     return [c, !!v && !String(actuels[c] || '').trim()];   // un champ deja rempli n'est pas ecrase d'office
   })));
-  const [sel, setSel] = useState([]);
-  const [lignesDe, setLignesDe] = useState({});   // champ -> indices choisis a la main
+  const [sel, setSel] = useState([]);   // indices, dans l'ordre ou l'utilisateur les a touches
+  // Champ -> lignes qui le composent, dans l'ordre. Au depart : ce que l'analyse
+  // a reconnu ; chaque ligne n'appartient qu'a un champ.
+  const [affect, setAffect] = useState(() => {
+    const a = Object.fromEntries(CHAMPS_CARTEL.map((c) => [c, []]));
+    lecture.lignes.forEach((l, i) => { const c = ROLE_CHAMP[l.role]; if (c) a[c].push(i); });
+    return a;
+  });
   useEffect(() => {
     const clavier = (e) => { if (e.key === 'Escape') onFermer(); };
     window.addEventListener('keydown', clavier);
@@ -1520,18 +1528,24 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
   }
 
   const basculer = (i) => setSel((x) => (x.includes(i) ? x.filter((k) => k !== i) : [...x, i]));
-  const mettre = (champ) => {
-    const choisies = sel.slice().sort((a, b) => a - b);
-    setProp((p) => ({ ...p, [champ]: joindreLignes(choisies.map((i) => lecture.lignes[i])) }));
-    setCoches((c) => ({ ...c, [champ]: true }));
-    setLignesDe((m) => ({ ...m, [champ]: choisies }));
+  // Retire les lignes choisies de leur champ, puis (champ donne) les y met dans
+  // l'ordre de selection. Les champs touches sont recalcules depuis leurs lignes.
+  const affecter = (champ) => {
+    const a = Object.fromEntries(CHAMPS_CARTEL.map((c) => [c, affect[c].filter((i) => !sel.includes(i))]));
+    if (champ) a[champ] = sel.slice();
+    const touches = CHAMPS_CARTEL.filter((c) => c === champ || a[c].length !== affect[c].length);
+    const valeurs = Object.fromEntries(touches.map((c) => [c, joindreLignes(a[c].map((i) => lecture.lignes[i]))]));
+    setAffect(a);
+    setProp((p) => ({ ...p, ...valeurs }));
+    setCoches((x) => ({ ...x, ...Object.fromEntries(touches.map((c) => [c, !!valeurs[c]])) }));
+    window.api.evt('edition', 'cartel-correction', { champ: champ || '(retire)', lignes: sel.length });
     setSel([]);
   };
   const choisis = CHAMPS_CARTEL.filter((c) => coches[c] && String(prop[c] || '').trim());
   const remplir = () => onRemplir(Object.fromEntries(choisis.map((c) => [c, prop[c]])));
   const etiquetteDe = (i, l) => {
-    const c = Object.keys(lignesDe).find((k) => lignesDe[k].includes(i));
-    return c ? LIBELLES_CHAMPS[c].toLowerCase() : ROLES_CARTEL[l.role] || '';
+    const c = CHAMPS_CARTEL.find((k) => affect[k].includes(i));
+    return c ? LIBELLES_CHAMPS[c].toLowerCase() : ROLE_CHAMP[l.role] ? '' : ROLES_CARTEL[l.role] || '';
   };
 
   return (
@@ -1555,14 +1569,20 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
           ))}
         </div>
 
-        <div className="options-note">Pour corriger : touche une ou plusieurs lignes, puis le champ où les mettre.</div>
+        <div className="options-note">
+          Pour corriger : touche une ou plusieurs lignes (dans l’ordre voulu), puis le champ où les mettre, ou « Retirer ».
+        </div>
         <div className="cartel-lignes">
           {lecture.lignes.map((l, i) => {
             const nouveauBloc = i > 0 && lecture.lignes[i - 1].bloc !== l.bloc;
             const eti = etiquetteDe(i, l);
+            const rang = sel.indexOf(i);
+            const range = CHAMPS_CARTEL.some((k) => affect[k].includes(i));
             return (
-              <button key={i} className={'cartel-ligne role-' + (l.role || 'autre') + (sel.includes(i) ? ' choisie' : '') + (nouveauBloc ? ' nouveau-bloc' : '')}
+              <button key={i} className={'cartel-ligne role-' + (l.role || 'autre') + (range ? ' rangee' : '')
+                + (rang >= 0 ? ' choisie' : '') + (nouveauBloc ? ' nouveau-bloc' : '')}
                 onClick={() => basculer(i)}>
+                {rang >= 0 && <span className="cartel-ligne-rang">{rang + 1}</span>}
                 <span className="cartel-ligne-texte">{l.texte}</span>
                 {eti && <span className="cartel-ligne-role">{eti}</span>}
               </button>
@@ -1574,8 +1594,11 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
           <div className="cartel-cibles">
             <span>Mettre {sel.length > 1 ? 'ces ' + sel.length + ' lignes' : 'cette ligne'} dans :</span>
             {CHAMPS_CARTEL.map((c) => (
-              <button key={c} className="puce" onClick={() => mettre(c)}>{LIBELLES_CHAMPS[c]}</button>
+              <button key={c} className="puce" onClick={() => affecter(c)}>{LIBELLES_CHAMPS[c]}</button>
             ))}
+            {sel.some((i) => CHAMPS_CARTEL.some((k) => affect[k].includes(i))) && (
+              <button className="puce puce-retirer" onClick={() => affecter(null)}><I.Croix t={11} /> Retirer du champ</button>
+            )}
           </div>
         )}
 
