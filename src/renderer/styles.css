@@ -1219,6 +1219,9 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 /* Le PC ne descend jamais sous 1024 px : ces regles ne le concernent pas. */
 @media (max-width: 700px) {
   body { -webkit-tap-highlight-color: transparent; }
+  /* Appli Android bord a bord : rien sous la barre d'etat. */
+  .appli, .menu { padding-top: env(safe-area-inset-top, 0px); box-sizing: border-box; }
+  .recouvrement-apercu, .recouvrement { padding-top: env(safe-area-inset-top, 0px); }
 
   /* Barre laterale -> barre d'onglets en bas, icones seules. */
   .appli { flex-direction: column; }
