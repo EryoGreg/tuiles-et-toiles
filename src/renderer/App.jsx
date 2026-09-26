@@ -660,6 +660,10 @@ function EnChantier({ nom }) {
 
 // Ordre d'affichage des pastilles de tag sur une carte : livre, etoile,
 // a-revoir — le meme que le rail du jeu.
+// Adresse d'une image de tuile : protocole tuile:// sur PC ; le pont mobile
+// fournit sa propre traduction (pas de protocole personnalise en WebView).
+const urlTuile = (nom) => (window.api && window.api.urlTuile ? window.api.urlTuile(nom) : 'tuile://' + nom);
+
 const PIPS = [
   ['livre', 'var(--livre)'],
   ['etoile', 'var(--etoile)'],
@@ -1300,7 +1304,7 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
             >
               {champs.image ? (
                 <>
-                  <img className="visuel" src={'tuile://' + champs.image} alt="" />
+                  <img className="visuel" src={urlTuile(champs.image)} alt="" />
                   <button className="editeur-image-x" onClick={retirerImage} title="Retirer l’image">
                     <I.Croix t={13} />
                   </button>

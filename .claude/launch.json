@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5600", "--bind", "127.0.0.1", "--directory", "dist-mobile"],
+      "port": 5600
+    }
+  ]
+}
