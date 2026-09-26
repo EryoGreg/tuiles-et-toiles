@@ -1470,8 +1470,10 @@ function PageEdition({ onEtat }) {
       ? `Tuile #${r.ref} créée — 0 masque valide, elle n’apparaîtra pas au tirage.`
       : `Tuile #${r.ref} créée (${r.masques} masques valides).`);
   };
+  // Apres une modification ou une suppression : retour a la liste des tuiles
+  // (on en modifie souvent plusieurs d'affilee), pas a l'accueil d'Edition.
   const finiModif = (r) => {
-    setMode(null);
+    setMode('liste');
     if (onEtat) onEtat();
     notifier(`#${r.ref} enregistrée${r.masques === 0 ? ' — 0 masque valide' : ` (${r.masques} masques)`}.`);
   };
@@ -1482,8 +1484,8 @@ function PageEdition({ onEtat }) {
   const confirmerSuppr = async () => {
     const t = demandeSuppr;
     setDemandeSuppr(null);
-    const r = await window.api.edition.supprimer(t.id);
-    setMode(null);
+    await window.api.edition.supprimer(t.id);
+    setMode('liste');
     if (onEtat) onEtat();
     notifier(`#${t.ref} mise à la corbeille.`);
   };
@@ -1498,6 +1500,7 @@ function PageEdition({ onEtat }) {
         <button className="edition-retour" onClick={() => setMode(null)}>
           <I.Fleche t={16} retour /> Retour
         </button>
+        {toast && <div className="edition-toast" role="status"><I.Coche t={14} /> {toast}</div>}
       </>
     );
   }

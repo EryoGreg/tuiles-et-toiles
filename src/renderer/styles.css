@@ -872,6 +872,11 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   font-size: 13px;
   box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.45);
 }
+.edition-toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 30;
+  display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--valide); color: var(--encre-vive); font-size: 13px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); max-width: calc(100vw - 40px); }
+.edition-toast svg { color: var(--valide); flex: none; }
 .edition-retour:hover { border-color: var(--laiton); color: var(--encre); }
 .carte:disabled { opacity: 0.45; cursor: default; }
 .carte:disabled:hover { transform: none; border-color: var(--carte-bord); }
