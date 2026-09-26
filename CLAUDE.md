@@ -193,6 +193,44 @@ payants → endpoint de licence plus tard ; packs gratuits livrables dès le hos
 statique. Téléchargement = action explicite, jamais bloquant, échec silencieux
 hors-ligne (règle 1).
 
+## Appli mobile (Android, Capacitor)
+
+**Même code que le PC**, pas de réécriture. `src/mobile/` fait tourner les modules du processus
+principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'interface React :
+- `principal.js` : démarrage (sql.js, fichiers, pack, appareil, `db.ouvrir`), sauvegarde différée ;
+  `window.api` est construit par le **vrai `src/main/preload.js`** sur un faux module `electron`
+  (`shims/electron.js`) → même surface que le PC, aucune dérive possible. `canaux.js` = les
+  `gerer(...)` de `index.js` version mobile (sans fenêtres, raccourcis, mises à jour d'exe,
+  dialogues de fichiers). `window.__tt` : poignée de diagnostic (console).
+- Remplaçants des modules Node (`shims/`, alias esbuild) : `better-sqlite3` → **sql.js**
+  (`sqlite.js`, même API synchrone ; la base jointe `pack` est recopiée en `:memory:` ;
+  `persister()` = `export()`, qui ferme/rouvre : requêtes, pragmas et `ATTACH` refaits) ; `fs` →
+  fichiers en mémoire sauvegardés dans IndexedDB (`vfs.js`, sauf `/data/logs`) ; `crypto` →
+  `@noble/hashes` (v2 : `sha2.js`, `legacy.js`) ; `zlib` → `fflate` ; `os`.
+- Remplacements de modules (plugin esbuild) : `images.js` → `images-import.js` (canvas, pas
+  Jimp) ; `drive.js` → `mobile/drive.js` (connexion Google **native**, Credential Manager via
+  `@capgo/capacitor-social-login`, jeton redemandé sans interface ; appels Drive dans
+  **`src/main/drive-api.js`, commun au PC**).
+- Images : pas de protocole `tuile://` en WebView → `images-url.js` traduit les résultats
+  (vignettes livrées, grandes images depuis GitHub puis cache IndexedDB, photos locales en URL
+  blob) ; seules les tuiles affichées en grand (`jeu:*`) déclenchent la mise en cache.
+- Interface : `@media (max-width: 700px)` dans `styles.css` (barre d'onglets en bas, marques
+  au-dessus de la tuile, marges `safe-area`), sans effet sur le PC. `SUR_MOBILE` (App.jsx) pour
+  les textes.
+- Construire : `node scripts/build-mobile.js` (→ `dist-mobile/`, servi par `.claude/launch.json`
+  « mobile-web » pour tester dans un navigateur), puis `npx cap sync android` et
+  `cd android && gradlew assembleDebug`. Émulateur : AVD `Medium_Phone_API_36.0`
+  (`emulator -avd … -no-window`), `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`.
+- Tests : `tests/mobile-sqlite.test.js` rejoue la suite E2b sur sql.js (`TT_SUITE=./synchro-e2e.test.js`
+  pour la compaction) ; `tests/synchro-drive-http.test.js` fait passer E2b par `drive-api.js`.
+- **Connexion Google sur Android** : client OAuth « Web » (son id → `src/mobile/google-config.json`
+  `{ "webClientId" }`, gitignoré, injecté au build) **et** client « Android » (paquet
+  `fr.tuilesettoiles.app` + SHA-1 de la clé de signature ; debug :
+  `33:08:3A:4F:C3:3A:6B:3D:0B:AA:92:14:4F:0D:C0:E9:59:AB:4C:D5`), dans le projet `dislike-334115`.
+  Une version publiée demandera sa propre clé (et son SHA-1).
+- `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
+  `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
+
 ## Dépôt, releases et mise à jour de l'app
 
 - Dépôt **public** github.com/EryoGreg/tuiles-et-toiles. Bristol (github.com/EryoGreg/bristol)

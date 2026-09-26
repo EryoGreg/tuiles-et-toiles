@@ -1252,6 +1252,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
   /* Menu : cartes sur 2 colonnes. */
   .cartes { grid-template-columns: repeat(2, 1fr); width: 100%; }
+  .menu-quitter { display: none; }   /* on quitte une appli Android par le systeme */
   .carte { min-height: 118px; }
 
   /* Jeu : marques en ligne au-dessus de la tuile, tuile pleine largeur. */
