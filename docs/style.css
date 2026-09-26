@@ -1,0 +1,13 @@
+:root { --fond: #faf6ef; --texte: #2b2521; --attenue: #6f645b; --lien: #8a5a17; --trait: #e3d9ca; }
+@media (prefers-color-scheme: dark) {
+  :root { --fond: #1e1a17; --texte: #ece3d7; --attenue: #a89c8f; --lien: #d9a653; --trait: #3a322b; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fond); color: var(--texte); font: 17px/1.6 Georgia, "Times New Roman", serif; }
+main { max-width: 720px; margin: 0 auto; padding: 48px 20px 64px; }
+h1 { font-weight: 400; font-size: 2.2em; margin: 0 0 6px; }
+h2 { font-weight: 400; font-size: 1.3em; margin: 36px 0 8px; }
+.accroche { color: var(--attenue); margin-top: 0; }
+a { color: var(--lien); }
+code { font-size: 0.9em; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--trait); color: var(--attenue); font-size: 0.9em; }
