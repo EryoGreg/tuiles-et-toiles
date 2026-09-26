@@ -2272,8 +2272,22 @@ const texteValeur = (v, champ) => (v == null || v === '' ? '(vide)' : champ === 
 function PageConflits({ onEtat }) {
   const [liste, setListe] = useState(null);
   const [enCours, setEnCours] = useState(null);
+  const [verif, setVerif] = useState(true);   // synchro d'ouverture en cours
 
-  useEffect(() => { window.api.conflits.liste().then(setListe); }, []);
+  // Liste locale tout de suite, puis synchro : un conflit deja tranche sur
+  // un autre appareil disparait. Et a la fin de chaque synchro, relecture.
+  useEffect(() => {
+    let vivant = true;
+    window.api.conflits.liste().then((l) => { if (vivant) setListe(l); });
+    window.api.conflits.actualiser().then((r) => {
+      if (!vivant) return;
+      setListe(r.conflits); setVerif(false); onEtat();
+    });
+    const desab = window.api.synchro.onProgression((p) => {
+      if (!p.enCours && vivant) window.api.conflits.liste().then((l) => { if (vivant) setListe(l); });
+    });
+    return () => { vivant = false; desab(); };
+  }, []);
 
   const trancher = async (id, choix) => {
     setEnCours(id);
@@ -2290,8 +2304,9 @@ function PageConflits({ onEtat }) {
           <h2>Conflits</h2>
           <div className="soustitre">
             Modifications faites sur deux appareils sans qu’ils se soient vus. En attendant ton choix,
-            la plus récente est affichée — ton choix partira à la prochaine synchro.
+            la plus récente est affichée. Chaque choix part aussitôt vers tes autres appareils.
           </div>
+          {verif && <div className="soustitre">Vérification auprès de tes autres appareils…</div>}
         </div>
       </div>
 
@@ -3062,8 +3077,8 @@ export default function App() {
   );
 
   // Pages qu'« Actualiser » peut remonter sans rien perdre (pas l'editeur :
-  // une saisie en cours serait perdue).
-  const PAGES_LISTES = ['bibliotheque', 'livre', 'etoile', 'revoir', 'corbeille', 'conflits'];
+  // une saisie en cours serait perdue ; pas Conflits : il se relit seul).
+  const PAGES_LISTES = ['bibliotheque', 'livre', 'etoile', 'revoir', 'corbeille'];
   const bandeauNouveautes = nouveautes && (nouveautes.conflits || PAGES_LISTES.includes(page)) && (
     <div className="bandeau-synchro" role="status">
       <I.Echange t={15} />

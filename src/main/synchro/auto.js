@@ -4,7 +4,11 @@
  *   - le lancement (6 s apres)
  *   - une modification locale, une fois le calme revenu : 20 s sans nouvelle
  *     modification (on ne synchronise pas au milieu d'une saisie)
- *   - toutes les 15 min, pour recevoir ce que font les autres appareils
+ *   - toutes les 15 min, pour recevoir ce que font les autres appareils ;
+ *     toutes les 2 min tant que des conflits sont ouverts (un choix fait sur
+ *     un autre appareil les ferme ici sans attendre)
+ *   - juste apres qu'un conflit a ete tranche (differer), et a l'ouverture de
+ *     l'ecran Conflits (declencher force)
  *   - le reveil de l'ordinateur
  *   - la fermeture de l'app, s'il reste des modifications a envoyer (10 s max)
  *
@@ -21,6 +25,7 @@ const DELAIS = {
   verification: 15e3,   // frequence de la surveillance
   calme: 20e3,          // sans nouvelle modification avant d'envoyer
   periode: 15 * 60e3,   // reception reguliere
+  periodeConflits: 2 * 60e3,   // idem, tant que des conflits sont ouverts
   apresEchec: 5 * 60e3,
   fermeture: 10e3
 };
@@ -31,6 +36,7 @@ const DELAIS = {
  *   cibles: () => string[],                 // 'drive', 'dossier' (configurees et joignables)
  *   lancer: (cible, raison) => Promise<object>,   // resultat de service.synchroniser*
  *   aEnvoyer: () => number,                 // ops locales pas encore parties
+ *   conflitsOuverts?: () => number,
  *   journal?: { evt, avertir },
  *   maintenant?: () => number,
  *   delais?: object
@@ -78,7 +84,8 @@ function creerAuto(o) {
     if (n !== vuN) { vuN = n; changeLe = t; }
     if (t < reprendreApres) return null;
     if (n > 0 && t - changeLe >= D.calme) return executer('modification');
-    if (t - derniere >= D.periode) return executer('periodique');
+    const periode = o.conflitsOuverts && o.conflitsOuverts() > 0 ? D.periodeConflits : D.periode;
+    if (t - derniere >= periode) return executer(periode === D.periode ? 'periodique' : 'conflits-ouverts');
     return null;
   }
 
@@ -95,10 +102,31 @@ function creerAuto(o) {
     minuteurs = [];
   }
 
-  /** Declenchement ponctuel (reveil de l'ordinateur…), sauf pendant une pause d'echec. */
-  function declencher(raison) {
-    if (!o.actif() || maintenant() < reprendreApres) return null;
+  /**
+   * Declenchement ponctuel (reveil de l'ordinateur…), sauf pendant une pause
+   * d'echec. forcer : suite directe d'une action de l'utilisateur (conflit
+   * tranche, ecran Conflits ouvert) -> meme synchro auto desactivee ou en
+   * pause ; si une synchro auto tourne deja, une autre suit, pour emporter ce
+   * qui vient d'etre ecrit.
+   */
+  async function declencher(raison, { forcer = false } = {}) {
+    if (!forcer && (!o.actif() || maintenant() < reprendreApres)) return null;
+    if (forcer && enCours) { try { await enCours; } catch { /* sans importance */ } }
     return executer(raison);
+  }
+
+  let minuteurDiffere = null;
+  /**
+   * Synchro forcee dans `ms` (0 = tout de suite), repoussee a chaque nouvel
+   * appel : trancher plusieurs conflits d'affilee n'en fait partir qu'une.
+   */
+  function differer(raison, ms) {
+    if (minuteurDiffere) clearTimeout(minuteurDiffere);
+    minuteurDiffere = null;
+    if (!ms) return declencher(raison, { forcer: true });
+    return new Promise((resoudre) => {
+      minuteurDiffere = setTimeout(() => { minuteurDiffere = null; resoudre(declencher(raison, { forcer: true })); }, ms);
+    });
   }
 
   /**
@@ -116,7 +144,7 @@ function creerAuto(o) {
     return issue;
   }
 
-  return { demarrer, arreter, tic, declencher, avantFermeture, _executer: executer };
+  return { demarrer, arreter, tic, declencher, differer, avantFermeture, _executer: executer };
 }
 
 module.exports = { creerAuto, DELAIS };

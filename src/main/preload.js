@@ -96,7 +96,8 @@ contextBridge.exposeInMainWorld('api', {
 
   conflits: {
     liste: () => ipcRenderer.invoke('conflits:liste'),
-    trancher: (id, choix) => ipcRenderer.invoke('conflits:trancher', { id, choix })
+    trancher: (id, choix) => ipcRenderer.invoke('conflits:trancher', { id, choix }),
+    actualiser: () => ipcRenderer.invoke('conflits:actualiser')
   },
 
   rapport: {

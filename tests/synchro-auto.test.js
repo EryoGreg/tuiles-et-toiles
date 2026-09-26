@@ -17,11 +17,12 @@ async function test(nom, fn) {
 }
 
 function monde(o = {}) {
-  const m = { t: 1e12, attente: 0, actif: true, cibles: ['drive'], appels: [], reponse: () => ({}) };
+  const m = { t: 1e12, attente: 0, conflits: 0, actif: true, cibles: ['drive'], appels: [], reponse: () => ({}) };
   m.auto = creerAuto({
     actif: () => m.actif,
     cibles: () => m.cibles,
     aEnvoyer: () => m.attente,
+    conflitsOuverts: () => m.conflits,
     lancer: async (cible, raison) => {
       m.appels.push(cible + ':' + raison);
       const r = await m.reponse(cible, raison);
@@ -50,6 +51,16 @@ function monde(o = {}) {
     assert.deepEqual(m.appels, []);
     await m.avancer(60e3);
     assert.deepEqual(m.appels, ['drive:periodique']);
+  });
+
+  await test('conflits ouverts : reception toutes les 2 min, puis retour au quart d\'heure', async () => {
+    const m = monde();
+    m.conflits = 2;
+    await m.avancer(4 * 60e3);
+    assert.deepEqual(m.appels, ['drive:conflits-ouverts', 'drive:conflits-ouverts']);
+    m.conflits = 0;
+    await m.avancer(10 * 60e3);
+    assert.equal(m.appels.length, 2);
   });
 
   await test('modification : envoi une fois le calme revenu, pas pendant la saisie', async () => {
@@ -102,6 +113,42 @@ function monde(o = {}) {
     m.cibles = ['drive', 'dossier'];
     await m.auto.declencher('reveil');
     assert.deepEqual(m.appels, ['drive:reveil', 'dossier:reveil']);
+  });
+
+  await test('declenchement force (conflit tranche) : meme desactivee ou en pause', async () => {
+    const m = monde();
+    m.actif = false;
+    assert.equal(await m.auto.declencher('reveil'), null, 'non force : rien');
+    await m.auto.declencher('conflits-resolus', { forcer: true });
+    assert.deepEqual(m.appels, ['drive:conflits-resolus']);
+    m.actif = true;
+    m.reponse = () => ({ erreur: 'hors ligne' });
+    m.attente = 1;
+    await m.avancer(45e3);                              // echec -> pause 5 min
+    m.reponse = () => ({});
+    await m.auto.declencher('conflit-tranche', { forcer: true });
+    assert.equal(m.appels[m.appels.length - 1], 'drive:conflit-tranche', 'la pause ne retient pas un choix');
+  });
+
+  await test('force pendant une synchro auto : une autre suit, pour emporter le choix', async () => {
+    const m = monde();
+    let liberer;
+    m.reponse = (c, raison) => (raison === 'periodique' ? new Promise((r) => { liberer = () => r({}); }) : {});
+    const premiere = m.auto._executer('periodique');
+    const seconde = m.auto.declencher('conflit-tranche', { forcer: true });
+    liberer();
+    await premiere; await seconde;
+    assert.deepEqual(m.appels, ['drive:periodique', 'drive:conflit-tranche']);
+  });
+
+  await test('differer : plusieurs choix d\'affilee -> une seule synchro', async () => {
+    const m = monde();
+    m.auto.differer('conflit-tranche', 40);
+    m.auto.differer('conflit-tranche', 40);
+    await m.auto.differer('conflit-tranche', 40);
+    assert.deepEqual(m.appels, ['drive:conflit-tranche']);
+    await m.auto.differer('conflits-resolus', 0);
+    assert.deepEqual(m.appels, ['drive:conflit-tranche', 'drive:conflits-resolus']);
   });
 
   await test('fermeture : envoie ce qui reste, attend au plus le delai', async () => {

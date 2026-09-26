@@ -523,6 +523,7 @@ const synchroAuto = creerAuto({
     return r;
   },
   aEnvoyer: () => db.instance().prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
+  conflitsOuverts: () => db.instance().prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
   journal
 });
 function etatAuto() {
@@ -637,7 +638,18 @@ gerer('appareils:retirer', (_e, { id, retirer }) => synchro.retirerAppareil(id, 
 gerer('conflits:liste', () => synchro.listeConflits());
 gerer('conflits:trancher', (_e, { id, choix }) => {
   synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant');
-  return synchro.listeConflits();
+  const reste = synchro.listeConflits();
+  // Le choix part vers les autres appareils sans attendre : tout de suite
+  // s'il ne reste rien a trancher, sinon 3 s apres le dernier choix.
+  synchroAuto.differer(reste.length ? 'conflit-tranche' : 'conflits-resolus', reste.length ? 3000 : 0)
+    .catch((e) => journal.erreur('synchro', 'apres-conflit', e));
+  return reste;
+});
+// Ecran Conflits ouvert : synchro d'abord, pour ne pas montrer des conflits
+// deja tranches sur un autre appareil. Renvoie la liste a jour.
+gerer('conflits:actualiser', async () => {
+  const r = await synchroAuto.declencher('ecran-conflits', { forcer: true });
+  return { conflits: synchro.listeConflits(), synchro: !!r };
 });
 
 // Rapport d'erreur : envoi direct au script de reception (un clic) ; repli
