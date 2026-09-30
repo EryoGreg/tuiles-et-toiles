@@ -196,6 +196,80 @@ function genese(d) {
 }
 
 /**
+ * Reconciliation : ce que l'app affiche (tables projetees) et le registre
+ * doivent dire la meme chose. Un ecart vient d'une ecriture faite HORS
+ * journal — typiquement une ancienne version (0.1.x, d'avant E2a) lancee sur
+ * la meme base : ses tuiles creees ou modifiees n'avaient aucune op, la
+ * synchro n'avait donc rien a envoyer (30/09/2026 : 27 tuiles absentes du
+ * mobile). Chaque ecart devient une ecriture ordinaire (HLC d'aujourd'hui :
+ * c'est la modification la plus recente), qui partira a la prochaine synchro.
+ *
+ * Les tables sont lues EN ENTIER avant la premiere ecriture : projeterLocale
+ * reecrit toute la ligne depuis le registre, une lecture au fil de l'eau
+ * verrait des champs deja remis a vide.
+ * @returns {{ locales, champs, suppressions, overrides, archives, tags }} ecarts corriges
+ */
+function reconcilier(d, ctx) {
+  const txt = (v) => (v == null ? '' : String(v));
+  const locales = d.prepare('SELECT * FROM oeuvres_locales').all();
+  const overrides = d.prepare('SELECT oeuvre_id, champ, valeur, valeur_source FROM user_overrides').all();
+  const archives = d.prepare('SELECT oeuvre_id FROM user_archive').all();
+  const tags = d.prepare('SELECT oeuvre_id, tag FROM user_tags').all();
+  const bilan = { locales: [], champs: 0, suppressions: [], overrides: 0, archives: 0, tags: 0 };
+  const val = (entite, cle, champ) => moteur.valeur(ctx, entite, cle, champ);
+
+  // Tuiles locales : presentes a l'ecran mais inconnues (ou supprimees) du registre.
+  const vues = new Set();
+  for (const r of locales) {
+    vues.add(r.id);
+    let ecarts = 0;
+    if (val('locale', r.id, '_existe') !== 1) { moteur.ecrire(ctx, 'locale', r.id, '_existe', 1); ecarts++; }
+    if (r.ref_local && txt(val('locale', r.id, 'ref_local')) !== r.ref_local) {
+      moteur.ecrire(ctx, 'locale', r.id, 'ref_local', r.ref_local); ecarts++;
+    }
+    for (const c of CHAMPS_LOCALE) {
+      if (txt(val('locale', r.id, c)) !== txt(r[c])) { moteur.ecrire(ctx, 'locale', r.id, c, r[c] || null); ecarts++; }
+    }
+    if (ecarts) { bilan.locales.push(r.ref_local || r.id); bilan.champs += ecarts; }
+  }
+  // ... et l'inverse : existante au registre, effacee de la table (suppression
+  // faite hors journal) -> pierre tombale, restaurable depuis la Corbeille.
+  for (const r of d.prepare("SELECT cle, valeur FROM etat WHERE entite='locale' AND champ='_existe'").all()) {
+    if (r.valeur === '1' && !vues.has(r.cle)) {
+      moteur.supprimerLocale(ctx, r.cle);
+      bilan.suppressions.push(txt(val('locale', r.cle, 'ref_local')) || r.cle);
+    }
+  }
+
+  // Corrections d'oeuvres du pack.
+  const vuesO = new Set();
+  for (const r of overrides) {
+    vuesO.add(r.oeuvre_id + '|' + r.champ);
+    const x = val('override', r.oeuvre_id, r.champ);
+    if (!x || txt(x.valeur) !== txt(r.valeur) || txt(x.valeur_source) !== txt(r.valeur_source)) {
+      moteur.ecrire(ctx, 'override', r.oeuvre_id, r.champ, { valeur: r.valeur, valeur_source: r.valeur_source });
+      bilan.overrides++;
+    }
+  }
+  for (const r of d.prepare("SELECT cle, champ FROM etat WHERE entite='override' AND valeur IS NOT NULL").all()) {
+    if (!vuesO.has(r.cle + '|' + r.champ)) { moteur.ecrire(ctx, 'override', r.cle, r.champ, null); bilan.overrides++; }
+  }
+
+  // Archives (oeuvres du pack masquees) et marques.
+  const vuesA = new Set(archives.map((r) => r.oeuvre_id));
+  for (const id of vuesA) if (val('archive', id, '_') !== 1) { moteur.ecrire(ctx, 'archive', id, '_', 1); bilan.archives++; }
+  for (const r of d.prepare("SELECT cle FROM etat WHERE entite='archive' AND valeur IS NOT NULL").all()) {
+    if (!vuesA.has(r.cle)) { moteur.ecrire(ctx, 'archive', r.cle, '_', null); bilan.archives++; }
+  }
+  const vuesT = new Set(tags.map((r) => r.oeuvre_id + '|' + r.tag));
+  for (const r of tags) if (val('tag', r.oeuvre_id, r.tag) !== 1) { moteur.ecrire(ctx, 'tag', r.oeuvre_id, r.tag, 1); bilan.tags++; }
+  for (const r of d.prepare("SELECT cle, champ FROM etat WHERE entite='tag' AND valeur IS NOT NULL").all()) {
+    if (!vuesT.has(r.cle + '|' + r.champ)) { moteur.ecrire(ctx, 'tag', r.cle, r.champ, null); bilan.tags++; }
+  }
+  return bilan;
+}
+
+/**
  * Hook d'ouverture (db.surOuverture) : migre user_stats, fait la genese si la
  * base n'en a jamais eu, recale l'horloge sur la plus grande HLC connue.
  * Tourne aussi apres un import zip : une sauvegarde d'avant E2a y passe en
@@ -216,8 +290,11 @@ function preparer(d) {
       journal.evt('synchro', 'genese', { appareil: appareil.id, ops: n });
     }
   })();
+  horloge.caler(d.prepare('SELECT MAX(hlc) h FROM changements').get().h);
+  const bilan = d.transaction(() => reconcilier(d, { d, appareil, horloge }))();
+  const nEcarts = bilan.champs + bilan.suppressions.length + bilan.overrides + bilan.archives + bilan.tags;
+  if (nEcarts) journal.evt('synchro', 'reconciliation', { ...bilan, ecarts: nEcarts }, 'WARN');
   const max = d.prepare('SELECT MAX(hlc) h FROM changements').get().h;
-  horloge.caler(max);
   journal.evt('synchro', 'journal-local', {
     appareil: appareil.id, prefixe: appareil.prefixe_ref, derniereHlc: max,
     ops: d.prepare('SELECT COUNT(*) n FROM changements').get().n,
@@ -228,5 +305,5 @@ function preparer(d) {
 
 module.exports = {
   configurer, contexte, appareil: lAppareil, valeur, lignes, existe, ecrire, supprimerLocale,
-  lot, conflits, resoudre, CHAMPS_LOCALE, opsGenese, horodaterGenese, capturer, brut
+  lot, conflits, resoudre, CHAMPS_LOCALE, opsGenese, horodaterGenese, capturer, brut, reconcilier
 };

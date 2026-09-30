@@ -172,6 +172,15 @@ Electron + React + SQLite. Windows, mono-utilisateur.
       La fiche reste : sa lettre de ref reste réservée. Ne coupe pas l'accès Drive (compte
       Google → Applications tierces). Un appareil sur un autre compte Google est invisible (autre
       espace Drive) : on affiche le compte de cet appareil, pas de détection possible.
+  - **Réconciliation à l'ouverture** (`etat.reconcilier`, après la genèse) : tables projetées
+    (`oeuvres_locales`, `user_overrides`, `user_archive`, `user_tags`) comparées au registre ;
+    chaque écart devient une écriture ordinaire (HLC du jour) → part à la synchro suivante ;
+    tuile présente au registre mais effacée de la table → pierre tombale (Corbeille). Journalisé
+    `synchro reconciliation` (WARN) avec les refs. Cas réel 30/09/2026 : une **0.1.0** (portable,
+    restée dans Documents, lancée par un vieux raccourci) a écrit 2 jours dans la base partagée
+    `%APPDATA%` sans journal → 27 tuiles jamais envoyées (`aPousser: 0`). Les tables sont lues en
+    entier avant d'écrire (`projeterLocale` réécrit toute la ligne). Test :
+    `tests/synchro-reconciliation.test.js`.
   - **À faire, PC et mobile :**
     - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
       première mise à jour de pack.
