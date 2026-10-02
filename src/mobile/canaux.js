@@ -26,7 +26,7 @@ const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 
   'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions',
   'edition:cartelEtat', 'edition:lireCartel']);
 
-function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
+function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauverTout }) {
   // Journalise comme gerer() du PC, puis signale une ecriture possible (la
   // base est sauvegardee en differe).
   const g = (canal, fn) => gerer(canal, async (...args) => {
@@ -167,6 +167,17 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre }) {
     try { await auto.avantFermeture(); } catch (e) { journal.erreur('synchro', 'auto-avant-maj', e); }
     surEcriture();
     return maj.installer();
+  });
+
+  // Avant un rechargement de page : la base DOIT etre dans IndexedDB, sinon la
+  // page repart de la derniere sauvegarde (differee de 1,5 s) et perd ce qui
+  // vient d'arriver — 02/10/2026 : ops recues par synchro perdues a chaque fois,
+  // curseurs compris, et une tuile creee juste avant la synchro.
+  gerer('app:persister', async () => {
+    // Journalise AVANT : la ligne part dans la meme sauvegarde que la base.
+    journal.evt('db', 'persistance-avant-rechargement');
+    await sauverTout();
+    return true;
   });
 
   // --- propres au poste : absents sur mobile ------------------------------------

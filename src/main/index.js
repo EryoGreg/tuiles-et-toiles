@@ -473,6 +473,8 @@ gerer('edition:importerImageUrl', async (_e, url) => {
 });
 
 // Lecture de cartel (ML Kit) : appli Android seulement pour l'instant.
+// Mobile seulement (base en memoire) : sur PC, SQLite ecrit au fil de l'eau.
+gerer('app:persister', () => true);
 gerer('edition:lireCartel', () => ({ erreur: 'La lecture de cartel est disponible dans l’appli Android.' }));
 gerer('edition:cartelEtat', () => ({ disponible: false }));
 gerer('edition:choisirImage', async () => {

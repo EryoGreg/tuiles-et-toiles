@@ -167,5 +167,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('app:nav', ecouteur);
     return () => ipcRenderer.removeListener('app:nav', ecouteur);
   },
-  quitter: () => ipcRenderer.invoke('app:quitter')
+  quitter: () => ipcRenderer.invoke('app:quitter'),
+  // Base ecrite pour de bon avant un rechargement de page (mobile : sql.js en
+  // memoire, enregistrement differe dans IndexedDB). PC : rien a faire.
+  persister: () => ipcRenderer.invoke('app:persister')
 });

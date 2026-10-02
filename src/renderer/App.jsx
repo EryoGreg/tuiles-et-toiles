@@ -1961,9 +1961,18 @@ function direChangements(s, images) {
 }
 
 // « Envoyé : … Reçu : … » d'un bilan de synchro (service.js).
+// Recharge la page une fois la base enregistree (mobile : sinon la page
+// repart de la derniere sauvegarde et perd ce que la synchro vient d'apporter).
+async function recharger() {
+  try { await window.api.persister(); } catch { /* PC ancien / navigateur : rien a attendre */ }
+  window.location.reload();
+}
+
 function phraseBilan(r) {
-  // Bilan d'avant les resumes (0.2.2 et avant) : compte d'ops seulement.
-  if (!r.envoye && !r.recu && (r.poussees || r.appliquees)) {
+  // Bilan d'avant les resumes (0.2.2 et avant) : compte d'ops seulement. Un
+  // bilan recent sans resume (envoye: null) n'a envoye que des compteurs de
+  // vues : ne pas l'annoncer comme des modifications.
+  if (!('envoye' in r) && !('recu' in r) && (r.poussees || r.appliquees)) {
     return (r.poussees || 0) + ' modification(s) envoyée(s), ' + (r.appliquees || 0) + ' reçue(s).';
   }
   const envoye = direChangements(r.envoye, r.imagesEnvoyees);
@@ -2042,7 +2051,7 @@ function Options({ etat, onEtat, aller }) {
       conflits: r.conflits
     };
     try { sessionStorage.setItem('import-msg', JSON.stringify(msg)); } catch { /* tant pis */ }
-    window.location.reload();   // la base a changé — repartir propre
+    await recharger();   // la base a changé — repartir propre
   };
 
   useEffect(() => { window.api.drive.etat().then(setDrv); }, []);
@@ -2121,7 +2130,7 @@ function Options({ etat, onEtat, aller }) {
     const msg = { ok: morceaux.join(' '), conflits: r.conflits };
     if (r.change || r.appliquees || r.renumerotees.length || r.imagesRecues) {
       try { sessionStorage.setItem('synchro-msg', JSON.stringify({ ou, msg })); } catch { /* tant pis */ }
-      window.location.reload();   // la base a change — repartir propre
+      await recharger();   // la base a change — repartir propre
       return;
     }
     setMsg(msg);

@@ -61,7 +61,10 @@ async function demarrer() {
     fetch('images-manifest.json').then((r) => r.json()).catch(() => ({ ref: null, images: {} }))
   ]);
   fs.writeFileSync(PACK, new Uint8Array(pack));
-  journal.configurer(DATA + '/logs', { version: VERSION, mobile: true, agent: navigator.userAgent }, { console: false });
+  // Journal garde d'une session a l'autre (avant 0.3.10 : en memoire seulement,
+  // l'historique d'un bug disparaissait au redemarrage), en plus petit qu'au PC.
+  journal.configurer(DATA + '/logs', { version: VERSION, mobile: true, agent: navigator.userAgent },
+    { console: false, max: 1024 * 1024, nb: 2 });
   // Fichier illisible dans le stockage (appli tuee en pleine ecriture) : ignore
   // plutot que de bloquer le demarrage ; la synchro retablit les donnees.
   if (fs.illisibles().length) journal.avertir('app', 'fichiers-illisibles', { fichiers: fs.illisibles() });
@@ -97,7 +100,8 @@ pret.catch((e) => {
 
 drive.configurer({ webClientId: typeof __GOOGLE_WEB_CLIENT_ID__ !== 'undefined' ? __GOOGLE_WEB_CLIENT_ID__ : '' });
 const auto = canaux.enregistrer({
-  version: VERSION, dossierImagesLocales: IMAGES_LOCALES, surEcriture: planifierSauvegarde, emettre: electron.emettre
+  version: VERSION, dossierImagesLocales: IMAGES_LOCALES, surEcriture: planifierSauvegarde, emettre: electron.emettre,
+  sauverTout
 });
 // Synchro automatique : au lancement, apres une modification, toutes les
 // 15 min tant que l'appli est ouverte, et au retour au premier plan.

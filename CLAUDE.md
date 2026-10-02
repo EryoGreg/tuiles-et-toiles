@@ -253,6 +253,12 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   fichier illisible est ignoré (`fs.illisibles()`, journalisé) au lieu de bloquer ; ancien
   format relu puis réécrit. `fs.promises` existe (le transport Drive range les images reçues
   par `transport-dossier.ecrireAtomique`, asynchrone).
+- **Rechargement de page = `recharger()`** (App.jsx), jamais `location.reload()` nu : il attend
+  `window.api.persister()` (mobile : `sauverTout()`, base écrite dans IndexedDB ; PC : rien). Sans
+  ça, la page repart de la dernière sauvegarde (différée de 1,5 s) — 02/10/2026 : chaque synchro
+  manuelle qui apportait des données les perdait au rechargement (curseurs compris, donc en boucle),
+  et une tuile créée juste avant aussi. **Journal mobile persistant** (1 Mo × 2, `journal.configurer`
+  `{ max, nb }`), enregistré par lots (15 s, `LENTS` dans `vfs.js`) et à la mise en veille.
 - **Données mobiles** : réglage `synchro_wifi` (« Seulement en Wi-Fi », actif par défaut,
   `@capacitor/network` via `src/mobile/reseau.js`) → `auto.reseauPermis` : rien d'automatique
   hors Wi-Fi, un geste explicite passe. Pas de synchro au retour au premier plan (la

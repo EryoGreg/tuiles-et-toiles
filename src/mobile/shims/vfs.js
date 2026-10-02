@@ -14,7 +14,12 @@ const path = require('path-browserify');
 const { Buffer } = require('buffer');
 
 const PERSISTANTS = ['/data/'];
-const EXCLUS = ['/data/logs/'];
+const EXCLUS = [];
+// Journaux : ecrits a chaque evenement, sauvegardes par lots (toutes les 15 s,
+// et avec tout le reste a la mise en veille) plutot qu'a chaque ligne.
+const LENTS = ['/data/logs/'];
+const DELAI_LENT = 15000;
+let minuteurLent = null;
 const BASE_IDB = 'tuiles-et-toiles';
 const MAGASIN = 'fichiers';
 
@@ -44,6 +49,10 @@ function versOctets(data, enc) {
 function planifier(p, suppression = false) {
   if (!persistant(p)) return;
   if (suppression) { aSauver.delete(p); aSupprimer.add(p); } else { aSupprimer.delete(p); aSauver.add(p); }
+  if (LENTS.some((x) => p.startsWith(x))) {
+    if (!minuteurLent) minuteurLent = setTimeout(() => { minuteurLent = null; sauver(); }, DELAI_LENT);
+    return;
+  }
   if (!minuteur) minuteur = setTimeout(() => { minuteur = null; sauver(); }, 1000);
 }
 

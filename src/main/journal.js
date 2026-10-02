@@ -27,8 +27,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const MAX = 5 * 1024 * 1024;
-const NB_FICHIERS = 5;
+let MAX = 5 * 1024 * 1024;
+let NB_FICHIERS = 5;
 const SESSION = crypto.randomBytes(3).toString('hex');
 const LONG_MAX = 2000;                  // chaine plus longue : tronquee
 const CLES_SECRETES = /token|secret|password|mot_?de_?passe|authorization|code_?verifier|refresh/i;
@@ -153,9 +153,11 @@ function ligne(msg, extra) {
   return evt('app', m, extra);
 }
 
-function configurer(d, infos, { console: recopie = true } = {}) {
+function configurer(d, infos, { console: recopie = true, max, nb } = {}) {
   dossier = d;
   echo = recopie;
+  if (max) MAX = max;
+  if (nb) NB_FICHIERS = nb;
   try {
     fs.mkdirSync(d, { recursive: true });
     fichier = path.join(d, 'journal.log');
