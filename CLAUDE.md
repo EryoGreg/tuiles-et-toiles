@@ -208,6 +208,31 @@ Electron + React + SQLite. Windows, mono-utilisateur.
       (scénarios + propriété : refs uniques, états identiques, une lettre par appareil vivant ;
       `TT_TRACE=<k>` déroule un scénario ; aussi sur sql.js : `TT_SUITE=./synchro-remplacement.test.js
       node scripts/lancer-node.js tests/mobile-sqlite.test.js`), service dans `synchro-e2c.test.js`.
+  - **Vitesse (0.3.11)** — mesuré sur 438 synchros réelles : 98 % « à vide », 10 s médiane, 20
+    allers-retours Drive successifs (~290 ms chacun). Désormais (faux Drive à 290 ms, 4 appareils) :
+    auto à vide **0,3 s / 1 appel**, complète à vide 1,8 s / 8, tuile reçue 2,7 s / 11, première
+    après lancement 3,8 s.
+    - **Synchro rapide** (`service.essaiRapide`, synchro **auto** seulement ; le bouton fait toujours
+      une complète) : fil des changements Drive (`drive-api` `jetonChangements` / `changements`) depuis
+      le jeton noté (`sync.drive_fil` `{ jeton, complet_le, relire, cle }`). Rien → fin. Complète
+      forcée si : pas inscrit, décision en attente, autre compte, `relire`, > 6 h depuis la dernière
+      complète, `synchro_complete` (renommer, retirer, remplacement), `images_a_reprendre` (échec ; image
+      annoncée absente : 24 h max, `images_manquantes_depuis`), ops à envoyer (compteurs de vues émis
+      d'abord), fil en panne. Complète : jeton pris **avant**, fil relu **après** sans nos écritures
+      (`transport.ecrits`) ; reste quelque chose → `relire` (écrit pendant notre synchro).
+    - **Fiche réécrite seulement si elle change** (`memeFiche`, hors `vu_le`), si elle a plus de 6 h
+      (`pouls`), ou si un autre appareil m'a retiré depuis. Sinon deux appareils se réveilleraient en
+      boucle par le fil des changements.
+    - **Caches par compte** (`transport-drive`, `cleCache` = `drive:<email>`, 24 h) : ids de dossiers,
+      contenu des fiches (relues si `modifiedTime` change), ids des fiches, LISEZMOI vérifiés ;
+      `oublierDossiers()` après une erreur ou un dossier changé ailleurs. Lectures en parallèle
+      (`parLots` dans `echange.tirer`, fiches, LISEZMOI de `preparer`).
+    - **Erreurs dites à l'utilisateur** (`synchro/erreurs.js`, `classer`) : type (session, compte,
+      reseau, limite, drive, refus, dossier, encours, interne) + phrase courte (« Synchro impossible :
+      pas de connexion. »), détail au journal (`r.detail`). Dernier échec dans `sync.synchro_echec`
+      (Options → section Google Drive), effacé au succès suivant ; synchro auto en échec → bandeau
+      global (sauf `reseau` : règle 1, silencieux).
+    - Tests : `tests/synchro-rapide.test.js` (faux Drive aux appels comptés, aussi par HTTP).
   - **À faire, PC et mobile :**
     - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
       première mise à jour de pack.

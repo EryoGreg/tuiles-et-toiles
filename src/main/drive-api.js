@@ -139,12 +139,12 @@ module.exports = function creerApiDrive(deps) {
         do {
           const params = {
             q, spaces: 'drive', pageSize: '1000', orderBy: 'createdTime',
-            fields: 'nextPageToken,files(id,name,mimeType,createdTime)'
+            fields: 'nextPageToken,files(id,name,mimeType,createdTime,modifiedTime)'
           };
           if (pageToken) params.pageToken = pageToken;
           const r = await appelJson(oauth, 'GET', API + '/files?' + new URLSearchParams(params));
           for (const f of r.files || []) {
-            out.push({ id: f.id, name: f.name, dossier: f.mimeType === MIME_DOSSIER, createdTime: f.createdTime });
+            out.push({ id: f.id, name: f.name, dossier: f.mimeType === MIME_DOSSIER, createdTime: f.createdTime, modifiedTime: f.modifiedTime });
           }
           pageToken = r.nextPageToken;
         } while (pageToken);
@@ -174,6 +174,33 @@ module.exports = function creerApiDrive(deps) {
           verifierAcces(res.status, txt);
           throw new Error('Suppression Drive ' + res.status + ' : ' + txt.slice(0, 200));
         }
+      },
+      // Fil des changements (synchro rapide, service.js) : une requete dit si un
+      // fichier de l'app a bouge depuis le jeton. drive.file : seuls les
+      // fichiers de l'app y figurent.
+      async jetonChangements() {
+        return (await appelJson(oauth, 'GET', API + '/changes/startPageToken?fields=startPageToken')).startPageToken;
+      },
+      async changements(jeton) {
+        const changes = [];
+        let page = jeton;
+        let nouveau = null;
+        while (page) {
+          const params = {
+            pageToken: page, pageSize: '1000', spaces: 'drive',
+            fields: 'nextPageToken,newStartPageToken,changes(fileId,removed,file(name,mimeType,trashed))'
+          };
+          const r = await appelJson(oauth, 'GET', API + '/changes?' + new URLSearchParams(params));
+          for (const c of r.changes || []) {
+            changes.push({
+              fileId: c.fileId, removed: !!c.removed, nom: c.file && c.file.name,
+              dossier: !!(c.file && c.file.mimeType === MIME_DOSSIER), trashed: !!(c.file && c.file.trashed)
+            });
+          }
+          page = r.nextPageToken;
+          if (r.newStartPageToken) nouveau = r.newStartPageToken;
+        }
+        return { changes, nouveauJeton: nouveau || jeton };
       },
       async lire(id) {
         const token = await jetonAcces(oauth);

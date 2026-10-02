@@ -21,6 +21,8 @@ const edition = require('../edition');
 const drive = require('../drive');
 const etat = require('./etat');
 const cycle = require('./cycle');
+const moteur = require('./moteur');
+const erreurs = require('./erreurs');
 const compaction = require('./compaction');
 const appareilFichier = require('./appareil');
 const { nomValide } = require('./noms');
@@ -40,6 +42,16 @@ const RE_MIROIR_DRIVE = /(^|[\\/])(Mon Drive|My Drive|Google Drive|Drive partag�
 let cfg = null;
 let enCours = false;
 
+// Synchro rapide (Drive, synchro automatique) : une requete au fil des
+// changements suffit quand rien n'a bouge. Une synchro complete est forcee au
+// moins toutes les 6 h, et apres tout ce qui pourrait avoir echappe au fil.
+const COMPLETE_MAX_MS = 6 * 3600e3;
+
+/** La prochaine synchro Drive sera complete (renommage, retrait, remplacement…). */
+function demanderComplete(raison) {
+  db.definirEtatSync('synchro_complete', JSON.stringify({ raison, le: new Date().toISOString() }));
+}
+
 // Progression de la synchro en cours, diffusee a l'interface (surProgression)
 // et relue par toute page qui s'ouvre (etatSynchro) : l'utilisateur voit en
 // permanence ce qui se passe, meme s'il change d'onglet.
@@ -47,6 +59,7 @@ let progression = { enCours: false };
 let nCycles = 0;
 const LIBELLES_ETAPES = {
   depart: 'Démarrage…',
+  rapide: 'Vérification des nouveautés',
   preparer: 'Préparation du dossier de synchro',
   rejoindre: 'Inscription de cet appareil',
   rattrapage: 'Rattrapage depuis un snapshot',
@@ -105,6 +118,8 @@ function etatSynchro() {
     dossier: a.dossier_synchro || null,
     appareil: { id: a.id, nom: a.nom, type: a.type || null, prefixe: a.prefixe_ref, inscrit: !!a.inscrit },
     decision: decisionEnAttente(),
+    // Dernier echec (type + phrase courte), efface a la synchro reussie suivante.
+    echec: lire('synchro_echec'),
     derniere: lire('dossier_derniere'),
     derniereDrive: lire('drive_fusion_derniere'),
     progression,
@@ -168,6 +183,19 @@ async function transfererImages(t, sens) {
       journal.erreur('synchro', 'image-' + sens, e, { nom });
     }
   }
+  // A reprendre a la prochaine synchro complete : un echec de transfert,
+  // toujours ; une image annoncee mais pas encore sur le Drive, pendant 24 h
+  // (au-dela, son appareil d'origine l'a sans doute perdue : inutile de forcer
+  // une synchro complete a chaque fois).
+  if (sens === 'reception') {
+    if (manquantes.length) {
+      if (!db.etatSync('images_manquantes_depuis')) db.definirEtatSync('images_manquantes_depuis', new Date().toISOString());
+    } else db.definirEtatSync('images_manquantes_depuis', '');
+  }
+  const depuis = Date.parse(db.etatSync('images_manquantes_depuis') || '') || 0;
+  if (echecs.length || (sens === 'reception' && manquantes.length && Date.now() - depuis < 24 * 3600e3)) {
+    db.definirEtatSync('images_a_reprendre', JSON.stringify({ sens, echecs: echecs.length, manquantes: manquantes.length }));
+  }
   const niveau = echecs.length ? 'WARN' : 'INFO';
   journal.evt('synchro', 'images-' + sens, {
     transferees: faites, manquantes: manquantes.length ? manquantes : undefined,
@@ -183,6 +211,7 @@ async function transfererImages(t, sens) {
  */
 async function coeur(t, sorte) {
   const a = etat.appareil();
+  db.definirEtatSync('images_a_reprendre', '');
   fs.mkdirSync(cfg.imagesLocales, { recursive: true });
   const ctx = etat.contexte();
   const t0 = Date.now();
@@ -275,9 +304,18 @@ async function exclusif(par, fn, auto = false) {
   signaler({ enCours: true, par, auto, cycle, debut: Date.now(), etape: 'depart', libelle: null, faits: null, total: null, resultat: null });
   let r;
   try { r = await fn(); }
-  catch (e) { r = { erreur: 'Synchro interrompue : ' + e.message }; }
+  catch (e) { r = { erreur: e.message, jetonMort: !!(e && e.jetonMort) }; }
   finally { enCours = false; }
   r = { ...r, cycle, auto };
+  // Echec : type + phrase courte pour l'utilisateur, detail au journal.
+  if (r.erreur && !r.decisionRequise) {
+    const c = erreurs.classer(r);
+    journal.evt('synchro', 'echec-signale', { par, auto, type: c.type, detail: r.erreur }, c.type === 'reseau' ? 'INFO' : 'WARN');
+    r = { ...r, detail: r.erreur, erreur: c.message, typeErreur: c.type };
+    db.definirEtatSync('synchro_echec', JSON.stringify({ type: c.type, libelle: c.libelle, par, auto, le: new Date().toISOString() }));
+  } else if (!r.erreur) {
+    db.definirEtatSync('synchro_echec', '');
+  }
   signaler({ enCours: false, etape: 'fin', libelle: r.erreur ? 'Échec' : 'Terminé', faits: null, total: null, resultat: r });
   return r;
 }
@@ -289,10 +327,15 @@ async function exclusif(par, fn, auto = false) {
  */
 function synchroniser({ auto = false } = {}) {
   const a = etat.appareil();
-  if (!a.dossier_synchro) return Promise.resolve({ erreur: 'Aucun dossier de synchro choisi.' });
+  const echec = (detail) => {
+    const c = erreurs.classer(detail);
+    db.definirEtatSync('synchro_echec', JSON.stringify({ type: c.type, libelle: c.libelle, par: 'dossier', auto, le: new Date().toISOString() }));
+    return Promise.resolve({ erreur: c.message, typeErreur: c.type, detail, auto });
+  };
+  if (!a.dossier_synchro) return echec('Aucun dossier de synchro choisi.');
   if (!fs.existsSync(a.dossier_synchro)) {
     journal.avertir('synchro', 'dossier-introuvable', { dossier: a.dossier_synchro });
-    return Promise.resolve({ erreur: 'Dossier de synchro introuvable (clé USB débranchée, lecteur réseau absent ?).' });
+    return echec('Dossier de synchro introuvable (clé USB débranchée, lecteur réseau absent ?).');
   }
   return exclusif('dossier', async () => {
     try {
@@ -300,7 +343,7 @@ function synchroniser({ auto = false } = {}) {
       db.definirEtatSync('dossier_derniere', JSON.stringify(bilan));
       return bilan;
     } catch (e) {
-      return { erreur: 'Synchro interrompue : ' + e.message };
+      return { erreur: e.message };
     }
   }, auto);
 }
@@ -316,18 +359,116 @@ function synchroniser({ auto = false } = {}) {
 function synchroniserDrive(surReconnexion, apiTest, { auto = false } = {}) {
   return exclusif('drive', async () => {
     const op = async (oauth) => {
-      const bilan = await coeur(creerTransportDrive(apiTest || drive.api(oauth)), 'drive');
+      const api = apiTest || drive.api(oauth);
+      const cle = cleCompte(apiTest);
+      if (auto) {
+        const rapide = await essaiRapide(api, cle);
+        if (rapide) return rapide;
+      }
+      const t = creerTransportDrive(api, { cleCache: cle });
+      // Jeton du fil pris AVANT : rien de ce que les autres ecrivent pendant
+      // cette synchro ne peut echapper a la suivante.
+      let jeton0 = null;
+      if (api.jetonChangements) {
+        try { jeton0 = await api.jetonChangements(); }
+        catch (e) { if (e && e.jetonMort) throw e; journal.avertir('synchro', 'fil-jeton-echec', { erreur: e.message }); }
+      }
+      let bilan;
+      try { bilan = await coeur(t, 'drive'); }
+      catch (e) { t.oublierDossiers(); throw e; }
+      if (bilan.decisionRequise) return bilan;
+      await noterFil(api, t, jeton0, cle);
       db.definirEtatSync('drive_fusion_derniere', JSON.stringify(bilan));
       return bilan;
     };
     if (apiTest) {
-      try { return await op(null); } catch (e) { return { erreur: 'Synchro interrompue : ' + e.message }; }
+      try { return await op(null); } catch (e) { return { erreur: e.message, jetonMort: !!e.jetonMort }; }
     }
     return drive.avecReconnexion(op,
       () => { signaler({ etape: 'reconnexion' }); if (surReconnexion) surReconnexion(); },
       () => signaler({ etape: 'reprise' }),
       { sansReconnexion: auto });
   }, auto);
+}
+
+/** Cle du compte Drive (caches et jeton du fil ne passent pas d'un compte a l'autre). */
+function cleCompte(apiTest) {
+  if (apiTest) return apiTest;
+  const e = drive.etat();
+  return 'drive:' + ((e && e.email) || 'compte');
+}
+
+/**
+ * Apres une synchro complete : fil des changements depuis jeton0, sans nos
+ * propres ecritures. Ce qui reste a ete ecrit par un autre appareil PENDANT
+ * cette synchro (peut-etre apres notre lecture) -> la suivante sera complete.
+ */
+async function noterFil(api, t, jeton0, cle) {
+  if (!jeton0 || !api.changements) { db.definirEtatSync('drive_fil', ''); return; }
+  try {
+    const L = await api.changements(jeton0);
+    const etrangers = L.changes.filter((c) => !t.ecrits.has(c.fileId));
+    if (etrangers.some((c) => c.dossier || c.removed || c.trashed)) t.oublierDossiers();
+    db.definirEtatSync('drive_fil', JSON.stringify({
+      jeton: L.nouveauJeton, complet_le: new Date().toISOString(), relire: etrangers.length > 0,
+      cle: typeof cle === 'string' ? cle : 'test'
+    }));
+    db.definirEtatSync('synchro_complete', '');
+    journal.debug('synchro', 'fil-note', { changements: L.changes.length, etrangers: etrangers.length });
+  } catch (e) {
+    if (e && e.jetonMort) throw e;
+    db.definirEtatSync('drive_fil', '');
+    journal.avertir('synchro', 'fil-echec', { erreur: e.message });
+  }
+}
+
+/**
+ * Synchro automatique sans rien a envoyer : le fil des changements dit si un
+ * autre appareil a ecrit quelque chose. Rien -> fin (une requete, ~0,3 s au
+ * lieu de ~20 et ~10 s). Le moindre doute -> null (synchro complete).
+ */
+async function essaiRapide(api, cle) {
+  const a = etat.appareil();
+  const fil = lire('drive_fil');
+  const raison = !a.inscrit ? 'pas inscrit'
+    : decisionEnAttente() ? 'decision en attente'
+    : !fil || !fil.jeton ? 'pas de jeton'
+    : fil.cle !== (typeof cle === 'string' ? cle : 'test') ? 'autre compte'
+    : fil.relire ? 'ecritures concurrentes a relire'
+    : Date.now() - (Date.parse(fil.complet_le) || 0) >= COMPLETE_MAX_MS ? 'synchro complete periodique'
+    : lire('synchro_complete') ? 'demandee (' + lire('synchro_complete').raison + ')'
+    : lire('images_a_reprendre') ? 'images a reprendre'
+    : !api.changements ? 'fil indisponible'
+    : null;
+  if (raison) { journal.debug('synchro', 'rapide-non', { raison }); return null; }
+  const ctx = etat.contexte();
+  moteur.emettreStats(ctx);   // compteurs de vues -> ops a envoyer eventuelles
+  const aPousser = ctx.d.prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n;
+  if (aPousser) { journal.debug('synchro', 'rapide-non', { raison: 'a envoyer', ops: aPousser }); return null; }
+  const t0 = Date.now();
+  signaler({ etape: 'rapide', libelle: 'Vérification des nouveautés' });
+  let L;
+  try { L = await api.changements(fil.jeton); }
+  catch (e) {
+    if (e && e.jetonMort) throw e;
+    journal.avertir('synchro', 'rapide-echec', { erreur: e.message });
+    return null;
+  }
+  if (L.changes.length) {
+    journal.debug('synchro', 'rapide-non', { raison: 'changements', n: L.changes.length, ms: Date.now() - t0 });
+    return null;
+  }
+  db.definirEtatSync('drive_fil', JSON.stringify({ ...fil, jeton: L.nouveauJeton }));
+  const bilan = {
+    le: new Date().toISOString(), rapide: true,
+    poussees: 0, appliquees: 0, rejetees: 0, conflits: etat.conflits().length,
+    envoye: null, recu: null, imagesEnvoyees: 0, imagesRecues: 0,
+    prefixe: a.prefixe_ref, premiereFois: false, renumerotees: [], remplacement: null, supplante: null, nom: a.nom,
+    rattrapage: null, snapshot: null, segmentsPurges: 0, tuilesOubliees: 0, change: false
+  };
+  journal.evt('synchro', 'rapide', { ms: Date.now() - t0, derniereComplete: fil.complet_le });
+  db.definirEtatSync('drive_fusion_derniere', JSON.stringify(bilan));
+  return bilan;
 }
 
 const LIBELLES = {
@@ -408,6 +549,7 @@ function retirerAppareil(id, retirer = true) {
   const l = (lire('appareils_retires') || []).filter((r) => r && r.id !== id);
   if (retirer) l.push({ id, le: new Date().toISOString() });
   db.definirEtatSync('appareils_retires', JSON.stringify(l));
+  demanderComplete(retirer ? 'appareil retire' : 'appareil remis');
   journal.evt('synchro', retirer ? 'appareil-retire' : 'appareil-remis', { id, retires: l });
   return { ok: true, appareils: listeAppareils() };
 }
@@ -421,6 +563,7 @@ function renommer(nom) {
   a.nom = n;
   a.nom_perso = true;
   sauverAppareil();
+  demanderComplete('appareil renomme');
   const connus = (lire('appareils_connus') || []).map((f) => (f.id === a.id ? { ...f, nom: n } : f));
   db.definirEtatSync('appareils_connus', JSON.stringify(connus));
   journal.evt('synchro', 'appareil-renomme', { avant, apres: n });
@@ -438,6 +581,7 @@ function choisirRemplacement(id) {
   if (id && !(d && (d.candidats || []).some((c) => c.id === id))) return { erreur: 'Appareil inconnu.' };
   a.remplace = id || 'aucun';
   sauverAppareil();
+  demanderComplete('remplacement choisi');
   db.definirEtatSync('decision_requise', '');
   journal.evt('synchro', 'remplacement-choisi', { remplace: a.remplace, candidat: id ? d.candidats.find((c) => c.id === id) : null });
   return { ok: true, etat: etatSynchro() };

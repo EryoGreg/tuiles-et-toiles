@@ -1152,6 +1152,8 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .bandeau-synchro > svg { color: var(--laiton); flex: none; }
 .bandeau-synchro .bouton-neutre { padding: 5px 11px; font-size: 12.5px; }
 .bandeau-annulation { bottom: 76px; }
+.bandeau-synchro.echec { border-color: color-mix(in srgb, var(--revoir) 60%, var(--trait)); }
+.bandeau-synchro.echec svg { color: var(--revoir); }
 .bandeau-synchro-x { background: none; border: none; color: var(--discret); cursor: pointer; padding: 4px; display: flex; }
 .bandeau-synchro-x:hover { color: var(--encre-vive); }
 

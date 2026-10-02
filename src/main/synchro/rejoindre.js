@@ -111,6 +111,12 @@ function candidats(fiches, id, maintenant) {
     .sort((a, b) => (a.recent !== b.recent ? (a.recent ? 1 : -1) : String(b.vu_le || '').localeCompare(String(a.vu_le || ''))));
 }
 
+/** Meme contenu de fiche, sans compter vu_le (ordre des cles indifferent). */
+function memeFiche(a, b) {
+  const norm = (f) => JSON.stringify(Object.keys(f || {}).filter((k) => k !== 'vu_le').sort().map((k) => [k, f[k]]));
+  return norm(a) === norm(b);
+}
+
 function lireRetires(ctx) {
   try { return JSON.parse((ctx.d.prepare("SELECT valeur FROM sync WHERE cle='appareils_retires'").get() || {}).valeur || '[]'); }
   catch { return []; }
@@ -177,12 +183,15 @@ async function rejoindre(ctx, transport, opts) {
     if (!a.inscrit) { a.inscrit = true; change = true; }
     if (a.prefixe_ref !== lettreAvant) enregistrerPrefixe(a.prefixe_ref);
     else if (change) enregistrerAppareil();
-    const fiche = { ...moi, nom: nom(), ...signes(), prefixe_ref: a.prefixe_ref, vu_le: maintenant };
-    await transport.ecrireFiche(fiche);
+    // Fiche reecrite seulement si quelque chose a change (nom, type, lettre…) :
+    // une ecriture reveille les autres appareils (fil des changements Drive).
+    let fiche = { ...moi, nom: nom(), ...signes(), prefixe_ref: a.prefixe_ref };
+    const ecrite = !memeFiche(fiche, moi);
+    if (ecrite) { fiche = { ...fiche, vu_le: maintenant }; await transport.ecrireFiche(fiche); }
     const toutes = fiches.map((f) => (f.id === id ? fiche : f));
     return {
       premiereFois: false, prefixe: a.prefixe_ref, renumerotees: supplante ? supplante.renumerotees : [],
-      appareils: resume(toutes), fiches: toutes, fiche, supplante
+      appareils: resume(toutes), fiches: toutes, fiche, ficheEcrite: ecrite, supplante
     };
   }
 
@@ -264,5 +273,5 @@ async function rejoindre(ctx, transport, opts) {
 }
 
 module.exports = {
-  rejoindre, renumeroter, renumeroterSuite, plusGrandNumero, prefixeLibre, candidats, DecisionRequise, RECENT_MS
+  rejoindre, memeFiche, renumeroter, renumeroterSuite, plusGrandNumero, prefixeLibre, candidats, DecisionRequise, RECENT_MS
 };

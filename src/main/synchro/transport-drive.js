@@ -22,6 +22,15 @@
  * installations et plateformes du meme projet Google Cloud confondues). Des
  * fichiers deposes a la main ou par Google Drive pour ordinateur ne sont pas
  * visibles — c'est voulu.
+ *
+ * Vitesse (0.3.11 : une synchro a vide passait 10 s en ~20 allers-retours
+ * successifs) : les ids de dossiers et le contenu des fiches d'appareils sont
+ * GARDES d'une synchro a l'autre (cache par compte, `cleCache`, 24 h ; vide par
+ * oublierDossiers() apres une erreur ou un changement de dossier vu dans le fil
+ * des changements), une fiche n'est relue que si sa date de modification a
+ * change, et les lectures independantes partent en parallele. `ecrits` = ids
+ * des fichiers ecrits par cette synchro (service.js : distinguer ses propres
+ * ecritures de celles des autres appareils dans le fil des changements).
  */
 
 const fs = require('fs');
@@ -36,19 +45,41 @@ const MIME_TXT = 'text/plain; charset=UTF-8';
 const MIME_GZ = 'application/gzip';
 const mimeImage = (nom) => (nom.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
-// LISEZMOI deja verifies pendant cette session de l'app. Cle : api.memoCle
-// (stable d'une synchro a l'autre pour le vrai Drive, dont les ids sont
-// uniques), sinon l'objet api lui-meme (faux Drive des tests).
-const lisezmoiVus = new Map();
+
+// Caches d'une synchro a l'autre, par compte Drive (cleCache).
+const caches = new Map();
+const DUREE_CACHE_DOSSIERS = 24 * 3600e3;
+
+function cacheDe(cle) {
+  let c = caches.get(cle);
+  if (!c || Date.now() - c.le > DUREE_CACHE_DOSSIERS) {
+    // lisezmoi : dossiers dont le LISEZMOI a deja ete verifie (une fois par session)
+    c = { le: Date.now(), dossiers: new Map(), fiches: new Map(), fichesIds: new Map(), lisezmoi: new Set() };
+    caches.set(cle, c);
+  }
+  return c;
+}
 
 const plusAncien = (a, b) => (a.createdTime < b.createdTime ? -1 : a.createdTime > b.createdTime ? 1
   : (a.id < b.id ? -1 : 1));
 
-function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
-  // Memo de session : ids de dossiers, listings de segments et d'images.
-  const memo = new Map();
-  const segments = new Map();   // app -> Map(nom -> id)
-  let images = null;            // Map(nom -> id)
+function creerTransportDrive(apiBrute, { nomRacine = F.NOM_RACINE, cleCache } = {}) {
+  // Par compte : cle donnee par service.js (email du compte) ; sinon propre a cet objet api.
+  const cache = cacheDe(cleCache || apiBrute);
+  const memo = cache.dossiers;          // ids de dossiers (gardes d'une synchro a l'autre)
+  const segments = new Map();           // app -> Map(nom -> id) (cette synchro)
+  let images = null;                    // Map(nom -> id) (cette synchro)
+  const ecrits = new Set();             // ids ecrits par cette synchro
+  // Toute ecriture passe par ici : on sait ce qui vient de nous.
+  const api = {
+    ...apiBrute,
+    lister: (...a) => apiBrute.lister(...a),
+    lire: (...a) => apiBrute.lire(...a),
+    async creerDossier(...a) { const id = await apiBrute.creerDossier(...a); ecrits.add(id); return id; },
+    async creerFichier(...a) { const id = await apiBrute.creerFichier(...a); ecrits.add(id); return id; },
+    async majFichier(id, ...a) { await apiBrute.majFichier(id, ...a); ecrits.add(id); },
+    async supprimer(id) { await apiBrute.supprimer(id); ecrits.add(id); }
+  };
 
   /** Tous les dossiers `nom` sous `parent` (plus ancien d'abord) ; cree si aucun. */
   async function dossiers(nom, parent, creer = true) {
@@ -63,11 +94,9 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
   const racine = async () => (await dossiers(nomRacine, 'root'))[0];
   const sous = async (nom) => dossiers(nom, await racine());
 
-  /** Fichiers (non dossiers) de plusieurs dossiers, union. */
+  /** Fichiers (non dossiers) de plusieurs dossiers, union (listes en parallele). */
   async function fichiers(parents) {
-    const out = [];
-    for (const p of parents) out.push(...(await api.lister(p, { dossier: false })));
-    return out;
+    return (await Promise.all(parents.map((p) => api.lister(p, { dossier: false })))).flat();
   }
 
   async function dossiersAppareil(app, creer = false) {
@@ -82,9 +111,7 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
   }
 
   async function deposerLisezmoi(parent, cle) {
-    const cleApi = api.memoCle || api;
-    if (!lisezmoiVus.has(cleApi)) lisezmoiVus.set(cleApi, new Set());
-    const vus = lisezmoiVus.get(cleApi);
+    const vus = cache.lisezmoi;
     if (vus.has(parent + '/' + cle)) return;
     const t = Buffer.from(lisezmoi.texte(cle), 'utf8');
     const l = await api.lister(parent, { nom: lisezmoi.NOM, dossier: false });
@@ -103,15 +130,25 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
   }
 
   return {
+    /** Ids des fichiers ecrits par cette synchro. */
+    ecrits,
+    /** Oublie les ids de dossiers et de fiches gardes (erreur, dossier change ailleurs). */
+    oublierDossiers() { memo.clear(); cache.fichesIds.clear(); cache.lisezmoi.clear(); },
+
     /** Arborescence + LISEZMOI de chaque dossier (une fois par session). */
     async preparer(idAppareil) {
+      // Racine et journaux d'abord (les autres en dependent), puis le reste en
+      // parallele : noms distincts, aucun risque de doublon entre eux.
       const r = await racine();
-      await deposerLisezmoi(r, 'racine');
-      await deposerLisezmoi((await sous('journaux'))[0], 'journaux');
-      await deposerLisezmoi((await dossiersAppareil(idAppareil, true))[0], 'journal_appareil');
-      await deposerLisezmoi((await sous('appareils'))[0], 'appareils');
-      await deposerLisezmoi((await sous('images'))[0], 'images');
-      await deposerLisezmoi((await sous('snapshots'))[0], 'snapshots');
+      await sous('journaux');
+      await Promise.all([
+        deposerLisezmoi(r, 'racine'),
+        (async () => deposerLisezmoi((await sous('journaux'))[0], 'journaux'))(),
+        (async () => deposerLisezmoi((await dossiersAppareil(idAppareil, true))[0], 'journal_appareil'))(),
+        (async () => deposerLisezmoi((await sous('appareils'))[0], 'appareils'))(),
+        (async () => deposerLisezmoi((await sous('images'))[0], 'images'))(),
+        (async () => deposerLisezmoi((await sous('snapshots'))[0], 'snapshots'))()
+      ]);
     },
 
     async listerAppareils() {
@@ -194,28 +231,44 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
     // --- fiches d'appareil ---
 
     async lireFiches() {
-      const out = [];
-      const vus = new Set();
-      for (const f of await fichiers(await sous('appareils'))) {
-        const m = F.RE_FICHE.exec(f.name);
-        if (!m || vus.has(m[1])) continue;
+      const liste = (await fichiers(await sous('appareils'))).filter((f) => F.RE_FICHE.test(f.name));
+      // Seules les fiches modifiees depuis la derniere lecture sont relues, en parallele.
+      const contenus = await Promise.all(liste.map(async (f) => {
+        const deja = cache.fiches.get(f.id);
+        if (deja && f.modifiedTime && deja.modifiedTime === f.modifiedTime) return deja.fiche;
         try {
           const fiche = JSON.parse((await api.lire(f.id)).toString('utf8'));
-          if (fiche && fiche.id === m[1]) { out.push(fiche); vus.add(m[1]); }
-        } catch { /* fiche illisible : ignoree */ }
-      }
+          cache.fiches.set(f.id, { modifiedTime: f.modifiedTime, fiche });
+          return fiche;
+        } catch { return null; }   // fiche illisible : ignoree
+      }));
+      const out = [];
+      const vus = new Set();
+      liste.forEach((f, i) => {
+        const m = F.RE_FICHE.exec(f.name);
+        const fiche = contenus[i];
+        if (vus.has(m[1]) || !fiche || fiche.id !== m[1]) return;
+        out.push(JSON.parse(JSON.stringify(fiche)));   // copie : le cache ne doit pas etre modifie
+        vus.add(m[1]);
+        cache.fichesIds.set(m[1] + '.json', f.id);
+      });
       return out;
     },
 
     async ecrireFiche(fiche) {
       const octets = Buffer.from(JSON.stringify(fiche, null, 2), 'utf8');
       const nom = fiche.id + '.json';
+      const connu = cache.fichesIds.get(nom);
+      if (connu) {
+        try { await api.majFichier(connu, octets, MIME_JSON); return; }
+        catch { cache.fichesIds.delete(nom); }   // supprimee ailleurs : on la retrouve ci-dessous
+      }
       const dossiersA = await sous('appareils');
       for (const d of dossiersA) {
         const l = await api.lister(d, { nom, dossier: false });
-        if (l.length) { await api.majFichier(l[0].id, octets, MIME_JSON); return; }
+        if (l.length) { await api.majFichier(l[0].id, octets, MIME_JSON); cache.fichesIds.set(nom, l[0].id); return; }
       }
-      await api.creerFichier(nom, dossiersA[0], octets, MIME_JSON);
+      cache.fichesIds.set(nom, await api.creerFichier(nom, dossiersA[0], octets, MIME_JSON));
     },
 
     // --- images ---
@@ -239,4 +292,7 @@ function creerTransportDrive(api, { nomRacine = F.NOM_RACINE } = {}) {
   };
 }
 
-module.exports = { creerTransportDrive };
+/** Tests : oublie tous les caches (nouveau « lancement » de l'app). */
+function viderCaches() { caches.clear(); }
+
+module.exports = { creerTransportDrive, viderCaches };

@@ -118,21 +118,35 @@ async function pousser(ctx, transport) {
  * n'est applique et les curseurs ne bougent pas.
  * @returns {Promise<{ appliquees, rejetees, conflits, bilan }>}
  */
+// Execute fn sur chaque element, `n` a la fois ; resultats dans l'ordre.
+async function parLots(elements, n, fn) {
+  const out = new Array(elements.length);
+  let i = 0;
+  const ouvrier = async () => { while (i < elements.length) { const k = i++; out[k] = await fn(elements[k], k); } };
+  await Promise.all(Array.from({ length: Math.min(n, elements.length) }, ouvrier));
+  return out;
+}
+
 async function tirer(ctx, transport) {
   const recues = [];
   const curseurs = {};
   const parAppareil = {};
-  for (const app of await transport.listerAppareils()) {
-    if (app === ctx.appareil.id) continue;
+  // Listes de segments de tous les appareils en parallele, puis lectures des
+  // nouveaux segments 6 a la fois : sur Drive, chaque appel est un aller-retour
+  // (~300 ms). L'ordre de reception n'importe pas (la fusion ne depend que de
+  // l'ensemble des ops) ; le resultat est assemble dans un ordre fixe.
+  const apps = (await transport.listerAppareils()).filter((app) => app !== ctx.appareil.id);
+  const listes = await parLots(apps, 6, async (app) => {
     const cur = curseur(ctx, app);
     const tous = await transport.listerSegments(app);
-    const noms = tous.filter((n) => !cur || n > cur).sort();
+    return { app, cur, tous, noms: tous.filter((n) => !cur || n > cur).sort() };
+  });
+  const aLire = listes.flatMap((l) => l.noms.map((nom) => ({ app: l.app, nom })));
+  const lus = await parLots(aLire, 6, ({ app, nom }) => transport.lireSegment(app, nom));
+  let k = 0;
+  for (const { app, cur, tous, noms } of listes) {
     let ops = 0;
-    for (const nom of noms) {
-      const l = await transport.lireSegment(app, nom);
-      ops += l.length;
-      recues.push(...l);
-    }
+    for (let j = 0; j < noms.length; j++, k++) { ops += lus[k].length; recues.push(...lus[k]); }
     parAppareil[app] = { segments: tous.length, nouveaux: noms.length, ops, curseur: cur };
     if (noms.length) curseurs[app] = noms[noms.length - 1];
   }
@@ -158,4 +172,4 @@ async function tirer(ctx, transport) {
   };
 }
 
-module.exports = { pousser, tirer, resumer, fusionner };
+module.exports = { pousser, tirer, resumer, fusionner, parLots };

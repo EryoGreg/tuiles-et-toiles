@@ -250,8 +250,15 @@ async function boutEnBout() {
   await test('Drive injoignable : message, donnees locales intactes', async () => {
     const panne = { ...faux, lister: async () => { throw new Error('ENOTFOUND www.googleapis.com'); } };
     const r = await service.synchroniserDrive(null, panne);
-    assert.match(r.erreur, /ENOTFOUND/);
+    // Phrase courte et type pour l'utilisateur, detail technique garde.
+    assert.equal(r.erreur, 'Synchro impossible : pas de connexion.');
+    assert.equal(r.typeErreur, 'reseau');
+    assert.match(r.detail, /ENOTFOUND/);
+    assert.equal(service.etat().echec.type, 'reseau');
     assert.equal(db.oeuvre(idsPC[0]).lieu, 'Orangerie');
+    // La synchro reussie suivante efface l'echec.
+    assert.ok(!(await service.synchroniserDrive(null, faux)).erreur);
+    assert.equal(service.etat().echec, null);
   });
 }
 

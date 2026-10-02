@@ -12,7 +12,11 @@
 const moteur = require('./moteur');
 const echange = require('./echange');
 const compaction = require('./compaction');
-const { rejoindre, renumeroterSuite } = require('./rejoindre');
+const { rejoindre, renumeroterSuite, memeFiche } = require('./rejoindre');
+
+// Signe de vie : la fiche est reecrite au moins toutes les 6 h meme sans
+// changement (vu_le : appareils muets, retraits, candidats au remplacement).
+const POULS_MS = 6 * 3600e3;
 
 /**
  * @param {object} ctx  contexte moteur
@@ -21,6 +25,7 @@ const { rejoindre, renumeroterSuite } = require('./rejoindre');
  *   pas?: (nom, fn) => Promise, crochets?: { imagesEnvoi?, imagesReception? } }} o
  *   exigerDecision : un appareil neuf demande « remplace-t-il un autre ? »
  *   avant sa premiere inscription (rejoindre.js, DecisionRequise).
+ *   pouls : delai max sans reecrire sa fiche (defaut 6 h).
  */
 async function executer(ctx, t, o) {
   const pas = o.pas || ((_nom, fn) => fn());
@@ -62,14 +67,28 @@ async function executer(ctx, t, o) {
   const maFiche = rj.fiche || fiches.find((f) => f.id === moi) || {};
   const monSnapshot = snapshot ? { nom: snapshot.nom, vecteur: snapshot.vecteur } : (maFiche.snapshot || null);
   const purge = await pas('purge', () => compaction.purgerSegments(ctx, t, fiches, monSnapshot, maFiche.purge, opts));
-  await pas('fiche', () => t.ecrireFiche({
+  // Fiche : reecrite seulement si son contenu change (accuses de lecture,
+  // purge, snapshot, retraits…), si elle date de plus que le pouls, ou si un
+  // autre appareil m'a retire depuis (me signaler annule le retrait). Chaque
+  // ecriture reveille les autres appareils : pas d'ecriture pour rien.
+  const nouvelle = {
     ...maFiche, id: moi, nom: maFiche.nom || o.nom, prefixe_ref: ctx.appareil.prefixe_ref,
-    vu_le: new Date(maintenant()).toISOString(),
     lu: compaction.curseurs(ctx), purge: purge.purge, snapshot: monSnapshot,
     retires: JSON.parse((ctx.d.prepare("SELECT valeur FROM sync WHERE cle='appareils_retires'").get() || {}).valeur || '[]')
-  }));
+  };
+  const vuLe = maFiche.vu_le || '';
+  const retireIci = fiches.some((f) => f.id !== moi
+    && (Array.isArray(f.retires) ? f.retires : []).some((r) => r && r.id === moi && String(r.le || '') >= vuLe));
+  const ficheEcrite = !memeFiche(nouvelle, maFiche) || retireIci
+    || maintenant() - (Date.parse(vuLe) || 0) >= (o.pouls != null ? o.pouls : POULS_MS);
+  if (ficheEcrite) {
+    await pas('fiche', () => t.ecrireFiche({ ...nouvelle, vu_le: new Date(maintenant()).toISOString() }));
+  }
 
-  return { rejoindre: rj, rattrapage, stats, imagesEnvoyees, pousse, tire, imagesRecues, snapshot, purge, tombes };
+  return {
+    rejoindre: rj, rattrapage, stats, imagesEnvoyees, pousse, tire, imagesRecues, snapshot, purge, tombes,
+    ficheEcrite: ficheEcrite || !!rj.ficheEcrite
+  };
 }
 
 module.exports = { executer };

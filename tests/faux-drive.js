@@ -11,13 +11,21 @@
 let horloge = Date.parse('2026-01-01T00:00:00Z');
 
 function creerFauxDrive() {
-  const elements = new Map();   // id -> { id, name, parent, dossier, createdTime, octets }
+  const elements = new Map();   // id -> { id, name, parent, dossier, createdTime, modifiedTime, octets }
   let n = 0;
-  const appels = { lister: 0, creer: 0, maj: 0, lire: 0, supprimer: 0 };
+  const appels = { lister: 0, creer: 0, maj: 0, lire: 0, supprimer: 0, changements: 0, jeton: 0 };
+  const journalChangements = [];   // { seq, fileId, removed, name, dossier }
+  const noter = (e, removed = false) => journalChangements.push({
+    seq: journalChangements.length + 1, fileId: e.id, removed, name: e.name, dossier: e.dossier
+  });
 
   const nouveau = (name, parent, dossier, octets) => {
+    if (parent !== 'root' && !elements.has(parent)) throw new Error('Drive 404 : dossier parent introuvable ' + parent);
     const id = 'f' + (++n);
-    elements.set(id, { id, name, parent, dossier, createdTime: new Date(++horloge).toISOString(), octets });
+    const t = new Date(++horloge).toISOString();
+    const e = { id, name, parent, dossier, createdTime: t, modifiedTime: t, octets };
+    elements.set(id, e);
+    noter(e);
     return id;
   };
 
@@ -29,18 +37,40 @@ function creerFauxDrive() {
       return [...elements.values()]
         .filter((e) => e.parent === parent && (nom == null || e.name === nom)
           && (dossier == null || e.dossier === dossier))
-        .map((e) => ({ id: e.id, name: e.name, dossier: e.dossier, createdTime: e.createdTime }));
+        .map((e) => ({ id: e.id, name: e.name, dossier: e.dossier, createdTime: e.createdTime, modifiedTime: e.modifiedTime }));
     },
     async creerDossier(nom, parent) { appels.creer++; return nouveau(nom, parent, true, null); },
     async creerFichier(nom, parent, octets) { appels.creer++; return nouveau(nom, parent, false, Buffer.from(octets)); },
-    async majFichier(id, octets) { appels.maj++; elements.get(id).octets = Buffer.from(octets); },
+    async majFichier(id, octets) {
+      appels.maj++;
+      const e = elements.get(id);
+      e.octets = Buffer.from(octets);
+      e.modifiedTime = new Date(++horloge).toISOString();
+      noter(e);
+    },
     async lire(id) {
       appels.lire++;
       const e = elements.get(id);
       if (!e || e.dossier) throw new Error('Drive 404 ' + id);
       return Buffer.from(e.octets);
     },
-    async supprimer(id) { appels.supprimer++; elements.delete(id); },
+    async supprimer(id) {
+      appels.supprimer++;
+      const e = elements.get(id);
+      if (e) { elements.delete(id); noter(e, true); }
+    },
+    async jetonChangements() { appels.jeton++; return String(journalChangements.length + 1); },
+    async changements(jeton) {
+      appels.changements++;
+      const depuis = parseInt(jeton, 10) || 1;
+      return {
+        changes: journalChangements.filter((c) => c.seq >= depuis)
+          .map((c) => ({ fileId: c.fileId, removed: c.removed, nom: c.name, dossier: c.dossier, trashed: false })),
+        nouveauJeton: String(journalChangements.length + 1)
+      };
+    },
+    /** Tests : simule un fichier modifie par un autre appareil (hors api). */
+    toucher(id) { const e = elements.get(id); e.modifiedTime = new Date(++horloge).toISOString(); noter(e); },
     /** Chemin -> element (tests). */
     trouver(...noms) {
       let parent = 'root';
@@ -83,7 +113,17 @@ function fetchFauxDrive(faux, { jetonValide = () => true } = {}) {
       const nom = /name='((?:[^'\\]|\\.)*)'/.exec(q);
       const dossier = /mimeType!=/.test(q) ? false : /mimeType=/.test(q) ? true : undefined;
       const l = await faux.lister(parent, { nom: nom ? nom[1].replace(/\\(.)/g, '$1') : undefined, dossier });
-      return reponse(200, { files: l.map((f) => ({ id: f.id, name: f.name, createdTime: f.createdTime, mimeType: f.dossier ? MIME : 'application/octet-stream' })) });
+      return reponse(200, { files: l.map((f) => ({ id: f.id, name: f.name, createdTime: f.createdTime, modifiedTime: f.modifiedTime, mimeType: f.dossier ? MIME : 'application/octet-stream' })) });
+    }
+    if (m === 'GET' && chemin === '/drive/v3/changes/startPageToken') {
+      return reponse(200, { startPageToken: await faux.jetonChangements() });
+    }
+    if (m === 'GET' && chemin === '/drive/v3/changes') {
+      const r = await faux.changements(u.searchParams.get('pageToken'));
+      return reponse(200, {
+        newStartPageToken: r.nouveauJeton,
+        changes: r.changes.map((c) => ({ fileId: c.fileId, removed: c.removed, file: c.removed ? undefined : { name: c.nom, mimeType: c.dossier ? MIME : 'application/octet-stream', trashed: false } }))
+      });
     }
     if (m === 'POST' && chemin === '/drive/v3/files') {
       const b = JSON.parse(opts.body);

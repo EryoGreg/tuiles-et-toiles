@@ -2350,6 +2350,11 @@ function Options({ etat, onEtat, aller }) {
             {!drvMsg && syn && syn.derniereDrive && (
               <div className="options-note">Dernière fois : {phraseBilan(syn.derniereDrive)}</div>
             )}
+            {!drvMsg && syn && syn.echec && syn.echec.par === 'drive' && (
+              <div className="options-note" style={{ color: syn.echec.type === 'reseau' ? undefined : 'var(--revoir)' }}>
+                Dernier échec{syn.echec.auto ? ' (synchro automatique)' : ''}, le {new Date(syn.echec.le).toLocaleString('fr-FR')} : {syn.echec.libelle}.
+              </div>
+            )}
             <div className="options-note">
               <strong>Synchroniser</strong> envoie les changements faits sur cet appareil et
               récupère ceux de tes autres appareils. Rien n’est écrasé : chaque modification
@@ -3508,14 +3513,26 @@ export default function App() {
   // Synchro automatique qui a apporte du nouveau : la page affichee n'est
   // pas rechargee d'office (saisie, apercu ouvert…), on propose d'actualiser.
   const [nouveautes, setNouveautes] = useState(null);   // { conflits }
+  // Echec d'une synchro automatique : bandeau court (type d'erreur), sauf hors
+  // ligne (regle 1 : silencieux, dit seulement dans Options). Efface au
+  // succes suivant ; fermable.
+  const [echecSynchro, setEchecSynchro] = useState(null);   // { type, libelle }
   const conflitsAvant = useRef(null);
   useEffect(() => {
-    window.api.synchro.etat().then((s) => { if (s.progression && s.progression.enCours) setSynchroEnCours(s.progression); });
+    window.api.synchro.etat().then((s) => {
+      if (s.progression && s.progression.enCours) setSynchroEnCours(s.progression);
+      if (s.echec && s.echec.auto && s.echec.type !== 'reseau') setEchecSynchro(s.echec);
+    });
     return window.api.synchro.onProgression((p) => {
       setSynchroEnCours(p.enCours ? p : null);
       if (p.enCours) return;
       charger();   // compteurs (conflits…) a jour sans changer d'onglet
       const r = p.resultat;
+      if (r && !r.erreur) setEchecSynchro(null);
+      if (r && r.auto && r.erreur && !r.decisionRequise) {
+        setEchecSynchro(r.typeErreur === 'reseau' || r.typeErreur === 'encours' ? null
+          : { type: r.typeErreur, libelle: String(r.erreur).replace(/^Synchro impossible : /, '').replace(/\.$/, '') });
+      }
       if (!r || !r.auto || r.erreur) return;
       const recu = r.appliquees || r.imagesRecues || (r.renumerotees && r.renumerotees.length);
       const nouveauxConflits = r.conflits > (conflitsAvant.current || 0);
@@ -3769,6 +3786,15 @@ export default function App() {
     </div>
   );
 
+  const bandeauEchec = echecSynchro && page !== 'options' && (
+    <div className="bandeau-synchro echec" role="alert">
+      <I.Nuage t={15} />
+      <span>Synchro en échec : {echecSynchro.libelle}.</span>
+      <button className="bouton-neutre" onClick={() => naviguer('options')}>Options</button>
+      <button className="bandeau-synchro-x" onClick={() => setEchecSynchro(null)} title="Fermer"><I.Croix t={12} /></button>
+    </div>
+  );
+
   const NOMS_RAC = { bureau: 'le bureau', menu: 'le menu Démarrer', taskbar: 'la barre des tâches' };
   const reparerRaccourcis = async () => {
     await window.api.raccourcis.reparer(racPerimes.map((r) => r.type));
@@ -3805,6 +3831,7 @@ export default function App() {
     return (
       <MajContext.Provider value={maj}>
         <Menu etat={etat} aller={naviguer} onQuitter={tenterFermeture} />
+        {bandeauEchec}
         {noteAnnulation}
         <BandeauMaj />
         {dialogueFermeture}
@@ -3843,6 +3870,7 @@ export default function App() {
         {dialogueRaccourcis}
         {dialoguePropositionRaccourcis}
         {bandeauNouveautes}
+        {bandeauEchec}
         {noteAnnulation}
         <BandeauMaj />
       </div>
