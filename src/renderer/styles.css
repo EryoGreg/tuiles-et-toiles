@@ -1204,6 +1204,37 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   font-size: 12.5px; color: var(--attenue);
 }
 .cartel-cibles > span { flex: 1 1 100%; }
+/* Qui est qui : cet appareil, decision de remplacement, avis de la synchro auto */
+.appareil-moi {
+  display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 12px;
+  padding: 12px 14px; margin-bottom: 10px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--trait);
+}
+.appareil-moi-texte { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.appareil-moi-titre { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--discret); }
+.appareil-moi-nom { font-family: var(--serif); font-size: 19px; color: var(--encre-vive); overflow-wrap: anywhere; }
+.appareil-moi .editeur-input { max-width: 320px; }
+.appareil-type { display: block; font-size: 11.5px; color: var(--discret); overflow-wrap: anywhere; }
+.decision-bandeau, .auto-avis {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; margin: 10px 0; border-radius: 10px; font-size: 13px; line-height: 1.45;
+  background: color-mix(in srgb, var(--laiton) 12%, transparent); border: 1px solid var(--laiton); color: var(--encre);
+}
+.auto-avis { background: var(--surface-2); border-color: var(--trait); color: var(--attenue); }
+.auto-avis.alerte { border-color: color-mix(in srgb, var(--revoir) 60%, var(--trait)); color: var(--encre); }
+.decision-bandeau > span, .auto-avis > span { flex: 1 1 260px; }
+.boite-remplacement { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); overflow-y: auto; }
+.remplacement-liste { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.remplacement-option {
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; cursor: pointer;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--trait); background: var(--surface-2);
+}
+.remplacement-option.choisie { border-color: var(--laiton); background: color-mix(in srgb, var(--laiton) 12%, var(--surface-2)); }
+.remplacement-option input { margin-top: 4px; accent-color: var(--laiton); }
+.remplacement-texte { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.remplacement-nom { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--encre-vive); }
+.remplacement-nom .appareil-prefixe { flex: none; }
+.remplacement-alerte { font-size: 11.5px; color: var(--revoir); }
 .boite-versions { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
 .versions-champ { margin-bottom: 18px; }
 .versions-champ .etiquette { margin-bottom: 6px; }

@@ -194,7 +194,7 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   synchro.configurer({ dossierUser: '/data', imagesLocales: dossierImagesLocales, surProgression: (p) => emettre('synchro:progression', p) });
   const auto = creerAuto({
     actif: () => db.reglage('synchro_auto', '1') === '1',
-    cibles: () => (drive.etat().connecte && !db.etatSync('drive_pause_auto') ? ['drive'] : []),
+    cibles: () => (!synchro.decisionEnAttente() && drive.etat().connecte && !db.etatSync('drive_pause_auto') ? ['drive'] : []),
     lancer: async () => {
       const r = await synchro.synchroniserDrive(null, null, { auto: true });
       if (r && r.jetonMort) db.definirEtatSync('drive_pause_auto', new Date().toISOString());
@@ -227,6 +227,8 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   });
   g('appareils:liste', () => synchro.listeAppareils());
   g('appareils:retirer', ({ id, retirer }) => synchro.retirerAppareil(id, retirer !== false));
+  g('appareils:renommer', (nom) => synchro.renommer(nom));
+  g('appareils:remplacer', (id) => synchro.choisirRemplacement(id || null));
   g('conflits:liste', () => synchro.listeConflits());
   g('conflits:trancher', ({ id, choix }) => {
     annuler.action('Choix dans un conflit', () => synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant'));

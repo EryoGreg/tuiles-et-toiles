@@ -181,6 +181,33 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     `%APPDATA%` sans journal → 27 tuiles jamais envoyées (`aPousser: 0`). Les tables sont lues en
     entier avant d'écrire (`projeterLocale` réécrit toute la ligne). Test :
     `tests/synchro-reconciliation.test.js`.
+  - **Qui est qui (0.3.10)** — `synchro/noms.js`, `appareil.js`, `rejoindre.js` :
+    - **Nom mémorable** (« Ananas dansant », `nomPour(id)` déterministe, accord du genre), tiré à la
+      création, gardé dans `appareil.json`, publié dans la fiche ; renommable (Options → Appareils →
+      Renommer, `service.renommer`, `nom_perso`). Anciens noms automatiques (nom du poste,
+      « Téléphone ») migrés une fois (`nom_memorable`). **Type** recalculé à chaque lancement
+      (« Windows · POSTE », « Android · Samsung SM-G998B ») et publié.
+    - **Empreinte matérielle** (`materiel`, jamais en clair) : PC = MachineGuid + utilisateur
+      Windows (`materielPoste`, index.js) ; Android = `ANDROID_ID` (`IdentitePlugin.java`). Identité
+      **recopiée** sur une autre machine (empreinte différente) → nouvelle identité (`copie_de`).
+      Android : copie de secours de `appareil.json` dans les préférences (restaurée seulement si même
+      empreinte), `navigator.storage.persist()` (`src/mobile/identite.js`).
+    - **Remplacement** : un appareil neuf qui arrive là où d'autres existent ne s'inscrit pas sans
+      décision (`exigerDecision`, `DecisionRequise`, rien n'est écrit sur le Drive) → `sync.decision_requise`,
+      bandeau + boîte « Cet appareil en remplace-t-il un autre ? » (`BoiteRemplacement`), synchro
+      auto suspendue (`decisionEnAttente`) ; choix rangé dans `appareil.remplace` (id | 'aucun').
+      Même empreinte qu'une fiche → **reprise automatique**. Remplacer = reprendre **nom** (sauf
+      `nom_perso`) et **lettre**, retirer l'ancien (`appareils_retires`), fiche `remplace: id`. L'id
+      reste neuf. Tuiles créées avant l'inscription : cycle inversé (tirer → `renumeroterSuite` →
+      pousser), numérotées à la suite du plus grand numéro de la lettre (P8 après P7).
+    - **Supplanté** : un ancien appareil qui revient alors qu'une fiche déclare le remplacer et que
+      sa lettre est portée ailleurs (y compris en chaîne A ← B ← C) prend une lettre libre pour ses
+      prochaines tuiles et renumérote celles **pas encore envoyées** (`nonPartageesSeulement`).
+    - Appareil déjà inscrit : la **fiche fait foi pour la lettre** (copie de secours périmée).
+    - Tests : `tests/appareil-identite.test.js`, `tests/synchro-remplacement.test.js [n] [graine]`
+      (scénarios + propriété : refs uniques, états identiques, une lettre par appareil vivant ;
+      `TT_TRACE=<k>` déroule un scénario ; aussi sur sql.js : `TT_SUITE=./synchro-remplacement.test.js
+      node scripts/lancer-node.js tests/mobile-sqlite.test.js`), service dans `synchro-e2c.test.js`.
   - **À faire, PC et mobile :**
     - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
       première mise à jour de pack.

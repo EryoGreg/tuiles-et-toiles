@@ -2116,9 +2116,24 @@ function Options({ etat, onEtat, aller }) {
   // rechargement via sessionStorage.
   const annoncerSynchro = async (r, ou, setMsg) => {
     onEtat();   // compteurs de la barre (conflits…)
+    if (r.decisionRequise) {
+      // Appareil neuf : « remplace-t-il un autre ? » avant toute ecriture.
+      setSyn(await window.api.synchro.etat());
+      setDecisionOuverte(true);
+      return;
+    }
     if (r.erreur) { setMsg({ erreur: r.erreur }); return; }
     const morceaux = [];
     if (r.reconnecte) morceaux.push('Reconnecté à Google.');
+    if (r.remplacement) {
+      morceaux.push(r.remplacement.auto
+        ? 'Appareil reconnu : il reprend le nom « ' + r.nom + ' » et la lettre « ' + r.prefixe + ' ».'
+        : 'Cet appareil remplace « ' + r.remplacement.nom + ' » : il reprend son nom et sa lettre « ' + r.prefixe + ' ».');
+    }
+    if (r.supplante) {
+      morceaux.push('« ' + r.supplante.par.nom + ' » a repris la lettre « ' + r.supplante.ancienPrefixe
+        + ' » de cet appareil : ses nouvelles tuiles seront numérotées « ' + r.supplante.prefixe + ' ».');
+    }
     if (r.renumerotees.length) {
       morceaux.push('Cet appareil numérote désormais ses tuiles « ' + r.prefixe + ' » : '
         + r.renumerotees.map((x) => x.avant + ' → ' + x.apres).join(', ') + '.');
@@ -2135,6 +2150,18 @@ function Options({ etat, onEtat, aller }) {
     }
     setMsg(msg);
     setSyn(await window.api.synchro.etat());
+  };
+
+  // « Cet appareil en remplace-t-il un autre ? » (appareil neuf, avant sa
+  // premiere synchro) : le choix est range, puis la synchro relancee.
+  const [decisionOuverte, setDecisionOuverte] = useState(false);
+  const decider = async (id) => {
+    setDecisionOuverte(false);
+    const par = syn && syn.decision && syn.decision.par;
+    const r = await window.api.appareils.remplacer(id);
+    if (r.erreur) { (par === 'drive' ? setDrvMsg : setSynMsg)({ erreur: r.erreur }); return; }
+    setSyn(r.etat);
+    if (par === 'dossier') synLancer(); else drvSynchroniser();
   };
 
   const synLancer = async () => {
@@ -2347,7 +2374,20 @@ function Options({ etat, onEtat, aller }) {
         )}
       </section>
 
-      {syn && drv && (drv.connecte || syn.dossier) && <SectionAppareils syn={syn} drv={drv} />}
+      {syn && syn.decision && (
+        <div className="decision-bandeau">
+          <span>
+            <strong>Première synchro en attente.</strong> D’autres appareils utilisent déjà ce Drive :
+            dis si celui-ci en remplace un (téléphone changé, appli réinstallée).
+          </span>
+          <button className="bouton-valide" onClick={() => setDecisionOuverte(true)}>Choisir</button>
+        </div>
+      )}
+      {decisionOuverte && syn && syn.decision && (
+        <BoiteRemplacement candidats={syn.decision.candidats} onChoisir={decider} onFermer={() => setDecisionOuverte(false)} />
+      )}
+
+      {syn && drv && (drv.connecte || syn.dossier) && <SectionAppareils syn={syn} drv={drv} onSyn={setSyn} />}
 
       {syn && drv && (drv.connecte || syn.dossier) && (
         <>
@@ -2377,14 +2417,21 @@ function Options({ etat, onEtat, aller }) {
               </button>
             )}
             {syn.auto && syn.auto.mobile && syn.auto.wifiSeulement && !syn.auto.wifi && (
-              <div className="options-note">
-                En données mobiles : la synchro automatique attend le Wi-Fi. « Synchroniser » reste disponible.
+              <div className="auto-avis">
+                <span>En données mobiles : la synchro automatique attend le Wi-Fi. Tu peux synchroniser maintenant quand même.</span>
+                {drv.connecte && (
+                  <button className="bouton-neutre" onClick={drvSynchroniser} disabled={syncDrive}>
+                    <I.Nuage t={14} /> Synchroniser maintenant
+                  </button>
+                )}
               </div>
             )}
             {syn.auto && syn.auto.pauseDrive && drv.connecte && (
-              <div className="options-note" style={{ color: 'var(--revoir)' }}>
-                Session Google expirée : la synchro automatique avec Drive est en pause. Clique
-                « Synchroniser » ci-dessus pour autoriser de nouveau l’accès.
+              <div className="auto-avis alerte">
+                <span>Session Google expirée : la synchro automatique avec Drive est en pause jusqu’à une synchro faite à la main.</span>
+                <button className="bouton-neutre" onClick={drvSynchroniser} disabled={syncDrive}>
+                  <I.Nuage t={14} /> Synchroniser et autoriser l’accès
+                </button>
               </div>
             )}
             <div className="options-note">
@@ -2630,11 +2677,22 @@ function SectionImages() {
 
 // Appareils vus a la derniere synchro. Retirer un appareil perdu : il ne
 // bloque plus le menage du dossier de synchro (ses tuiles restent).
-function SectionAppareils({ syn, drv }) {
+function SectionAppareils({ syn, drv, onSyn }) {
   const [liste, setListe] = useState(null);
   const [demande, setDemande] = useState(null);
+  const [renommage, setRenommage] = useState(null);   // null | texte en cours
+  const [erreurNom, setErreurNom] = useState(null);
   useEffect(() => { window.api.appareils.liste().then(setListe); }, [syn.derniere, syn.derniereDrive]);
   if (!liste) return null;
+  const moi = liste.find((a) => a.moi);
+  const renommer = async () => {
+    const r = await window.api.appareils.renommer(renommage);
+    if (r.erreur) { setErreurNom(r.erreur); return; }
+    setErreurNom(null);
+    setRenommage(null);
+    setListe(r.appareils);
+    if (onSyn && r.etat) onSyn(r.etat);
+  };
   const basculer = async (a, retirer) => {
     setDemande(null);
     const r = await window.api.appareils.retirer(a.id, retirer);
@@ -2646,11 +2704,36 @@ function SectionAppareils({ syn, drv }) {
       <div className="filet" />
       <section>
         <div className="etiquette">Appareils</div>
+        {moi && (
+          <div className="appareil-moi">
+            <span className="appareil-prefixe">{moi.prefixe || '?'}</span>
+            <div className="appareil-moi-texte">
+              <span className="appareil-moi-titre">Cet appareil</span>
+              {renommage === null ? (
+                <span className="appareil-moi-nom">{moi.nom}</span>
+              ) : (
+                <input
+                  className="editeur-input" value={renommage} maxLength={40} autoFocus
+                  onChange={(e) => setRenommage(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') renommer(); if (e.key === 'Escape') setRenommage(null); }}
+                />
+              )}
+              {moi.type && <span className="appareil-type">{moi.type}</span>}
+            </div>
+            {renommage === null
+              ? <button className="bouton-neutre" onClick={() => setRenommage(moi.nom || '')}><I.Crayon t={14} /> Renommer</button>
+              : <button className="bouton-valide" onClick={renommer}><I.Coche t={14} /> OK</button>}
+          </div>
+        )}
+        {erreurNom && <div className="options-note" style={{ color: 'var(--revoir)' }}>{erreurNom}</div>}
         <div className="appareils">
-          {liste.map((a) => (
+          {liste.filter((a) => !a.moi).map((a) => (
             <div key={a.id} className={'appareil' + (a.retire ? ' retire' : '')}>
               <span className="appareil-prefixe">{a.prefixe || '?'}</span>
-              <span className="appareil-nom">{a.nom || a.id}{a.moi ? ' (cet appareil)' : ''}</span>
+              <span className="appareil-nom">
+                {a.nom || a.id}
+                {a.type && <span className="appareil-type">{a.type}</span>}
+              </span>
               <span className="appareil-vu">
                 {a.retire ? (a.retireIci ? 'retiré' : 'retiré par un autre appareil')
                   : a.moi && !a.prefixe ? 'lettre attribuée à la première synchro'
@@ -2663,7 +2746,8 @@ function SectionAppareils({ syn, drv }) {
           ))}
         </div>
         <div className="options-note">
-          Chaque appareil numérote ses tuiles avec sa lettre. {drv.connecte ? 'Compte Google de cet appareil : '
+          Chaque appareil numérote ses tuiles avec sa lettre, et garde son nom tant que l’appli
+          n’est pas réinstallée ; un appareil qui en remplace un autre reprend son nom et sa lettre. {drv.connecte ? 'Compte Google de cet appareil : '
             + (drv.email || 'inconnu') + ' — un appareil connecté avec un autre compte n’apparaît pas ici et ne '
             + 'reçoit rien.' : ''}
         </div>
@@ -2688,6 +2772,59 @@ function SectionAppareils({ syn, drv }) {
         </BoiteConfirmation>
       )}
     </>
+  );
+}
+
+// Appareil neuf qui arrive sur un Drive (ou un dossier) deja utilise : reprend-il
+// le nom et la lettre d'un appareil precedent ? Rien n'est ecrit avant le choix.
+function BoiteRemplacement({ candidats, onChoisir, onFermer }) {
+  const [choix, setChoix] = useState(() => {
+    const muet = candidats.find((c) => !c.recent);
+    return muet ? muet.id : 'aucun';
+  });
+  const jour = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : 'jamais');
+  useEffect(() => {
+    const clavier = (e) => { if (e.key === 'Escape') onFermer(); };
+    window.addEventListener('keydown', clavier);
+    return () => window.removeEventListener('keydown', clavier);
+  }, [onFermer]);
+  const Option = ({ id, children, recent }) => (
+    <label className={'remplacement-option' + (choix === id ? ' choisie' : '') + (recent ? ' recent' : '')}>
+      <input type="radio" name="remplacement" checked={choix === id} onChange={() => setChoix(id)} />
+      <span className="remplacement-texte">{children}</span>
+    </label>
+  );
+  return (
+    <div className="recouvrement" onClick={onFermer}>
+      <div className="boite-dialogue boite-remplacement" onClick={(e) => e.stopPropagation()}>
+        <h3>Cet appareil en remplace-t-il un autre ?</h3>
+        <p>
+          Téléphone changé, appli réinstallée, ordinateur remis à zéro : choisis l’ancien appareil.
+          Celui-ci reprend son nom et sa lettre (ses tuiles continuent à la suite), et l’ancien est
+          retiré. Sinon, c’est un nouvel appareil, avec son propre nom.
+        </p>
+        <div className="remplacement-liste">
+          {candidats.map((c) => (
+            <Option key={c.id} id={c.id} recent={c.recent}>
+              <span className="remplacement-nom"><span className="appareil-prefixe">{c.prefixe}</span> {c.nom}</span>
+              <span className="appareil-type">
+                {[c.type, 'dernière synchro : ' + jour(c.vu_le), c.retire ? 'retiré' : null].filter(Boolean).join(' · ')}
+              </span>
+              {c.recent && <span className="remplacement-alerte">Actif il y a moins d’un jour : sans doute un autre appareil encore en service.</span>}
+            </Option>
+          ))}
+          <Option id="aucun">
+            <span className="remplacement-nom">Non, c’est un nouvel appareil</span>
+          </Option>
+        </div>
+        <div className="actions">
+          <button className="bouton-neutre" onClick={onFermer}>Plus tard</button>
+          <button className="bouton-valide" onClick={() => onChoisir(choix === 'aucun' ? null : choix)}>
+            <I.Coche t={14} /> Valider et synchroniser
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

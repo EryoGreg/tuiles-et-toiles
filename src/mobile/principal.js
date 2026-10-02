@@ -28,6 +28,7 @@ const canaux = require('./canaux');
 const drive = require('./drive');
 const { App: AppNative } = require('@capacitor/app');
 const reseau = require('./reseau');
+const identite = require('./identite');
 
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
 const DATA = '/data';
@@ -69,7 +70,18 @@ async function demarrer() {
   // plutot que de bloquer le demarrage ; la synchro retablit les donnees.
   if (fs.illisibles().length) journal.avertir('app', 'fichiers-illisibles', { fichiers: fs.illisibles() });
 
-  const moi = appareil.charger(DATA, { nom: os.hostname() });
+  // Identite : copie de secours tenue a jour, remise en place si le stockage
+  // de la page a ete perdu sur ce meme telephone (identite.js).
+  const ident = await identite.infos();
+  appareil.apresEnregistrement((a) => identite.copier(a));
+  await identite.restaurer(DATA, ident.materiel);
+  const moi = appareil.charger(DATA, { nom: os.hostname(), type: ident.type, materiel: ident.materiel });
+  identite.copier(moi);
+  identite.persistance();
+  journal.evt('app', 'appareil', {
+    id: moi.id, nom: moi.nom, type: moi.type, prefixe: moi.prefixe_ref, evenement: moi.evenement || null,
+    ancien: moi.ancien || null, inscrit: !!moi.inscrit, remplace: moi.remplace || null
+  }, moi.evenement === 'copie' ? 'WARN' : 'INFO');
   etat.configurer({ appareil: moi });
   db.ouvrir(USER, PACK);
   edition.configurer(IMAGES_LOCALES);

@@ -23,6 +23,7 @@ const etat = require('./etat');
 const cycle = require('./cycle');
 const compaction = require('./compaction');
 const appareilFichier = require('./appareil');
+const { nomValide } = require('./noms');
 const { NOM_RACINE } = require('./format');
 const { creerTransportDossier } = require('./transport-dossier');
 const { creerTransportDrive } = require('./transport-drive');
@@ -92,11 +93,18 @@ function lire(cle) {
   try { return JSON.parse(db.etatSync(cle) || 'null'); } catch { return null; }
 }
 
+/** Decision « cet appareil en remplace-t-il un autre ? » en attente (rejoindre.js). */
+function decisionEnAttente() {
+  const d = lire('decision_requise');
+  return d && Array.isArray(d.candidats) && etat.appareil().remplace === undefined ? d : null;
+}
+
 function etatSynchro() {
   const a = etat.appareil();
   return {
     dossier: a.dossier_synchro || null,
-    appareil: { id: a.id, nom: a.nom, prefixe: a.prefixe_ref },
+    appareil: { id: a.id, nom: a.nom, type: a.type || null, prefixe: a.prefixe_ref, inscrit: !!a.inscrit },
+    decision: decisionEnAttente(),
     derniere: lire('dossier_derniere'),
     derniereDrive: lire('drive_fusion_derniere'),
     progression,
@@ -196,7 +204,8 @@ async function coeur(t, sorte) {
 
   try {
     const c = await cycle.executer(ctx, t, {
-      nom: a.nom, enregistrerPrefixe: () => sauverAppareil(), pas,
+      nom: a.nom, type: a.type, materiel: a.materiel, exigerDecision: true,
+      enregistrerPrefixe: () => sauverAppareil(), enregistrerAppareil: () => sauverAppareil(), pas,
       crochets: {
         imagesEnvoi: () => transfererImages(t, 'envoi'),
         imagesReception: () => transfererImages(t, 'reception')
@@ -206,9 +215,11 @@ async function coeur(t, sorte) {
     const r = c.tire;
     // Noms des appareils, pour l'ecran des conflits (« modifie sur Telephone »).
     db.definirEtatSync('appareils_connus', JSON.stringify(rj.appareils || []));
+    db.definirEtatSync('decision_requise', '');
     journal.evt('synchro', 'appareils', {
-      premiereFois: rj.premiereFois, prefixe: rj.prefixe, renumerotees: rj.renumerotees, appareils: rj.appareils
-    });
+      premiereFois: rj.premiereFois, prefixe: rj.prefixe, renumerotees: rj.renumerotees, appareils: rj.appareils,
+      remplacement: rj.remplacement || undefined, supplante: rj.supplante || undefined
+    }, rj.supplante ? 'WARN' : 'INFO');
     if (c.rattrapage) {
       journal.evt('synchro', 'rattrapage', c.rattrapage, c.rattrapage.manque ? 'ERREUR' : 'INFO');
     }
@@ -236,6 +247,7 @@ async function coeur(t, sorte) {
       envoye: c.pousse.resume || null, recu: r.resume || null,
       imagesEnvoyees: c.imagesEnvoyees, imagesRecues: c.imagesRecues,
       prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees,
+      remplacement: rj.remplacement || null, supplante: rj.supplante || null, nom: a.nom,
       rattrapage: c.rattrapage ? (c.rattrapage.snapshot || 'impossible') : null,
       snapshot: c.snapshot ? c.snapshot.nom : null, segmentsPurges: c.purge.supprimes.length,
       tuilesOubliees: c.tombes.length, change: !!change
@@ -243,6 +255,13 @@ async function coeur(t, sorte) {
     journal.evt('synchro', 'fin', { par: sorte, ...bilan, ms: Date.now() - t0 });
     return bilan;
   } catch (e) {
+    if (e && e.decisionRequise) {
+      // Appareil neuf, d'autres existent deja : rien n'est ecrit tant que
+      // l'utilisateur n'a pas dit s'il en remplace un (Options).
+      db.definirEtatSync('decision_requise', JSON.stringify({ candidats: e.candidats, le: new Date().toISOString(), par: sorte }));
+      journal.evt('synchro', 'decision-requise', { par: sorte, candidats: e.candidats }, 'WARN');
+      return { erreur: e.message, decisionRequise: true, candidats: e.candidats };
+    }
     journal.erreur('synchro', 'echec', e, { par: sorte, etape, ms: Date.now() - t0, jetonMort: !!e.jetonMort });
     if (!e.jetonMort) e.message = '[' + etape + '] ' + e.message;
     throw e;
@@ -369,11 +388,12 @@ function listeAppareils() {
   const locaux = compaction.retiresEnVigueur(lire('appareils_retires') || [],
     connus.map((f) => ({ id: f.id, vu_le: f.vu_le })), a.id);
   const out = connus.map((f) => ({
-    ...f, moi: f.id === a.id, retireIci: locaux.has(f.id), retire: f.id !== a.id && (locaux.has(f.id) || !!f.retire)
+    ...f, ...(f.id === a.id ? { nom: a.nom, type: a.type || f.type || null } : {}),
+    moi: f.id === a.id, retireIci: locaux.has(f.id), retire: f.id !== a.id && (locaux.has(f.id) || !!f.retire)
   }));
   // Pas encore synchronise : sa lettre n'est pas encore attribuee (elle l'est en
   // rejoignant, selon celles deja prises) -> pas de lettre provisoire affichee.
-  if (!out.some((f) => f.moi)) out.push({ id: a.id, nom: a.nom, prefixe: null, vu_le: null, moi: true, retire: false });
+  if (!out.some((f) => f.moi)) out.push({ id: a.id, nom: a.nom, type: a.type || null, prefixe: null, vu_le: null, moi: true, retire: false });
   return out.sort((x, y) => (x.moi ? -1 : y.moi ? 1 : String(y.vu_le || '').localeCompare(String(x.vu_le || ''))));
 }
 
@@ -390,6 +410,37 @@ function retirerAppareil(id, retirer = true) {
   db.definirEtatSync('appareils_retires', JSON.stringify(l));
   journal.evt('synchro', retirer ? 'appareil-retire' : 'appareil-remis', { id, retires: l });
   return { ok: true, appareils: listeAppareils() };
+}
+
+/** Renomme cet appareil (publie a la prochaine synchro). */
+function renommer(nom) {
+  const n = nomValide(nom);
+  if (!n) return { erreur: 'Nom vide ou trop long (40 caractères au plus).' };
+  const a = etat.appareil();
+  const avant = a.nom;
+  a.nom = n;
+  a.nom_perso = true;
+  sauverAppareil();
+  const connus = (lire('appareils_connus') || []).map((f) => (f.id === a.id ? { ...f, nom: n } : f));
+  db.definirEtatSync('appareils_connus', JSON.stringify(connus));
+  journal.evt('synchro', 'appareil-renomme', { avant, apres: n });
+  return { ok: true, appareils: listeAppareils(), etat: etatSynchro() };
+}
+
+/**
+ * Decision avant la premiere synchro : id de l'appareil remplace, ou null
+ * (« nouvel appareil »). La synchro suivante l'applique (rejoindre.js).
+ */
+function choisirRemplacement(id) {
+  const a = etat.appareil();
+  if (a.inscrit) return { erreur: 'Cet appareil est déjà inscrit à la synchro.' };
+  const d = lire('decision_requise');
+  if (id && !(d && (d.candidats || []).some((c) => c.id === id))) return { erreur: 'Appareil inconnu.' };
+  a.remplace = id || 'aucun';
+  sauverAppareil();
+  db.definirEtatSync('decision_requise', '');
+  journal.evt('synchro', 'remplacement-choisi', { remplace: a.remplace, candidat: id ? d.candidats.find((c) => c.id === id) : null });
+  return { ok: true, etat: etatSynchro() };
 }
 
 /**
@@ -409,5 +460,6 @@ function resoudre(id, choix) {
 
 module.exports = {
   configurer, etat: etatSynchro, definirDossier, oublierDossier,
-  synchroniser, synchroniserDrive, resoudre, listeConflits, listeAppareils, retirerAppareil, SOUS_DOSSIER
+  synchroniser, synchroniserDrive, resoudre, listeConflits, listeAppareils, retirerAppareil, SOUS_DOSSIER,
+  renommer, choisirRemplacement, decisionEnAttente
 };

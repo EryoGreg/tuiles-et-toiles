@@ -223,6 +223,14 @@ async function boutEnBout() {
     const images = ouvrirAppareil(TEL);
     edition.creer({ titre: 'Sculpture salle 12', artiste: 'Inconnu', image: poserImage(images) });
     await service.definirDossier(partage);
+    // Appareil neuf, le PC est deja inscrit : « remplace-t-il un autre ? » d'abord,
+    // sans rien ecrire dans le dossier partage.
+    const d = await service.synchroniser();
+    assert.equal(d.decisionRequise, true);
+    assert.deepEqual(d.candidats.map((c) => c.prefixe), ['L']);
+    assert.ok(service.decisionEnAttente());
+    assert.ok(!(service.choisirRemplacement(null)).erreur);   // nouvel appareil
+    assert.equal(service.decisionEnAttente(), null);
     const r = await service.synchroniser();
     assert.ok(!r.erreur, r.erreur);
     assert.equal(r.prefixe, 'M');
@@ -320,10 +328,100 @@ async function boutEnBout() {
   });
 }
 
+// --- qui est qui : nom, decision, remplacement (service + vraies bases) --------
+
+const lireAppareil = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'appareil.json'), 'utf8'));
+
+async function identite() {
+  console.log('identite des appareils (service)');
+  const partage = dossier();
+  const VIEUX = dossier(), NEUF = dossier(), AUTRE = dossier();
+  let idVieux, nomVieux;
+
+  await test('nom memorable, pas le nom du poste ; renommer : publie a la synchro suivante', async () => {
+    ouvrirAppareil(VIEUX);
+    const a = etat.appareil();
+    idVieux = a.id;
+    assert.notEqual(a.nom, path.basename(VIEUX));
+    assert.match(a.nom, /^\S+ \S+$/);
+    assert.match(service.renommer('   ').erreur, /vide/);
+    assert.match(service.renommer('x'.repeat(41)).erreur, /trop long/);
+    const r = service.renommer('  Vieux   telephone ');
+    assert.ok(r.ok);
+    nomVieux = 'Vieux telephone';
+    assert.equal(lireAppareil(VIEUX).nom, nomVieux);
+    assert.equal(lireAppareil(VIEUX).nom_perso, true);
+    assert.equal(r.appareils.find((x) => x.moi).nom, nomVieux);
+    edition.creer({ titre: 'Du vieux 1', artiste: 'x' });
+    edition.creer({ titre: 'Du vieux 2', artiste: 'x' });
+    await service.definirDossier(partage);
+    const s = await service.synchroniser();
+    assert.ok(!s.erreur, s.erreur);
+    assert.equal(lireAppareil(VIEUX).inscrit, true);
+    const fiche = JSON.parse(fs.readFileSync(path.join(partage, 'Tuiles et Toiles', 'appareils', idVieux + '.json'), 'utf8'));
+    assert.equal(fiche.nom, nomVieux);
+  });
+
+  await test('appareil neuf : decision en attente, synchro auto suspendue, choix invalide refuse', async () => {
+    ouvrirAppareil(NEUF);
+    await service.definirDossier(partage);
+    const r = await service.synchroniser({ auto: true });
+    assert.equal(r.decisionRequise, true);
+    const d = service.decisionEnAttente();
+    assert.ok(d && d.candidats.some((c) => c.id === idVieux && c.nom === nomVieux));
+    assert.equal(service.etat().decision.candidats.length, d.candidats.length);
+    assert.equal(service.etat().appareil.inscrit, false);
+    assert.match(service.choisirRemplacement('ffffffff').erreur, /inconnu/);
+    assert.ok(service.decisionEnAttente(), 'toujours en attente');
+  });
+
+  await test('remplacement : nom et lettre repris, ancien retire, decision effacee, appareil.json a jour', async () => {
+    const c = service.choisirRemplacement(idVieux);
+    assert.ok(c.ok);
+    assert.equal(service.decisionEnAttente(), null);
+    assert.equal(lireAppareil(NEUF).remplace, idVieux);
+    const r = await service.synchroniser();
+    assert.ok(!r.erreur, r.erreur);
+    assert.deepEqual(r.remplacement, { id: idVieux, nom: nomVieux, prefixe: 'L', auto: false });
+    const a = lireAppareil(NEUF);
+    assert.equal(a.prefixe_ref, 'L');
+    assert.equal(a.nom, nomVieux, 'le nom choisi pour l\'ancien est repris');
+    assert.equal(a.inscrit, true);
+    assert.equal(r.nom, nomVieux);
+    const liste = service.listeAppareils();
+    assert.ok(liste.find((x) => x.id === idVieux).retire);
+    assert.equal(edition.creer({ titre: 'Du neuf', artiste: 'x' }).ref, 'L3');
+    assert.match(service.choisirRemplacement(null).erreur, /déjà inscrit/);
+  });
+
+  await test('l\'ancien revient : supplante, nouvelle lettre, ses tuiles gardent la leur', async () => {
+    ouvrirAppareil(VIEUX);
+    const r = await service.synchroniser();
+    assert.ok(!r.erreur, r.erreur);
+    assert.ok(r.supplante);
+    assert.notEqual(lireAppareil(VIEUX).prefixe_ref, 'L');
+    const refs = db.instance().prepare('SELECT ref_local FROM oeuvres_locales ORDER BY ref_local').all().map((x) => x.ref_local);
+    assert.deepEqual(refs, ['L1', 'L2'], 'ses tuiles L1, L2 restent L1, L2');
+  });
+
+  await test('decision « nouvel appareil » : lettre libre, rien de repris', async () => {
+    ouvrirAppareil(AUTRE);
+    await service.definirDossier(partage);
+    assert.equal((await service.synchroniser()).decisionRequise, true);
+    service.choisirRemplacement(null);
+    const r = await service.synchroniser();
+    assert.ok(!r.erreur, r.erreur);
+    assert.equal(r.remplacement, null);
+    assert.equal(lireAppareil(AUTRE).remplace, 'aucun');
+    assert.notEqual(lireAppareil(AUTRE).nom, nomVieux);
+  });
+}
+
 (async () => {
   await transport();
   await entree();
   await boutEnBout();
+  await identite();
   db.fermer();
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* verrou Windows */ }
   console.log(`\n${nOk} ok, ${nKo} KO`);

@@ -10,6 +10,7 @@
 const { app, BrowserWindow, ipcMain, nativeTheme, protocol, net, dialog, shell, clipboard, screen, powerMonitor } = require('electron');
 const path = require('path');
 const os = require('os');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 
@@ -67,6 +68,18 @@ const ANCIEN = path.join(DOSSIER_USER, 'tuiles.db');   // base v1 monolithique
 
 // Icone de fenetre en dev (l'exe empaquete porte deja la sienne).
 const ICONE = path.join(__dirname, '..', '..', 'build', 'icon.png');
+
+// Empreinte de ce poste pour la synchro (appareil.js) : MachineGuid de Windows
+// (une installation de Windows) + utilisateur (deux comptes sur un meme PC =
+// deux appareils). Illisible -> null : la detection est simplement sautee.
+function materielPoste() {
+  try {
+    const sortie = execFileSync('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'],
+      { encoding: 'utf8', windowsHide: true, timeout: 3000 });
+    const m = /MachineGuid\s+REG_SZ\s+(\S+)/i.exec(sortie);
+    return m ? appareil.empreinte(m[1], os.userInfo().username) : null;
+  } catch { return null; }
+}
 
 function preparerDonnees() {
   if (DEV) return;   // dev : data/pack.db (import) + data/utilisateur.db (cree a l'ouverture)
@@ -231,9 +244,14 @@ app.whenReady().then(() => {
 
   // Identite de l'installation (appareil.json, hors utilisateur.db) : avant
   // db.ouvrir, dont le hook d'ouverture migre les stats et fait la genese.
-  const moi = appareil.charger(DOSSIER_USER, { nom: os.hostname() });
+  const moi = appareil.charger(DOSSIER_USER, {
+    nom: os.hostname(), type: 'Windows · ' + os.hostname(), materiel: materielPoste()
+  });
   etat.configurer({ appareil: moi });
-  journal.evt('app', 'appareil', { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref, dossierSynchro: moi.dossier_synchro || null });
+  journal.evt('app', 'appareil', {
+    id: moi.id, nom: moi.nom, type: moi.type, prefixe: moi.prefixe_ref, dossierSynchro: moi.dossier_synchro || null,
+    evenement: moi.evenement || null, ancien: moi.ancien || null, inscrit: !!moi.inscrit, remplace: moi.remplace || null
+  }, moi.evenement === 'copie' ? 'WARN' : 'INFO');
 
   db.ouvrir(USER, PACK);
   edition.configurer(DOSSIER_IMAGES_LOCALES);
@@ -566,6 +584,8 @@ const synchroAuto = creerAuto({
   actif: () => db.reglage('synchro_auto', '1') === '1',
   cibles: () => {
     const c = [];
+    // Appareil neuf en attente de « remplace-t-il un autre ? » : rien d'automatique.
+    if (synchro.decisionEnAttente()) return c;
     if (drive.etat().connecte && !db.etatSync('drive_pause_auto')) c.push('drive');
     const dossier = etat.appareil().dossier_synchro;
     if (dossier && fs.existsSync(dossier)) c.push('dossier');
@@ -695,6 +715,8 @@ gerer('reglages:definir', (_e, { cle, valeur }) => {
 // Conflits de synchro : liste lisible et choix de l'utilisateur.
 gerer('appareils:liste', () => synchro.listeAppareils());
 gerer('appareils:retirer', (_e, { id, retirer }) => synchro.retirerAppareil(id, retirer !== false));
+gerer('appareils:renommer', (_e, nom) => synchro.renommer(nom));
+gerer('appareils:remplacer', (_e, id) => synchro.choisirRemplacement(id || null));
 gerer('conflits:liste', () => synchro.listeConflits());
 gerer('conflits:trancher', (_e, { id, choix }) => {
   annuler.action('Choix dans un conflit', () => synchro.resoudre(id, choix === 'perdant' ? 'perdant' : 'gagnant'));

@@ -98,7 +98,10 @@ contextBridge.exposeInMainWorld('api', {
 
   appareils: {
     liste: () => ipcRenderer.invoke('appareils:liste'),
-    retirer: (id, retirer = true) => ipcRenderer.invoke('appareils:retirer', { id, retirer })
+    retirer: (id, retirer = true) => ipcRenderer.invoke('appareils:retirer', { id, retirer }),
+    renommer: (nom) => ipcRenderer.invoke('appareils:renommer', nom),
+    // Avant la premiere synchro : id de l'appareil remplace, ou null (nouvel appareil)
+    remplacer: (id) => ipcRenderer.invoke('appareils:remplacer', id)
   },
 
   synchro: {

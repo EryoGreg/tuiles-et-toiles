@@ -192,6 +192,9 @@ async function boutEnBout() {
     const images = ouvrirAppareil(TEL);
     edition.creer({ titre: 'Sculpture salle 12', artiste: 'Inconnu' });
     voir(pack[0].id, 2);
+    // Appareil neuf, le PC est deja sur le Drive : decision d'abord (nouvel appareil).
+    assert.equal((await service.synchroniserDrive(null, faux)).decisionRequise, true);
+    service.choisirRemplacement(null);
     const r = await service.synchroniserDrive(null, faux);
     assert.ok(!r.erreur, r.erreur);
     assert.equal(r.prefixe, 'M');

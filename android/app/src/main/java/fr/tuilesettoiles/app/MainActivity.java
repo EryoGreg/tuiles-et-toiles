@@ -25,6 +25,7 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         // Modules locaux (pas des paquets npm) : a declarer avant super.onCreate.
         registerPlugin(MiseAJourPlugin.class);
         registerPlugin(LectureTextePlugin.class);
+        registerPlugin(IdentitePlugin.class);
         super.onCreate(savedInstanceState);
     }
 

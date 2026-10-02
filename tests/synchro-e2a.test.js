@@ -106,7 +106,9 @@ test('cree au premier lancement, relu ensuite', () => {
   const a = appareil.charger(dir, { nom: 'PC' });
   assert.match(a.id, /^[0-9a-f]{8}$/);
   assert.equal(a.prefixe_ref, 'L');
-  assert.deepEqual(appareil.charger(dir), a);
+  const { evenement, ...cree } = a;
+  assert.equal(evenement, 'cree');
+  assert.deepEqual(appareil.charger(dir), cree);
 });
 
 test('fichier illisible : nouvelle identite', () => {
