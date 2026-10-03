@@ -16,6 +16,8 @@ const densiteValide = (n) => DENSITES.reduce((m, d) => (Math.abs(d - n) < Math.a
 // ouvert dans Livre renverrait direct à la page précédente au lieu de se
 // refermer. Le gestionnaire renvoie true s'il a absorbé le retour.
 const NavContext = createContext({ setRetour: () => {} });
+// Tuile a ouvrir dans l'editeur a l'arrivee sur Edition (menu contextuel).
+let editionEnAttente = null;
 
 /* ---------------------------------------------------- preferences d'affichage */
 
@@ -705,9 +707,44 @@ function PastilleConflit() {
 
 // Carte commune a la Bibliotheque et aux galeries. Clic n'importe ou =
 // agrandir ; la croix (galeries seulement) retire le tag sans agrandir.
-function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer }) {
+// Appui long au doigt (500 ms sans bouger) = clic droit : le menu s'ouvre et le
+// toucher qui suit n'ouvre pas l'apercu. Le contextmenu natif d'Android, s'il
+// arrive aussi, rouvre le meme menu au meme endroit.
+function useAppuiLong(onLong) {
+  const t = useRef(null);
+  const depart = useRef(null);
+  const long = useRef(false);
+  const annuler = () => { clearTimeout(t.current); t.current = null; };
+  if (!onLong) return { props: {}, avale: () => false };
+  return {
+    props: {
+      onPointerDown: (e) => {
+        long.current = false;
+        if (e.pointerType !== 'touch') return;
+        depart.current = { x: e.clientX, y: e.clientY };
+        annuler();
+        t.current = setTimeout(() => { long.current = true; onLong({ clientX: depart.current.x, clientY: depart.current.y }); }, 500);
+      },
+      onPointerMove: (e) => {
+        if (!t.current || !depart.current) return;
+        if (Math.abs(e.clientX - depart.current.x) > 10 || Math.abs(e.clientY - depart.current.y) > 10) annuler();
+      },
+      onPointerUp: annuler,
+      onPointerCancel: annuler
+    },
+    avale: () => { const v = long.current; long.current = false; return v; }
+  };
+}
+
+function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer, onMenu }) {
+  const appui = useAppuiLong(onMenu ? (e) => onMenu(e, o) : null);
   return (
-    <div className="carte-galerie" onClick={onOuvrir}>
+    <div
+      className="carte-galerie"
+      onClick={(e) => { if (appui.avale()) return; if (onOuvrir) onOuvrir(e); }}
+      onContextMenu={onMenu ? (e) => { e.preventDefault(); onMenu(e, o); } : undefined}
+      {...appui.props}
+    >
       {onRetirer && (
         <button
           className="carte-galerie-retirer"
@@ -735,6 +772,89 @@ function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer }) {
       )}
     </div>
   );
+}
+
+// Menu contextuel d'une carte (clic droit ; appui long sur mobile) : agrandir,
+// modifier, marquer, mettre a la corbeille. Chaque geste passe par les memes
+// canaux que les boutons (donc annulable par Ctrl+Z et synchronise).
+const MARQUES_MENU = [['livre', 'Livre', I.Livre], ['etoile', 'Étoile', I.Etoile], ['bad_smiley', 'À revoir', I.Revoir]];
+
+function useMenuTuile({ onMaj, onAgrandir, onEtat }) {
+  const [menu, setMenu] = useState(null);         // { x, y, o }
+  const [suppr, setSuppr] = useState(null);       // tuile a mettre a la corbeille
+  const { modifierTuile } = useContext(NavContext);
+  const fermer = () => setMenu(null);
+  useEffect(() => {
+    if (!menu) return undefined;
+    const echap = (e) => { if (e.key === 'Escape') fermer(); };
+    window.addEventListener('keydown', echap);
+    window.addEventListener('resize', fermer);
+    window.addEventListener('scroll', fermer, true);
+    return () => {
+      window.removeEventListener('keydown', echap);
+      window.removeEventListener('resize', fermer);
+      window.removeEventListener('scroll', fermer, true);
+    };
+  }, [menu]);
+  const surMenu = (e, o) => {
+    // Garde le menu dans la fenetre (220 x ~260 px).
+    const x = Math.min(e.clientX, window.innerWidth - 230);
+    const y = Math.min(e.clientY, window.innerHeight - 280);
+    setMenu({ x: Math.max(8, x), y: Math.max(8, y), o });
+    window.api.evt('ui', 'menu-tuile', { id: o.id, ref: o.ref });
+  };
+  const fait = () => { fermer(); if (onMaj) onMaj(); if (onEtat) onEtat(); };
+  const marquer = async (tag) => { await window.api.tags.basculer(menu.o.id, tag); fait(); };
+  const supprimer = async () => {
+    const o = suppr;
+    setSuppr(null);
+    await window.api.edition.supprimer(o.id);
+    if (onMaj) onMaj();
+    if (onEtat) onEtat();
+  };
+  const tags = (menu && menu.o.tagsUtilisateur) || [];
+  const rendu = (
+    <>
+      {menu && (
+        <div className="menu-tuile-fond" onClick={fermer} onContextMenu={(e) => { e.preventDefault(); fermer(); }}>
+          <div className="menu-tuile" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} role="menu">
+            <div className="menu-tuile-tete">#{menu.o.ref} {menu.o.titre || ''}</div>
+            {onAgrandir && (
+              <button role="menuitem" onClick={() => { const o = menu.o; fermer(); onAgrandir(o); }}>
+                <I.Loupe t={14} /> Agrandir
+              </button>
+            )}
+            {modifierTuile && (
+              <button role="menuitem" onClick={() => { const o = menu.o; fermer(); modifierTuile(o.id); }}>
+                <I.Crayon t={14} /> Modifier
+              </button>
+            )}
+            <div className="menu-tuile-filet" />
+            {MARQUES_MENU.map(([t, nom, Ic]) => (
+              <button key={t} role="menuitemcheckbox" aria-checked={tags.includes(t)} onClick={() => marquer(t)}>
+                <Ic t={14} /> {nom}{tags.includes(t) && <span className="menu-tuile-coche"><I.Coche t={12} /></span>}
+              </button>
+            ))}
+            <div className="menu-tuile-filet" />
+            <button role="menuitem" className="danger" onClick={() => { const o = menu.o; fermer(); setSuppr(o); }}>
+              <I.Corbeille t={14} /> Mettre à la corbeille
+            </button>
+          </div>
+        </div>
+      )}
+      {suppr && (
+        <BoiteConfirmation
+          titre={'Mettre #' + suppr.ref + ' à la corbeille ?'}
+          texteConfirmer="Mettre à la corbeille"
+          onAnnuler={() => setSuppr(null)}
+          onConfirmer={supprimer}
+        >
+          <p>Elle disparaît des listes et du tirage, avec ses marques. Tu peux la restaurer depuis la Corbeille.</p>
+        </BoiteConfirmation>
+      )}
+    </>
+  );
+  return { surMenu, rendu };
 }
 
 // Recouvrement plein ecran : la tuile agrandie a la taille exacte du jeu,
@@ -978,6 +1098,7 @@ function Galerie({ nom, tag, couleur, Icone, description, onEtat }) {
     if (onEtat) onEtat();
   };
   const fermerApercu = () => { setApercuId(null); setNonce((n) => n + 1); };
+  const menuTuile = useMenuTuile({ onMaj: () => setNonce((n) => n + 1), onAgrandir: (o) => setApercuId(o.id), onEtat });
 
   // souris4 : refermer l'aperçu avant de quitter la page.
   const { setRetour } = useContext(NavContext);
@@ -1022,10 +1143,12 @@ function Galerie({ nom, tag, couleur, Icone, description, onEtat }) {
               onOuvrir={() => setApercuId(o.id)}
               onRetirer={() => retirer(o.id)}
               nomRetirer={'Retirer de ' + nom}
+              onMenu={menuTuile.surMenu}
             />
           ))}
         </div>
       )}
+      {menuTuile.rendu}
 
       {apercuId && (
         <RecouvrementApercu id={apercuId} onFermer={fermerApercu} onEtat={onEtat} />
@@ -1081,6 +1204,8 @@ function PageBibliotheque({ onEtat, onChoisirTuile }) {
   }, [q, catsFiltre, soustractif, nonce]);
 
   const fermerApercu = () => { setApercuId(null); setNonce((n) => n + 1); };
+  // Mode choix (liste d'Edition) : pas d'apercu, toucher = modifier.
+  const menuTuile = useMenuTuile({ onMaj: () => setNonce((n) => n + 1), onAgrandir: choix ? null : (o) => setApercuId(o.id), onEtat });
 
   // souris4 : refermer l'aperçu d'abord (sauf en mode choix, géré par PageEdition).
   const { setRetour } = useContext(NavContext);
@@ -1129,10 +1254,12 @@ function PageBibliotheque({ onEtat, onChoisirTuile }) {
         <div className="galerie-grille">
           {affichees.map((o) => (
             <CarteTuile key={o.id} o={o}
-              onOuvrir={choix ? () => onChoisirTuile(o) : () => setApercuId(o.id)} />
+              onOuvrir={choix ? () => onChoisirTuile(o) : () => setApercuId(o.id)}
+              onMenu={menuTuile.surMenu} />
           ))}
         </div>
       )}
+      {menuTuile.rendu}
 
       {!choix && apercuId && (
         <RecouvrementApercu id={apercuId} onFermer={fermerApercu} onEtat={onEtat} />
@@ -1705,6 +1832,13 @@ function PageEdition({ onEtat }) {
     const t = await window.api.edition.tuile(o.id);
     if (t) setMode({ tuile: t });
   };
+  // Arrivee depuis le menu contextuel d'une carte : editeur de cette tuile.
+  useEffect(() => {
+    if (!editionEnAttente) return;
+    const id = editionEnAttente;
+    editionEnAttente = null;
+    ouvrir({ id });
+  }, []);
   const confirmerSuppr = async () => {
     const t = demandeSuppr;
     setDemandeSuppr(null);
@@ -2913,8 +3047,9 @@ function PageConflits({ onEtat }) {
         <div>
           <h2>Conflits</h2>
           <div className="soustitre">
-            Modifications faites sur deux appareils sans qu’ils se soient vus. En attendant ton choix,
-            la plus récente est affichée. Chaque choix part aussitôt vers tes autres appareils.
+            Modifications faites sur deux appareils sans qu’ils se soient vus, ou champs que tu avais
+            corrigés et qu’une mise à jour du pack a changés. En attendant ton choix, la version
+            marquée « affichée » reste. Chaque choix part aussitôt vers tes autres appareils.
           </div>
           {verif && <div className="soustitre">Vérification auprès de tes autres appareils…</div>}
         </div>
@@ -2928,9 +3063,23 @@ function PageConflits({ onEtat }) {
             <div key={c.id} className="conflit">
               <div className="conflit-tete">
                 <span className="conflit-oeuvre">{c.oeuvre.ref ? '#' + c.oeuvre.ref + ' ' : ''}« {c.oeuvre.titre} »</span>
-                <span className="conflit-champ">{c.type === 'suppression' ? 'supprimée ici, modifiée là-bas' : c.libelle}</span>
+                <span className="conflit-champ">
+                  {c.type === 'suppression' ? 'supprimée ici, modifiée là-bas'
+                    : c.type === 'pack' ? c.libelle + ' — corrigé par toi, changé par la mise à jour du pack' : c.libelle}
+                </span>
               </div>
-              {c.type === 'suppression' ? (
+              {c.type === 'pack' ? (
+                <div className="conflit-versions">
+                  <Version titre="Ta correction" actuelle
+                    texte={texteValeur(c.correction, c.champ)} bouton="Garder ma correction"
+                    occupe={enCours === c.id} onChoisir={() => trancher(c.id, 'gagnant')} />
+                  <Version titre="Nouvelle version du pack"
+                    texte={texteValeur(c.nouveauPack, c.champ)}
+                    note={'Avant la mise à jour, le pack disait : ' + texteValeur(c.ancienPack, c.champ)}
+                    bouton="Prendre celle du pack"
+                    occupe={enCours === c.id} onChoisir={() => trancher(c.id, 'perdant')} />
+                </div>
+              ) : c.type === 'suppression' ? (
                 <div className="conflit-versions">
                   <Version
                     titre={(c.supprimee ? 'Supprimée' : 'Restaurée') + ' sur ' + c.gagnant.nomAppareil}
@@ -2968,12 +3117,13 @@ function PageConflits({ onEtat }) {
   );
 }
 
-function Version({ titre, date, texte, bouton, actuelle, occupe, onChoisir }) {
+function Version({ titre, date, texte, note, bouton, actuelle, occupe, onChoisir }) {
   return (
     <div className={'conflit-version' + (actuelle ? ' actuelle' : '')}>
       <div className="conflit-qui">{titre}{actuelle && <span className="conflit-badge">affichée</span>}</div>
-      <div className="conflit-quand">{dateCourte(date)}</div>
+      {date && <div className="conflit-quand">{dateCourte(date)}</div>}
       <div className="conflit-valeur">{texte}</div>
+      {note && <div className="conflit-quand">{note}</div>}
       <button className="bouton-neutre" onClick={onChoisir} disabled={occupe}><I.Coche t={14} /> {bouton}</button>
     </div>
   );
@@ -3518,7 +3668,6 @@ export default function App() {
   // Gestionnaire de retour interne posé par la page courante (voir NavContext).
   const retourInterneRef = useRef(null);
   const setRetour = useCallback((fn) => { retourInterneRef.current = fn || null; }, []);
-  const navValue = useMemo(() => ({ setRetour }), [setRetour]);
 
   const charger = useCallback(async () => {
     const e = await window.api.etat();
@@ -3649,6 +3798,11 @@ export default function App() {
     setPage(p);
     setNavNonce((n) => n + 1);
   }, []);
+
+  const navValue = useMemo(() => ({
+    setRetour,
+    modifierTuile: (id) => { editionEnAttente = id; naviguer('edition'); }
+  }), [setRetour, naviguer]);
 
   const reculer = useCallback(() => {
     // D'abord fermer l'état interne de la page (aperçu, éditeur…) s'il y en a.

@@ -17,13 +17,13 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   bureau / menu / barre des tâches + détection des raccourcis périmés au lancement
 - **S1 du modèle pack** : socle 2 bases (voir « Architecture données »)
 
-**En cours — Édition (ajouts locaux).** Découpage :
+**Fait — Édition (ajouts locaux).** Découpage :
 
 - S1 ✅ socle : `pack.db` / `utilisateur.db`, migration v1 → v2, identité stable
-- S2 union `pack ∪ oeuvres_locales` + filtre `user_archive` + overrides + hook recalcul masques
-- S3 page Édition + éditeur de tuile + flux « créer »
-- S4 pipeline image (dossier local, resize ≤ 500 Ko, sélecteur + drag-drop fichier)
-- S5 drag-drop web, modifier / supprimer, `user_archive` pour les œuvres du pack
+- S2 ✅ union `pack ∪ oeuvres_locales` + filtre `user_archive` + overrides + hook recalcul masques
+- S3 ✅ page Édition + éditeur de tuile + flux « créer »
+- S4 ✅ pipeline image (dossier local, resize ≤ 500 Ko, sélecteur + drag-drop fichier)
+- S5 ✅ drag-drop web, modifier / supprimer, `user_archive` pour les œuvres du pack
 - S6 ✅ **annuler / rétablir** (`src/main/annuler.js`, Ctrl+Z / Ctrl+Y ou Ctrl+Maj+Z, hors champs
   de saisie et hors éditeur) : chaque action utilisateur (canaux IPC enveloppés dans
   `annuler.action`) relève ses écritures via `etat.capturer` (crochet `ctx.surEcriture` de
@@ -32,7 +32,12 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   au ménage. Annuler une création → `_existe = null` (ni liste ni Corbeille).
   ✅ **Journal des modifications** (Édition → 3e carte, `edition.journalModifs`) : `changements`
   hors stats, regroupés par action (même appareil, même tuile, ≤ 3 s), avant → après, paginé
-  par HLC, « Ouvrir » la tuile. Reste : menu contextuel.
+  par HLC, « Ouvrir » la tuile.
+  ✅ **Menu contextuel des cartes** (Bibliothèque, Livre / Étoile / À revoir, liste d'Édition) : clic
+  droit, ou appui long au doigt (`useAppuiLong`, 500 ms, le toucher suivant n'ouvre pas l'aperçu) →
+  Agrandir, Modifier (`NavContext.modifierTuile(id)` → page Édition, éditeur ouvert), Livre / Étoile /
+  À revoir (cochés), Mettre à la corbeille (confirmation). Mêmes canaux que les boutons (annulable,
+  synchronisé). `useMenuTuile` (App.jsx).
 
 **En cours — Sauvegarde / synchro Google Drive.** Ce qui voyage : `utilisateur.db`
 + `images-locales/`. Jamais `pack.db`. Découpage :
@@ -243,9 +248,13 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     « Reconnecter et synchroniser » / non connecté), puis « Automatique » (`.sous-etiquette`),
     Appareils, et sur PC le dossier partagé replié (`details.options-replie`, ouvert s'il est utilisé).
     Tests dans `synchro-rapide.test.js`.
-  - **À faire, PC et mobile :**
-    - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
-      première mise à jour de pack.
+  - **Conflit « MAJ de pack contre correction locale »** ✅ (`edition.conflitsPack` / `trancherPack`) :
+    champ corrigé dont la valeur du pack a changé depuis la correction (`valeur_source`, comparaison
+    stricte ; rien si le nouveau pack dit la même chose que la correction). En tête de l'écran Conflits
+    (`type: 'pack'`, id `pack:<id>:<champ>`, `service.resoudre` aiguille), compté dans la barre
+    (`service.nombreConflits`). « Garder ma correction » = override avec `valeur_source` = nouveau pack ;
+    « Prendre celle du pack » = override retiré. Écritures ordinaires (synchronisées). Test :
+    `tests/conflit-pack.test.js`.
   Décisions actées : préfixe de ref par appareil (`L`, puis `M`, `N`, `P`…) attribué en
   rejoignant ; les tuiles d'un appareil **jamais partagées** sont renumérotées une fois en
   rejoignant (« ref figée » vaut à partir du partage).

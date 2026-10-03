@@ -58,7 +58,7 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
     forme: 'mobile',
     version,
     derniereSynchro: db.etatSync('derniere_synchro'),
-    conflits: etat.conflits().length,
+    conflits: synchro.nombreConflits(),
     corbeille: edition.corbeille().length
   }));
   gerer('journal', (msg, extra) => journal.ligne('[ui] ' + msg, extra));

@@ -431,6 +431,56 @@ function texte(champs, c) {
   return String(champs[c] == null ? '' : champs[c]).trim();
 }
 
+/**
+ * MAJ de pack contre correction locale : un champ d'une oeuvre du pack que
+ * l'utilisateur a corrige, et que le pack a change DEPUIS (valeur actuelle du
+ * pack differente de `valeur_source`, la valeur du pack au moment de la
+ * premiere correction ; comparaison STRICTE, valeurs brutes). Pas de conflit si
+ * le nouveau pack dit exactement ce que dit la correction (il a corrige pareil).
+ * Oeuvre retiree du pack : rien a comparer.
+ * @returns {Array<{ id, oeuvreId, champ, ref, titre, correction, ancienPack, nouveauPack }>}
+ */
+function conflitsPack() {
+  const d = db.instance();
+  const lignes = d.prepare(`SELECT o.oeuvre_id, o.champ, o.valeur, o.valeur_source FROM user_overrides o
+    JOIN pack.oeuvres p ON p.id = o.oeuvre_id
+    WHERE o.valeur IS NOT NULL AND o.valeur_source IS NOT NULL`).all();
+  const out = [];
+  const pack = d.prepare('SELECT * FROM pack.oeuvres WHERE id = ?');
+  for (const l of lignes) {
+    if (!CHAMPS.includes(l.champ)) continue;
+    const p = pack.get(l.oeuvre_id);
+    const nouveau = String(p[l.champ] == null ? '' : p[l.champ]);
+    if (nouveau === String(l.valeur_source) || nouveau === String(l.valeur)) continue;
+    const o = db.oeuvre(l.oeuvre_id);
+    out.push({
+      id: 'pack:' + l.oeuvre_id + ':' + l.champ, oeuvreId: l.oeuvre_id, champ: l.champ,
+      ref: (o && o.ref) || p.ref, titre: (o && o.titre) || p.titre,
+      correction: l.valeur, ancienPack: l.valeur_source, nouveauPack: nouveau
+    });
+  }
+  return out;
+}
+
+/**
+ * Tranche un conflit de MAJ de pack (ecritures ordinaires, synchronisees) :
+ *  - 'garder' : la correction reste, `valeur_source` passe a la nouvelle
+ *    valeur du pack (plus de conflit tant que le pack ne rechange pas ce champ)
+ *  - 'pack'   : la correction est retiree, la nouvelle valeur du pack s'affiche
+ */
+function trancherPack(idConflit, choix) {
+  const c = conflitsPack().find((x) => x.id === idConflit);
+  if (!c) return { erreur: 'conflit introuvable (déjà tranché ?)' };
+  if (choix === 'pack') etat.ecrire('override', c.oeuvreId, c.champ, null);
+  else etat.ecrire('override', c.oeuvreId, c.champ, { valeur: c.correction, valeur_source: c.nouveauPack });
+  appliquer();
+  journal.evt('edition', 'conflit-pack-tranche', {
+    id: c.oeuvreId, ref: c.ref, champ: c.champ, choix: choix === 'pack' ? 'pack' : 'garder',
+    correction: journal.decrireTexte(c.correction), nouveauPack: journal.decrireTexte(c.nouveauPack)
+  });
+  return { ok: true };
+}
+
 function appliquer() {
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
@@ -439,6 +489,7 @@ function appliquer() {
 
 module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
+  conflitsPack, trancherPack,
   rafraichir: appliquer,
   imagesReferencees
 };

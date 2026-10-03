@@ -525,7 +525,14 @@ function listeConflits() {
     if (entite === 'override' && v && typeof v === 'object') v = v.valeur;
     return { hlc, valeur: v, appareil: h.appareil, nomAppareil: noms.get(h.appareil) || h.appareil, le: new Date(h.ms).toISOString() };
   };
-  return etat.conflits().map((c) => {
+  // MAJ de pack contre correction locale (edition.conflitsPack) : propres a cet
+  // appareil (meme pack partout = memes conflits), en tete de liste.
+  const pack = edition.conflitsPack().map((c) => ({
+    id: c.id, entite: 'pack', cle: c.oeuvreId, champ: c.champ, libelle: LIBELLES[c.champ] || c.champ,
+    oeuvre: { titre: c.titre, ref: c.ref, locale: false }, type: 'pack',
+    correction: c.correction, ancienPack: c.ancienPack, nouveauPack: c.nouveauPack
+  }));
+  return pack.concat(etat.conflits().map((c) => {
     const o = db.oeuvre(c.cle);
     const l = c.entite === 'locale' ? etat.lignes('locale', c.cle) : {};
     const titre = (o && o.titre) || (l.titre && l.titre.valeur) || '(sans titre)';
@@ -548,7 +555,12 @@ function listeConflits() {
       gagnant: version(c.hlc_gagnant, c.valeur_gagnante, c.entite),
       perdant: version(c.hlc_perdant, c.valeur_perdante, c.entite)
     };
-  });
+  }));
+}
+
+/** Nombre de conflits ouverts (synchro + MAJ de pack) : compteur de la barre laterale. */
+function nombreConflits() {
+  return etat.conflits().length + edition.conflitsPack().length;
 }
 
 /**
@@ -625,6 +637,10 @@ function choisirRemplacement(id) {
  * L'op emise partira a la prochaine synchro et fermera le conflit ailleurs.
  */
 function resoudre(id, choix) {
+  if (typeof id === 'string' && id.startsWith('pack:')) {
+    edition.trancherPack(id, choix === 'perdant' ? 'pack' : 'garder');
+    return { conflits: etat.conflits() };
+  }
   const c = etat.conflits().find((x) => x.id === id);
   const h = etat.resoudre(id, choix);
   journal.evt('synchro', 'conflit-tranche', {
@@ -638,5 +654,5 @@ function resoudre(id, choix) {
 module.exports = {
   configurer, etat: etatSynchro, definirDossier, oublierDossier,
   synchroniser, synchroniserDrive, resoudre, listeConflits, listeAppareils, retirerAppareil, SOUS_DOSSIER,
-  renommer, choisirRemplacement, decisionEnAttente, sessionExpiree, sessionRetablie
+  renommer, choisirRemplacement, decisionEnAttente, sessionExpiree, sessionRetablie, nombreConflits
 };

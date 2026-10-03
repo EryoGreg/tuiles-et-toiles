@@ -153,3 +153,10 @@ export const Rafraichir = ({ t = 19 }) => (
     <path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" />
   </svg>
 );
+
+export const Loupe = ({ t = 19 }) => (
+  <svg {...base(t)}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m20 20-4.2-4.2" />
+  </svg>
+);

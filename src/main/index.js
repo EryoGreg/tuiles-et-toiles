@@ -424,7 +424,7 @@ gerer('etat', () => ({
   forme: maj.mode(),
   version: app.getVersion(),
   derniereSynchro: db.etatSync('derniere_synchro'),
-  conflits: etat.conflits().length,
+  conflits: synchro.nombreConflits(),
   corbeille: edition.corbeille().length
 }));
 

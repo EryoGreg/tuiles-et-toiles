@@ -1482,3 +1482,27 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .appareil { grid-template-columns: 26px 1fr auto; }
   .appareil-vu { grid-column: 2; }
 }
+
+/* Menu contextuel d'une carte (clic droit / appui long) */
+.menu-tuile-fond { position: fixed; inset: 0; z-index: 60; }
+.menu-tuile {
+  position: fixed; width: 220px; padding: 6px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--trait);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column;
+}
+.menu-tuile-tete {
+  padding: 6px 10px 8px; font-size: 11.5px; color: var(--discret);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.menu-tuile button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border: 0; border-radius: 7px; background: none;
+  color: var(--encre); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.menu-tuile button:hover, .menu-tuile button:focus-visible { background: color-mix(in srgb, var(--laiton) 14%, transparent); outline: none; }
+.menu-tuile button.danger { color: var(--revoir); }
+.menu-tuile-coche { margin-left: auto; color: var(--laiton); display: inline-flex; }
+.menu-tuile-filet { height: 1px; background: var(--trait); margin: 4px 6px; }
+/* Appui long sur une carte = menu de l'appli, pas celui du navigateur (image). */
+.carte-galerie { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
