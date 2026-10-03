@@ -21,10 +21,11 @@ const { creerAuto } = require('../main/synchro/auto');
 const reseau = require('./reseau');
 const maj = require('./maj');
 const cartel = require('./cartel');
+const revision = require('../main/revision');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
   'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions',
-  'edition:cartelEtat', 'edition:lireCartel']);
+  'edition:cartelEtat', 'edition:lireCartel', 'revision:etat']);
 
 function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauverTout }) {
   // Journalise comme gerer() du PC, puis signale une ecriture possible (la
@@ -80,6 +81,11 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
       + ' sur ' + refDe(id), () => db.basculerTag(id, tag)),
     comptes: db.comptesTags()
   }));
+  const NOMS_NOTES = { 1: 'Encore', 2: 'Difficile', 3: 'Bien', 4: 'Facile' };
+  g('revision:etat', () => revision.resume());
+  g('revision:tirer', (exclure) => revision.tirer(Array.isArray(exclure) ? exclure : []));
+  g('revision:noter', ({ id, note }) =>
+    annuler.action('Note « ' + (NOMS_NOTES[note] || note) + ' » sur ' + refDe(id), () => revision.noter(id, note)));
   g('tags:effacerTout', () => ({
     supprimes: annuler.action('Effacement de toutes les marques', () => db.effacerTousLesTags()),
     comptes: db.comptesTags()

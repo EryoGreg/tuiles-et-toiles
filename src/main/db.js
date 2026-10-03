@@ -156,6 +156,27 @@ CREATE TABLE IF NOT EXISTS etat (
   PRIMARY KEY (entite, cle, champ)
 );
 
+-- Revisions espacees (entite 'revision' du registre, projetee ici) : une ligne
+-- par note donnee, sur n'importe quel appareil. L'etat FSRS d'une tuile se
+-- recalcule en rejouant ses notes dans l'ordre (revision.js) : rien a fusionner.
+CREATE TABLE IF NOT EXISTS user_revisions (
+  oeuvre_id  TEXT NOT NULL,
+  rid        TEXT NOT NULL,   -- <appareil>.<horodatage base 36> : un seul ecrivain
+  note       INTEGER NOT NULL CHECK (note BETWEEN 1 AND 4),
+  le         TEXT NOT NULL,
+  PRIMARY KEY (oeuvre_id, rid)
+);
+
+-- Ops recues d'une entite que cette version ne connait pas (appareil plus
+-- recent) : gardees telles quelles, appliquees quand une mise a jour de l'appli
+-- apprend l'entite (synchro/etat.js preparer). Sinon elles seraient perdues :
+-- le curseur de lecture les a deja depassees.
+CREATE TABLE IF NOT EXISTS ops_attente (
+  hlc     TEXT PRIMARY KEY,
+  entite  TEXT NOT NULL,
+  op      TEXT NOT NULL        -- JSON de l'op recue
+);
+
 -- Journal des operations, locales et recues. hlc unique (suffixe appareil)
 -- -> rejouer une op deja connue ne fait rien. pousse = 0 : pas encore envoyee.
 CREATE TABLE IF NOT EXISTS changements (

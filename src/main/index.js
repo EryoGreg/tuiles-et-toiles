@@ -29,6 +29,7 @@ const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
 const cartelPc = require('./cartel-pc');
+const revision = require('./revision');
 const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
 const imagesDistantes = require('./images-distantes');
@@ -380,7 +381,7 @@ function infosRapport() {
 // Lectures appelees en boucle -> DEBUG ; resultat { erreur } -> WARN.
 const ROUTINE = new Set([
   'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'annuler:etat', 'images:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
-  'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero',
+  'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero', 'revision:etat',
   'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile'
 ]);
 
@@ -688,6 +689,13 @@ gerer('tags:basculer', (_e, { id, tag }) => ({
     + ' sur ' + refDe(id), () => db.basculerTag(id, tag)),
   comptes: db.comptesTags()
 }));
+
+// Repetition espacee (revision.js) : une note = ecriture synchronisee, annulable.
+const NOMS_NOTES = { 1: 'Encore', 2: 'Difficile', 3: 'Bien', 4: 'Facile' };
+gerer('revision:etat', () => revision.resume());
+gerer('revision:tirer', (_e, exclure) => revision.tirer(Array.isArray(exclure) ? exclure : []));
+gerer('revision:noter', (_e, { id, note }) =>
+  annuler.action('Note « ' + (NOMS_NOTES[note] || note) + ' » sur ' + refDe(id), () => revision.noter(id, note)));
 
 gerer('tags:effacerTout', () => ({
   supprimes: annuler.action('Effacement de toutes les marques', () => db.effacerTousLesTags()),

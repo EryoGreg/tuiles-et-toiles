@@ -136,7 +136,8 @@ const MARQUES = [
 function Tuile({
   tuile, revele, sur, onReveler,
   onSuivante, onPrecedente, onMarquer, peutRevenir,
-  apercu = false, onFermer, onChanger
+  apercu = false, onFermer, onChanger,
+  compteur, actions   // revision : texte a gauche et boutons a droite a la place des boutons de jeu
 }) {
   // Vue plein cadre de l'image (85% de la fenetre) : locale, pas dans
   // l'historique de Jeu — changer de tuile referme toujours la vue.
@@ -199,7 +200,9 @@ function Tuile({
           <div className="tete">
             <span className="numero">
               #{tuile.ref}
-              {!apercu && <span className="compteur-tete"> · {tuile.restant} restantes</span>}
+              {!apercu && (tuile.revision
+                ? <span className="compteur-tete"> · {tuile.revision.nouvelle ? 'nouvelle' : 'à revoir'}</span>
+                : <span className="compteur-tete"> · {tuile.restant} restantes</span>)}
             </span>
             <span className="tete-aide">
               {apercu
@@ -319,8 +322,9 @@ function Tuile({
                   <I.Fleche t={16} retour /> <span className="libelle-bouton">Mode</span>
                 </button>
               )}
-              <span className="compteur-sac">{tuile.restant} tuiles restantes dans le sac</span>
+              <span className="compteur-sac">{compteur != null ? compteur : tuile.restant + ' tuiles restantes dans le sac'}</span>
             </div>
+            {actions ? <div className="actions-droite">{actions}</div> : (
             <div className="actions-droite">
               <button
                 className="bouton-neutre"
@@ -338,6 +342,7 @@ function Tuile({
                 Suivante <I.Fleche />
               </button>
             </div>
+            )}
           </>
         )}
       </div>
@@ -369,6 +374,8 @@ function NouvellePartie({ onLancer }) {
   //   soustractif      : l'œuvre porte TOUTES les catégories
   const [soustractif, setSoustractif] = usePref('partie:soustractif', false);
   const [apercu, setApercu] = useState(null);     // { total, possibles }
+  const [rev, setRev] = useState(null);           // compteurs de la revision espacee
+  useEffect(() => { window.api.revision.etat().then(setRev).catch(() => {}); }, []);
 
   useEffect(() => {
     window.api.jeu.categories().then((l) => {
@@ -407,10 +414,11 @@ function NouvellePartie({ onLancer }) {
   const bloquee = (v) => !!possibles && !choisies.includes(v) && !possibles.has(v);
 
   const total = apercu ? apercu.total : null;
-  const peutLancer = mode === 'aleatoire'
+  const peutLancer = mode === 'aleatoire' || mode === 'revision'
     || (choisies.length > 0 && (total == null || total > 0));
   const lancer = () => {
-    if (peutLancer) onLancer(mode === 'categorie' ? { cats: choisies, soustractif } : null);
+    if (!peutLancer) return;
+    onLancer(mode === 'categorie' ? { cats: choisies, soustractif } : mode === 'revision' ? { revision: true } : null);
   };
 
   return (
@@ -449,11 +457,31 @@ function NouvellePartie({ onLancer }) {
         </button>
 
         <button
+          className={'np-mode' + (mode === 'revision' ? ' actif' : '')}
+          onClick={() => setMode('revision')}
+        >
+          <span className="np-radio" />
+          <span>
+            <div className="np-mode-nom">Révision espacée</div>
+            <div className="np-mode-desc">
+              Chaque tuile revient au bon moment : juste avant que tu l’oublies. Après « Tout
+              révéler », dis si tu t’en souvenais (Encore · Difficile · Bien · Facile).
+              {rev && ' ' + texteRevision(rev)}
+            </div>
+          </span>
+        </button>
+
+        <button
           className={'np-lancer' + (peutLancer ? '' : ' off')}
           disabled={!peutLancer}
           onClick={lancer}
         >
           <span>Lancer <I.Fleche /></span>
+          {mode === 'revision' && rev && (
+            <span className="np-lancer-sub">
+              {rev.dues + rev.nouvelles === 0 ? 'rien à revoir pour l’instant' : (rev.dues + rev.nouvelles) + ' tuile' + (rev.dues + rev.nouvelles > 1 ? 's' : '') + ' aujourd’hui'}
+            </span>
+          )}
           {mode === 'categorie' && (
             <span className="np-lancer-sub">
               {choisies.length === 0
@@ -511,6 +539,181 @@ function NouvellePartie({ onLancer }) {
   );
 }
 
+// Options → Revision espacee : nouvelles tuiles par jour et retention cible
+// (reglages propres a l'appareil ; les notes, elles, sont synchronisees).
+function SectionRevision() {
+  const [c, setC] = useState(null);
+  const charger = () => window.api.revision.etat().then(setC).catch(() => {});
+  useEffect(() => { charger(); }, []);
+  const definir = async (cle, v) => { await window.api.reglages.definir(cle, String(v)); charger(); };
+  if (!c) return null;
+  return (
+    <section>
+      <div className="etiquette">Révision espacée</div>
+      <div className="options-note" style={{ marginBottom: 8 }}>Nouvelles tuiles par jour</div>
+      <div className="choix-raccourcis">
+        {[5, 10, 20, 30].map((n) => (
+          <button key={n} className={'raccourci-bouton' + (c.quotaNouvelles === n ? ' pose' : '')} onClick={() => definir('revision_nouvelles', n)}>
+            {c.quotaNouvelles === n && <I.Coche t={14} />} {n}
+          </button>
+        ))}
+      </div>
+      <div className="options-note" style={{ margin: '14px 0 8px' }}>Taux de souvenir visé</div>
+      <div className="choix-raccourcis">
+        {[[0.85, 'Détendu · 85 %'], [0.9, 'Normal · 90 %'], [0.95, 'Exigeant · 95 %']].map(([r, nom]) => (
+          <button key={r} className={'raccourci-bouton' + (Math.abs(c.retention - r) < 0.001 ? ' pose' : '')} onClick={() => definir('revision_retention', r)}>
+            {Math.abs(c.retention - r) < 0.001 && <I.Coche t={14} />} {nom}
+          </button>
+        ))}
+      </div>
+      <div className="options-note">
+        {c.apprises} tuile{c.apprises > 1 ? 's' : ''} en cours d’apprentissage sur {c.total}. Plus le taux visé est
+        haut, plus les tuiles reviennent souvent. Tes notes sont synchronisées entre tes appareils
+        (Jouer → Révision espacée) ; ces deux réglages restent propres à cet appareil.
+      </div>
+    </section>
+  );
+}
+
+// Repetition espacee (revision.js) : comme une partie, mais la tuile vient de
+// la file du jour, et apres « Tout reveler » on note son souvenir (1-4).
+const NOTES_REVISION = [
+  [1, 'Encore', 'Oubliée : elle revient dans quelques minutes'],
+  [2, 'Difficile', 'Retrouvée avec peine'],
+  [3, 'Bien', 'Retrouvée'],
+  [4, 'Facile', 'Retrouvée sans effort']
+];
+
+function dureeRevision(j) {
+  if (!j) return '10 min';
+  if (j < 30) return j + ' j';
+  if (j < 365) return Math.round(j / 30) + ' mois';
+  const a = Math.round(j / 36.5) / 10;
+  return String(a).replace('.', ',') + ' an' + (a >= 2 ? 's' : '');
+}
+
+function texteRevision(c) {
+  if (!c) return '';
+  const bouts = [];
+  if (c.dues) bouts.push(c.dues + ' à revoir');
+  if (c.nouvelles) bouts.push(c.nouvelles + ' nouvelle' + (c.nouvelles > 1 ? 's' : ''));
+  if (!bouts.length) {
+    return c.prochaine
+      ? 'Rien à revoir pour l’instant — prochaine le ' + new Date(c.prochaine).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) + '.'
+      : 'Rien à revoir pour l’instant.';
+  }
+  return 'Aujourd’hui : ' + bouts.join(' · ') + '.';
+}
+
+function Revision({ onChanger, onEtat }) {
+  const [tuile, setTuile] = useState(null);       // tuile + .revision, ou { fini, compte }
+  const [revele, setRevele] = useState(null);
+  const [sur, setSur] = useState(new Set());
+  const [note, setNote] = useState(null);         // note en cours d'envoi
+  const derniere = useRef(null);
+
+  const tirer = useCallback(async () => {
+    const t = await window.api.revision.tirer(derniere.current ? [derniere.current] : []);
+    setRevele(null); setSur(new Set()); setNote(null);
+    setTuile(t);
+  }, []);
+  useEffect(() => { tirer(); }, [tirer]);
+
+  const reveler = async (champ) => {
+    if (!tuile || tuile.fini) return;
+    if (champ === null) {
+      setRevele(await window.api.jeu.reveler(tuile.id));
+    } else {
+      setSur((s) => new Set(s).add(champ));
+      const complet = await window.api.jeu.reveler(tuile.id);
+      setTuile((t) => ({ ...t, champs: { ...t.champs, [champ]: complet[champ] } }));
+    }
+  };
+  const noter = async (n) => {
+    if (!tuile || tuile.fini || !revele || note) return;
+    setNote(n);
+    await window.api.revision.noter(tuile.id, n);
+    derniere.current = tuile.id;
+    onEtat();
+    tirer();
+  };
+  const marquer = async (tag) => {
+    const r = await window.api.tags.basculer(tuile.id, tag);
+    setTuile((t) => ({
+      ...t,
+      tagsUtilisateur: r.actif ? [...t.tagsUtilisateur, tag] : t.tagsUtilisateur.filter((x) => x !== tag)
+    }));
+    onEtat();
+  };
+
+  useEffect(() => {
+    const clavier = (e) => {
+      if (!tuile || tuile.fini) return;
+      if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+      if (e.code === 'Space') { e.preventDefault(); reveler(null); }
+      if (revele && ['1', '2', '3', '4'].includes(e.key)) noter(Number(e.key));
+      if (e.key.toLowerCase() === 'l') marquer('livre');
+      if (e.key.toLowerCase() === 'e') marquer('etoile');
+      if (e.key.toLowerCase() === 's') marquer('bad_smiley');
+    };
+    window.addEventListener('keydown', clavier);
+    return () => window.removeEventListener('keydown', clavier);
+  });
+
+  if (tuile && tuile.fini) {
+    const c = tuile.compte;
+    return (
+      <div className="revision-fin">
+        <div className="revision-fin-icone"><I.Coche t={28} /></div>
+        <h2>Révision terminée pour aujourd’hui</h2>
+        <p>
+          {c.faitesAujourdhui
+            ? c.faitesAujourdhui + ' note' + (c.faitesAujourdhui > 1 ? 's' : '') + ' aujourd’hui. '
+            : ''}
+          {c.apprises} tuile{c.apprises > 1 ? 's' : ''} en cours d’apprentissage sur {c.total}.
+        </p>
+        <p className="revision-fin-note">
+          {c.prochaine
+            ? 'Prochaine tuile à revoir : ' + new Date(c.prochaine).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' }) + '.'
+            : ''}
+          {' '}Jusqu’à {c.quotaNouvelles} nouvelle{c.quotaNouvelles > 1 ? 's' : ''} tuile{c.quotaNouvelles > 1 ? 's' : ''} par jour (Options → Révision espacée).
+        </p>
+        <button className="bouton-neutre" onClick={onChanger}><I.Fleche t={16} retour /> Choisir un autre mode</button>
+      </div>
+    );
+  }
+
+  const r = tuile && tuile.revision;
+  const compteur = r
+    ? (r.nouvelle ? 'Nouvelle tuile · ' : 'À revoir · ') + texteRevision(r.compte).replace(/^Aujourd’hui : /, 'reste ').replace(/\.$/, '')
+    : '';
+  const actions = !r ? null : !revele ? (
+    <button className="bouton-valide" onClick={() => reveler(null)} title="Espace">
+      <I.Coche /> Tout révéler
+    </button>
+  ) : (
+    <div className="notes-revision" role="group" aria-label="Ton souvenir">
+      {NOTES_REVISION.map(([n, nom, aide]) => (
+        <button key={n} className={'note-revision note-' + n} onClick={() => noter(n)} disabled={!!note} title={aide + ' (touche ' + n + ')'}>
+          <span className="note-revision-nom">{nom}</span>
+          <span className="note-revision-delai">{dureeRevision(r.apercu[n])}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="jeu">
+      <Tuile
+        tuile={tuile && !tuile.fini ? tuile : null} revele={revele} sur={sur}
+        onReveler={reveler} onSuivante={() => { if (!revele) reveler(null); }}
+        onPrecedente={() => {}} onMarquer={marquer} peutRevenir={false}
+        onChanger={onChanger} compteur={compteur} actions={actions}
+      />
+    </div>
+  );
+}
+
 // Choix du mode, puis la partie. La cle sur <Partie> force un etat neuf
 // (sac, historique) a chaque changement de mode.
 function Jeu({ onEtat }) {
@@ -524,6 +727,7 @@ function Jeu({ onEtat }) {
   }, [filtre]);
 
   if (filtre === undefined) return <NouvellePartie onLancer={setFiltre} />;
+  if (filtre && filtre.revision) return <Revision onChanger={() => setFiltre(undefined)} onEtat={onEtat} />;
   return (
     <Partie
       key={JSON.stringify(filtre)}
@@ -2097,6 +2301,7 @@ function direChangements(s, images) {
   n('oeuvresCorrigees', 'œuvre corrigée', 'œuvres corrigées');
   n('marques', 'marque', 'marques');
   n('archives', 'archivage', 'archivages');
+  n('revisions', 'note de révision', 'notes de révision');
   if (images) l.push(images + ' image' + (images > 1 ? 's' : ''));
   return l.join(', ');
 }
@@ -2457,6 +2662,9 @@ function Options({ etat, onEtat, aller }) {
       <div className="filet" />
 
       <SectionImages />
+
+      <div className="filet" />
+      <SectionRevision />
 
       <div className="filet" />
 

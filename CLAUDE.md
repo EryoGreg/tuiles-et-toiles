@@ -248,6 +248,19 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     « Reconnecter et synchroniser » / non connecté), puis « Automatique » (`.sous-etiquette`),
     Appareils, et sur PC le dossier partagé replié (`details.options-replie`, ouvert s'il est utilisé).
     Tests dans `synchro-rapide.test.js`.
+  - **Révision espacée** ✅ (`src/main/revision.js`, `fsrs.js` repris de Bristol) : Jouer → « Révision
+    espacée ». Note 1-4 après « Tout révéler » = entité synchronisée **`revision`** (cle = oeuvre, champ =
+    `<appareil>.<t36>`, valeur `{ n, le }`, un seul écrivain → jamais de conflit), projetée dans
+    `user_revisions`. **L'état FSRS n'est stocké nulle part** : rejoué depuis les notes dans l'ordre
+    chronologique (`etatCarte`), identique sur tous les appareils. File du jour : dues (plus en retard
+    d'abord ; « Encore » = due 10 min après, proposée en avance si plus rien d'autre) puis nouvelles
+    (ordre mélangé stable dans la journée, quota `revision_nouvelles` par jour tous appareils confondus).
+    Réglages propres à l'appareil (Options → Révision espacée) : `revision_nouvelles` (10),
+    `revision_retention` (0,9). Ctrl+Z efface la note. Test : `tests/revision.test.js`.
+  - **Ops d'une entité inconnue** (appareil plus récent) : gardées dans `ops_attente` (bilan `attente`),
+    appliquées à l'ouverture par une version qui connaît l'entité (`etat.reprendreAttente`). Les
+    versions ≤ 0.3.12 rejettent encore les ops `revision` : mettre tous les appareils à jour avant de
+    réviser, sinon leurs notes n'arrivent pas sur un appareil resté ancien.
   - **Conflit « MAJ de pack contre correction locale »** ✅ (`edition.conflitsPack` / `trancherPack`) :
     champ corrigé dont la valeur du pack a changé depuis la correction (`valeur_source`, comparaison
     stricte ; rien si le nouveau pack dit la même chose que la correction). En tête de l'écran Conflits

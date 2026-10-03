@@ -34,7 +34,7 @@ const COLONNES = 'hlc, appareil, entite, cle, champ, valeur, base, vus';
 function resumer(ops, existaitAvant) {
   const nouvelles = new Set(), modifiees = new Set(), supprimees = new Set(), restaurees = new Set();
   const corrections = new Set();
-  let marques = 0, archives = 0;
+  let marques = 0, archives = 0, revisions = 0;
   for (const op of ops) {
     const v = op.valeur == null ? null : JSON.parse(op.valeur);
     if (op.entite === 'locale' && op.champ === '_existe') {
@@ -45,11 +45,12 @@ function resumer(ops, existaitAvant) {
     else if (op.entite === 'override') corrections.add(op.cle);
     else if (op.entite === 'tag') marques++;
     else if (op.entite === 'archive') archives++;
+    else if (op.entite === 'revision' && v) revisions++;
   }
   for (const c of [...nouvelles, ...supprimees, ...restaurees]) modifiees.delete(c);
   return {
     tuilesNouvelles: nouvelles.size, tuilesModifiees: modifiees.size, tuilesSupprimees: supprimees.size,
-    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives
+    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives, revisions
   };
 }
 
@@ -164,6 +165,7 @@ async function tirer(ctx, transport) {
     appliquees: bilan.avance || 0,
     resume: f.resume,
     rejetees: bilan.rejetee || 0,
+    attente: bilan.attente || 0,     // entite inconnue (appareil plus recent) : gardee pour plus tard
     conflits: ctx.d.prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
     bilan,
     parAppareil,

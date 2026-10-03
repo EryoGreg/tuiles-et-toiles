@@ -330,7 +330,7 @@ async function scenarios() {
     assert.equal(r2.appliquees, 0);
   });
 
-  await test('op mal formee : rejetee partout, le reste passe', async () => {
+  await test('op mal formee : rejetee partout ; entite inconnue : gardee en attente ; le reste passe', async () => {
     const m = creerMonde();
     const B = m.appareil('bbbb0002');
     const h = (n) => formater(m.t, n, 'ffff0009');
@@ -340,7 +340,8 @@ async function scenarios() {
       { hlc: h(2), appareil: 'ffff0009', entite: 'tag', cle: 'p:1', champ: 'etoile', valeur: '1', base: null }
     ]);
     const r = await B.tirer();
-    assert.equal(r.rejetees, 2);
+    assert.equal(r.rejetees, 1);
+    assert.equal(r.attente, 1, 'entite inconnue (appareil plus recent) : pas perdue');
     assert.equal(r.appliquees, 1);
   });
 

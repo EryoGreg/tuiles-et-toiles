@@ -1506,3 +1506,28 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .menu-tuile-filet { height: 1px; background: var(--trait); margin: 4px 6px; }
 /* Appui long sur une carte = menu de l'appli, pas celui du navigateur (image). */
 .carte-galerie { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* Revision espacee : notes 1-4 sous la tuile, ecran de fin */
+.notes-revision { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.note-revision {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 82px;
+  padding: 7px 12px; border-radius: 9px; border: 1px solid var(--trait); background: var(--surface-2);
+  color: var(--encre); font: inherit; cursor: pointer;
+}
+.note-revision:hover:not(:disabled) { border-color: var(--trait-fort); }
+.note-revision:disabled { opacity: 0.5; cursor: default; }
+.note-revision-nom { font-size: 13px; font-weight: 600; }
+.note-revision-delai { font-family: var(--mono); font-size: 10.5px; color: var(--discret); }
+.note-revision.note-1 { border-color: color-mix(in srgb, var(--revoir) 55%, var(--trait)); }
+.note-revision.note-1 .note-revision-nom { color: var(--revoir); }
+.note-revision.note-3 { border-color: color-mix(in srgb, var(--laiton) 55%, var(--trait)); }
+.note-revision.note-3 .note-revision-nom { color: var(--laiton); }
+.revision-fin { max-width: 520px; margin: 12vh auto 0; padding: 0 16px; text-align: center; }
+.revision-fin-icone { display: inline-flex; padding: 14px; border-radius: 50%; color: var(--laiton); background: color-mix(in srgb, var(--laiton) 14%, transparent); margin-bottom: 14px; }
+.revision-fin h2 { font-family: var(--serif); font-weight: 400; margin: 0 0 12px; color: var(--encre-vive); }
+.revision-fin p { color: var(--attenue); line-height: 1.55; margin: 0 0 10px; }
+.revision-fin-note { font-size: 13px; color: var(--discret) !important; margin-bottom: 22px !important; }
+@media (max-width: 700px) {
+  .notes-revision { gap: 6px; width: 100%; justify-content: space-between; }
+  .note-revision { flex: 1 1 0; min-width: 0; padding: 7px 4px; }
+}

@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('api', {
   // Journal structure : domaine, evenement, details, niveau (DEBUG/INFO/WARN/ERREUR).
   evt: (domaine, quoi, donnees, niveau) => ipcRenderer.send('journal:evt', domaine, quoi, donnees, niveau),
 
+  // Repetition espacee : file du jour, prochaine tuile, note 1..4 (annulable).
+  revision: {
+    etat: () => ipcRenderer.invoke('revision:etat'),
+    tirer: (exclure) => ipcRenderer.invoke('revision:tirer', exclure),
+    noter: (id, note) => ipcRenderer.invoke('revision:noter', { id, note })
+  },
   jeu: {
     tirer: (tagJeu) => ipcRenderer.invoke('jeu:tirer', tagJeu),
     reveler: (id) => ipcRenderer.invoke('jeu:reveler', id),

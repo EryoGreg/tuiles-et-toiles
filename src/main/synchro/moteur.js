@@ -37,8 +37,12 @@ const TAGS = ['livre', 'etoile', 'bad_smiley'];
 // stat : cle = oeuvre_id, champ = id de l'appareil qui compte, valeur =
 // { vues, dernier_vu }. Un seul ecrivain par champ (l'appareil lui-meme) :
 // jamais de conflit, total = somme des appareils.
-const ENTITES = ['locale', 'override', 'archive', 'tag', 'stat'];
+// revision : cle = oeuvre_id, champ = <appareil>.<horodatage base 36> (un seul
+// ecrivain), valeur = { n: 1..4, le } — une note de repetition espacee ; NULL
+// = note annulee (Ctrl+Z). Ajout seulement : jamais de conflit.
+const ENTITES = ['locale', 'override', 'archive', 'tag', 'stat', 'revision'];
 const RE_APPAREIL = /^[0-9a-f]{8}$/;
+const RE_REVISION = /^[0-9a-f]{8}\.[0-9a-z]{1,16}$/;
 
 function parse(v) { return v == null ? null : JSON.parse(v); }
 
@@ -115,6 +119,10 @@ function projeter(ctx, entite, cle, champ, val, hlc) {
     case 'tag':
       if (val == null) d.prepare('DELETE FROM user_tags WHERE oeuvre_id=? AND tag=?').run(cle, champ);
       else d.prepare('INSERT OR REPLACE INTO user_tags (oeuvre_id, tag, cree_le) VALUES (?, ?, ?)').run(cle, champ, t);
+      return;
+    case 'revision':
+      if (val == null) d.prepare('DELETE FROM user_revisions WHERE oeuvre_id=? AND rid=?').run(cle, champ);
+      else d.prepare('INSERT OR REPLACE INTO user_revisions (oeuvre_id, rid, note, le) VALUES (?, ?, ?, ?)').run(cle, champ, val.n, val.le);
       return;
     case 'stat':
       if (val == null) d.prepare('DELETE FROM user_stats WHERE oeuvre_id=? AND appareil=?').run(cle, champ);
@@ -316,7 +324,10 @@ function valide(op) {
   if (op.base != null && typeof op.base !== 'string') return false;
   const okValeur = op.entite === 'stat'
     ? RE_APPAREIL.test(op.champ) && jsonOk(op.valeur, (v) => v === null || (v && Number.isInteger(v.vues) && v.vues >= 0))
-    : jsonOk(op.valeur);
+    : op.entite === 'revision'
+      ? RE_REVISION.test(op.champ) && jsonOk(op.valeur, (v) => v === null
+        || (v && Number.isInteger(v.n) && v.n >= 1 && v.n <= 4 && typeof v.le === 'string' && !Number.isNaN(Date.parse(v.le))))
+      : jsonOk(op.valeur);
   return okValeur && jsonOk(op.vus, (x) => Array.isArray(x) && x.every((h) => typeof h === 'string'));
 }
 
@@ -328,7 +339,18 @@ function valide(op) {
  * @returns {'connue'|'rejetee'|'avance'|'ignoree'} ignoree = plus ancienne que
  *   la valeur courante (gardee au journal : elle compte pour les conflits)
  */
+/** Op bien formee mais d'une entite inconnue de cette version (appareil plus recent). */
+function future(op) {
+  return !!op && typeof op.hlc === 'string' && typeof op.cle === 'string' && typeof op.champ === 'string'
+    && typeof op.entite === 'string' && /^[a-z_]{1,24}$/.test(op.entite) && !ENTITES.includes(op.entite);
+}
+
 function appliquer(ctx, r, { pousse = 1, remplace = 0 } = {}) {
+  if (future(r)) {
+    ctx.d.prepare('INSERT OR IGNORE INTO ops_attente (hlc, entite, op) VALUES (?, ?, ?)')
+      .run(r.hlc, r.entite, JSON.stringify({ ...r, pousse, remplace }));
+    return 'attente';
+  }
   if (!valide(r)) return 'rejetee';
   if (ctx.d.prepare('SELECT 1 FROM changements WHERE hlc=?').get(r.hlc)) return 'connue';
   ctx.horloge.recevoir(r.hlc);
@@ -373,7 +395,7 @@ function resoudre(ctx, id, choix) {
 }
 
 module.exports = {
-  CHAMPS_LOCALE, TAGS, ENTITES,
+  CHAMPS_LOCALE, TAGS, ENTITES, RE_REVISION,
   lire, valeur, lignes, existe, ecrire, supprimerLocale, pierreTombale, emettreStats,
   appliquer, tetes, conflits, resoudre, valide, recalculer: apres
 };

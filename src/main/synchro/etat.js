@@ -17,6 +17,7 @@
  *   override  cle = p:…           champ = nom du champ   valeur = {valeur, valeur_source}
  *   archive   cle = p:…           champ = '_'            valeur = 1
  *   tag       cle = oeuvre_id     champ = livre | etoile | bad_smiley   valeur = 1
+ *   revision  cle = oeuvre_id     champ = <appareil>.<t36>   valeur = { n: 1..4, le }
  * valeur NULL = absent (tag retire, override annule).
  * Tuile supprimee : _existe = { vu } (pierre tombale, voir moteur.js).
  *
@@ -275,6 +276,27 @@ function reconcilier(d, ctx) {
  * Tourne aussi apres un import zip : une sauvegarde d'avant E2a y passe en
  * genese, une sauvegarde recente garde son journal.
  */
+/**
+ * Ops d'entites alors inconnues (recues d'un appareil plus recent, moteur
+ * `ops_attente`) que cette version sait maintenant appliquer.
+ */
+function reprendreAttente(d) {
+  const ctx = { d, appareil, horloge };
+  const lignes = d.prepare('SELECT hlc, entite, op FROM ops_attente').all()
+    .filter((l) => moteur.ENTITES.includes(l.entite));
+  if (!lignes.length) return;
+  const stats = { appliquees: 0, rejetees: 0 };
+  d.transaction(() => {
+    for (const l of lignes.sort((a, b) => (a.hlc < b.hlc ? -1 : 1))) {
+      const op = JSON.parse(l.op);
+      const r = moteur.appliquer(ctx, op, { pousse: op.pousse === 0 ? 0 : 1, remplace: op.remplace ? 1 : 0 });
+      stats[r === 'rejetee' ? 'rejetees' : 'appliquees']++;
+      d.prepare('DELETE FROM ops_attente WHERE hlc=?').run(l.hlc);
+    }
+  })();
+  journal.evt('synchro', 'ops-attente-reprises', { ...stats, entites: [...new Set(lignes.map((l) => l.entite))] });
+}
+
 function preparer(d) {
   lAppareil();
   d.transaction(() => {
@@ -291,6 +313,7 @@ function preparer(d) {
     }
   })();
   horloge.caler(d.prepare('SELECT MAX(hlc) h FROM changements').get().h);
+  reprendreAttente(d);
   const bilan = d.transaction(() => reconcilier(d, { d, appareil, horloge }))();
   const nEcarts = bilan.champs + bilan.suppressions.length + bilan.overrides + bilan.archives + bilan.tags;
   if (nEcarts) journal.evt('synchro', 'reconciliation', { ...bilan, ecarts: nEcarts }, 'WARN');

@@ -63,11 +63,24 @@ function tirer(filtre = null) {
   if (!sac.length) return null;
 
   const id = sac.pop();
+  const t = tuile(id, f);
+  if (!t) return tirer(filtre);
+  return { ...t, restant: sac.length };
+}
+
+/**
+ * Tuile a jouer pour une oeuvre precise : un masque valide tire au hasard,
+ * compteur de vues de cet appareil. Commun au tirage et a la revision espacee
+ * (revision.js). null si l'oeuvre n'existe pas ou n'a aucun masque valide.
+ * @param {string} id
+ * @param {{cats:string[]}|null} f  filtre de categories (tag de jeu visible ?)
+ */
+function tuile(id, f = null) {
   const o = db.oeuvre(id);
-  if (!o) return tirer(filtre);
+  if (!o) return null;
 
   const masques = JSON.parse(o.masques || '[]');
-  if (!masques.length) return tirer(filtre);
+  if (!masques.length) return null;
   const masque = masques[Math.floor(Math.random() * masques.length)];
   const visible = decrire(masque);
 
@@ -91,7 +104,7 @@ function tirer(filtre = null) {
     masque,
     visible,
     tagVisible: null,
-    restant: sac.length,
+    restant: null,
     champs: {
       image: visible.image ? 'tuile://' + o.image : null,
       artiste: visible.artiste ? o.artiste : null,
@@ -263,6 +276,6 @@ function reinitialiserSac() {
 }
 
 module.exports = {
-  tirer, reveler, apercu, categories, apercuCategories,
+  tirer, tuile, reveler, apercu, categories, apercuCategories,
   listerParTag, listerToutes, reinitialiserSac
 };
