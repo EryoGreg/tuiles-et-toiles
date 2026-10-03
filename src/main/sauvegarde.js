@@ -30,6 +30,7 @@ const journal = require('./journal');
 const jeu = require('./jeu');
 const etat = require('./synchro/etat');
 const echange = require('./synchro/echange');
+const format = require('./synchro/format');
 
 let cfg = null;
 function configurer({ user, imagesLocales, pack, versionApp }) {
@@ -167,7 +168,19 @@ function importer(cheminZip) {
   });
 
   const zip = new AdmZip(cheminZip);
-  const octets = zip.getEntry('utilisateur.db').getData();
+  const entreeDb = zip.getEntry('utilisateur.db');
+  // Plafond anti-bombe : l'entree annonce sa taille decompressee avant qu'on
+  // l'alloue. Une vraie base, meme a des milliers de tuiles, reste bien en
+  // dessous ; au-dela c'est un zip trafique.
+  const DB_OCTETS_MAX = 512 * 1024 * 1024;
+  if (entreeDb.header && entreeDb.header.size > DB_OCTETS_MAX) {
+    journal.avertir('sauvegarde', 'import-db-trop-grosse', { annonce: entreeDb.header.size });
+    return { erreur: 'La base de ce zip est anormalement volumineuse — import refusé.' };
+  }
+  const octets = entreeDb.getData();
+  if (octets.length > DB_OCTETS_MAX) {
+    return { erreur: 'La base de ce zip est anormalement volumineuse — import refusé.' };
+  }
   const tmp = path.join(os.tmpdir(), 'tuiles-import-' + horodatage() + '-' + process.pid + '.db');
   let lu;
   try {
@@ -195,18 +208,27 @@ function importer(cheminZip) {
     return { erreur: 'Import impossible : ' + e.message };
   }
 
-  // Images manquantes seulement : un nom d'image est unique (uuid).
+  // Images manquantes seulement : un nom d'image est unique (uuid). Seuls les
+  // noms produits par images.importer (uuid.jpg|png) sont copies : un zip
+  // trafique ne depose pas un .exe, un .lnk ni un nom pirate dans le dossier.
+  // Taille plafonnee (une image du pipeline fait <= 500 Ko ; large = anomalie).
+  const IMAGE_OCTETS_MAX = 25 * 1024 * 1024;
   fs.mkdirSync(cfg.imagesLocales, { recursive: true });
-  let imagesCopiees = 0, imagesPresentes = 0;
+  let imagesCopiees = 0, imagesPresentes = 0, imagesRefusees = 0;
   for (const e of zip.getEntries()) {
     if (e.isDirectory) continue;
     const m = e.entryName.match(/^images-locales\/(.+)$/);
     if (!m || path.basename(m[1]) === lisezmoi.NOM) continue;
-    const cible = path.join(cfg.imagesLocales, path.basename(m[1]));
+    const nom = path.basename(m[1]);
+    if (!format.RE_IMAGE.test(nom)) { imagesRefusees++; continue; }
+    const cible = path.join(cfg.imagesLocales, nom);
     if (fs.existsSync(cible)) { imagesPresentes++; continue; }
-    fs.writeFileSync(cible, e.getData());
+    const data = e.getData();
+    if (data.length > IMAGE_OCTETS_MAX) { imagesRefusees++; continue; }
+    fs.writeFileSync(cible, data);
     imagesCopiees++;
   }
+  if (imagesRefusees) journal.avertir('sauvegarde', 'import-images-refusees', { imagesRefusees });
 
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();

@@ -189,12 +189,36 @@ function creerFenetre() {
     else if (cmd === 'browser-forward') { e.preventDefault(); fenetre.webContents.send('app:nav', 'avancer'); }
   });
 
+  // Defense en profondeur. Le rendu est notre propre code (contextIsolation,
+  // sandbox, pas de nodeIntegration), mais si une page etrangere parvenait a
+  // s'y charger (fichier HTML depose, redirection), elle heriterait du preload
+  // et de tout window.api. On fige donc l'origine : aucune navigation hors de
+  // la page de l'appli, aucune ouverture de fenetre, les liens http(s) partent
+  // au navigateur systeme.
+  const origineOk = (url) => url.startsWith(ORIGINE_RENDU);
+  fenetre.webContents.on('will-navigate', (e, url) => {
+    if (!origineOk(url)) {
+      e.preventDefault();
+      journal.avertir('app', 'navigation-bloquee', { url: url.slice(0, 200) });
+      if (/^https?:/.test(url)) shell.openExternal(url).catch(() => {});
+    }
+  });
+  fenetre.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) shell.openExternal(url).catch(() => {});
+    journal.avertir('app', 'fenetre-refusee', { url: url.slice(0, 200) });
+    return { action: 'deny' };
+  });
+
   if (DEV) {
     fenetre.loadURL('http://127.0.0.1:5500');
   } else {
     fenetre.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
   }
 }
+
+// Origine legitime du rendu : la seule depuis laquelle les canaux IPC et la
+// navigation sont acceptes. En prod le rendu est charge par loadFile -> file://.
+const ORIGINE_RENDU = DEV ? 'http://127.0.0.1:5500' : 'file://';
 
 app.whenReady().then(() => {
   journal.configurer(path.join(DOSSIER_USER, 'logs'), {
@@ -398,6 +422,13 @@ function resumerResultat(r) {
 function gerer(canal, fn) {
   ipcMain.handle(canal, async (e, ...args) => {
     const t0 = Date.now();
+    // L'appel doit venir de notre page, pas d'un cadre etranger (iframe, page
+    // naviguee). Sinon il n'atteint pas le processus principal.
+    const origine = e.senderFrame && e.senderFrame.url;
+    if (origine && !origine.startsWith(ORIGINE_RENDU)) {
+      journal.avertir('ipc', 'expediteur-refuse', { canal, origine: String(origine).slice(0, 200) });
+      throw new Error('Appel refusé : origine inattendue.');
+    }
     try {
       const r = await fn(e, ...args);
       const niveau = r && r.erreur ? 'WARN' : ROUTINE.has(canal) ? 'DEBUG' : 'INFO';

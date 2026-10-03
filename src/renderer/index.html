@@ -3,6 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Durcissement : pas de plugins/embeds, pas de <base> injectable. (Le
+         rendu charge ses images via le protocole tuile:// et parle au reste par
+         IPC ; connect/script restent larges pour ne pas casser le build mobile,
+         qui tourne les modules principaux dans la page.) -->
+    <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'" />
     <title>Tuiles &amp; Toiles</title>
   </head>
   <body>
