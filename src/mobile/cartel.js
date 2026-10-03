@@ -48,15 +48,39 @@ async function preparer({ reseauPermis }) {
   return etat;
 }
 
+let derniere = null;   // adresse lisible par la page de la derniere photo (« Relire avec Claude »)
+
 async function prendre(source) {
   const { Camera } = require('@capacitor/camera');
+  let m;
   if (source === 'galerie') {
     const r = await Camera.chooseFromGallery({ limit: 1, correctOrientation: true });
-    const m = r && r.results && r.results[0];
-    return m && (m.uri || m.webPath);
+    m = r && r.results && r.results[0];
+  } else {
+    m = await Camera.takePhoto({ quality: 90, correctOrientation: true });
   }
-  const r = await Camera.takePhoto({ quality: 90, correctOrientation: true });
-  return r && (r.uri || r.webPath);
+  if (!m) return null;
+  const C = window.Capacitor;
+  derniere = m.webPath || (m.uri && C && C.convertFileSrc ? C.convertFileSrc(m.uri) : null);
+  return m.uri || m.webPath;
+}
+
+/**
+ * Derniere photo lue, prete pour Claude : JPEG, cote <= 1 568 px.
+ * @returns {Promise<{ data: string, media_type: string } | null>}
+ */
+async function imageIA() {
+  if (!derniere) return null;
+  const brut = await (await fetch(derniere)).blob();
+  const bmp = await createImageBitmap(brut);
+  const k = Math.min(1, 1568 / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bmp.width * k);
+  canvas.height = Math.round(bmp.height * k);
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85));
+  const { Buffer } = require('buffer');
+  return { data: Buffer.from(await blob.arrayBuffer()).toString('base64'), media_type: 'image/jpeg' };
 }
 
 async function lire(source) {
@@ -104,4 +128,4 @@ async function lire(source) {
   }
 }
 
-module.exports = { preparer, lire, etat: () => etat };
+module.exports = { preparer, lire, imageIA, etat: () => etat };

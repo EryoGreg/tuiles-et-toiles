@@ -8,6 +8,11 @@
  *     node scripts/lancer-node.js tests/banc-cartels.js synthese   cartels fabriques (tests/cartels-synthese/,
  *                                                                  voir tools/fabriquer-cartels.py)
  *     ... banc-cartels.js <dossier> -v                             detail ligne par ligne
+ *     ... banc-cartels.js <dossier> --ia [--haiku]                 lecture par Claude (PAYANT : environ
+ *                                                                  1,5 centime par image) ; cle lue dans
+ *                                                                  ia-cle-dev.txt a la racine (gitignore)
+ *                                                                  ou TT_CLE_IA. Tags non notes : Claude
+ *                                                                  rend des categories, pas la technique.
  *
  * Note par champ : exact (memes lettres, accents / casse / ponctuation ignores),
  * proche (similarite >= 85 %) ou faux. Lecture brute : taux d'erreur par
@@ -17,6 +22,23 @@
 const fs = require('fs');
 const path = require('path');
 const cartel = require('../src/main/cartel-pc');
+const ia = require('../src/main/cartel-ia');
+
+/** Categories du pack (champ tags), les plus frequentes d'abord : ce que l'appli envoie a Claude. */
+function categoriesDuPack() {
+  const Database = require('better-sqlite3');
+  const d = new Database(path.join(__dirname, '..', 'data', 'pack.db'), { readonly: true });
+  const n = new Map();
+  for (const r of d.prepare('SELECT tags FROM oeuvres').all()) {
+    for (const t of String(r.tags || '').split(',').map((x) => x.trim()).filter(Boolean)) {
+      const k = t.toLowerCase();
+      if (!n.has(k)) n.set(k, { label: t, n: 0 });
+      n.get(k).n++;
+    }
+  }
+  d.close();
+  return [...n.values()].sort((a, b) => b.n - a.n).map((x) => x.label);
+}
 const exemples = require('./cartels-exemples');
 
 const CHAMPS = ['artiste', 'titre', 'date', 'tags', 'description'];
@@ -66,7 +88,23 @@ function verite(fichier) {
 (async () => {
   const args = process.argv.slice(2);
   const verbeux = args.includes('-v');
-  const arg = args.find((a) => a !== '-v');
+  const avecIA = args.includes('--ia');
+  const arg = args.find((a) => !a.startsWith('-'));
+  let cle = null, categories = [];
+  if (avecIA) {
+    const f = path.join(__dirname, '..', 'ia-cle-dev.txt');
+    cle = process.env.TT_CLE_IA || (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : null);
+    if (!cle) { console.log('Cle absente : mets ta cle API dans ia-cle-dev.txt (racine du projet, ignore par git).'); return; }
+    categories = categoriesDuPack();
+  }
+  let depense = 0;
+  const lireUn = async (fichier) => {
+    if (!avecIA) return cartel.lire(fichier);
+    const image = await cartel.imageIA(fichier);
+    const r = await ia.lire({ image, categories, cle, gamme: args.includes('--haiku') ? 'haiku' : 'sonnet' });
+    depense += r.cout || 0;
+    return r;
+  };
   const dossier = !arg ? path.join(__dirname, 'photos-cartels')
     : arg === 'synthese' ? path.join(__dirname, 'cartels-synthese') : path.resolve(arg);
   const fichiers = fs.readdirSync(dossier).filter((f) => /\.(jpe?g|png)$/i.test(f)).sort();
@@ -75,13 +113,13 @@ function verite(fichier) {
   let cerSomme = 0, cerN = 0, ms = 0;
   for (const f of fichiers) {
     const v = verite(path.join(dossier, f));
-    const r = await cartel.lire(path.join(dossier, f));
+    const r = await lireUn(path.join(dossier, f));
     ms += r.ms || 0;
     if (r.erreur) { console.log(f.padEnd(28), 'ERREUR', r.erreur); continue; }
     const notes = [];
     if (v) {
       for (const c of CHAMPS) {
-        if (!(c in v.attendu)) continue;
+        if (!(c in v.attendu) || (avecIA && c === 'tags')) continue;
         const n = noter(r.proposition[c] || '', v.attendu[c]);
         total[n]++; parChamp[c][n]++;
         notes.push(c + ':' + (n === 'exact' ? '✓' : n === 'proche' ? '≈' : '✗'));
@@ -93,10 +131,11 @@ function verite(fichier) {
         notes.push('CER ' + (cer * 100).toFixed(1) + ' %');
       }
     }
-    console.log(f.padEnd(28), String(r.ms).padStart(5), 'ms ', notes.join('  '));
+    console.log(f.padEnd(28), String(r.ms).padStart(5), 'ms ', notes.join('  ')
+      + (avecIA ? '  ' + (r.cout * 100).toFixed(2) + ' ct$  tags « ' + (r.proposition.tags || '') + ' »' : ''));
     if (verbeux) {
-      for (const l of r.lignes) console.log('      ', ('[' + l.role + ']').padEnd(13), 'b' + l.bloc, 'h' + l.hauteur, l.texte);
-      if (v) for (const c of CHAMPS) if (c in v.attendu && noter(r.proposition[c] || '', v.attendu[c]) !== 'exact') {
+      for (const l of r.lignes) console.log('      ', ('[' + l.role + ']').padEnd(13), avecIA ? '' : 'b' + l.bloc + ' h' + l.hauteur, l.texte);
+      if (v) for (const c of CHAMPS) if (c in v.attendu && !(avecIA && c === 'tags') && noter(r.proposition[c] || '', v.attendu[c]) !== 'exact') {
         console.log('       ✗', c, ': lu « ' + (r.proposition[c] || '') + ' »\n              attendu « ' + v.attendu[c] + ' »');
       }
     }
@@ -110,4 +149,6 @@ function verite(fichier) {
   }
   if (cerN) console.log('lecture brute : CER moyen ' + (100 * cerSomme / cerN).toFixed(1) + ' % sur ' + cerN + ' images');
   console.log('temps moyen : ' + Math.round(ms / Math.max(fichiers.length, 1)) + ' ms');
+  if (avecIA) console.log('cout Claude : ' + (depense * 100).toFixed(2) + ' centimes de dollar au total, '
+    + (depense * 100 / Math.max(fichiers.length, 1)).toFixed(2) + ' par cartel');
 })();

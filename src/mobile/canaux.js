@@ -22,6 +22,8 @@ const reseau = require('./reseau');
 const maj = require('./maj');
 const cartel = require('./cartel');
 const revision = require('../main/revision');
+const cartelIa = require('../main/cartel-ia');
+const iaCle = require('../main/ia-cle');
 const imagesQualite = require('../main/images-qualite');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
@@ -141,6 +143,28 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   // Cartel du musee : photo -> lignes de texte, que l'editeur range dans les champs.
   g('edition:lireCartel', (source) => cartel.lire(source === 'galerie' ? 'galerie' : 'camera'));
   g('edition:cartelEtat', () => cartel.etat());
+  // Lecture amelioree par Claude : meme logique que le PC (index.js).
+  const etatIA = () => ({
+    ...iaCle.etat(), gamme: db.reglage('ia_gamme', 'sonnet'),
+    depense: parseFloat(db.reglage('ia_depense', '0')) || 0, lectures: parseInt(db.reglage('ia_lectures', '0'), 10) || 0
+  });
+  g('ia:etat', () => etatIA());
+  g('ia:cle', (cle) => { const r = iaCle.definir(cle); journal.evt('cartel', 'ia-cle', { ok: !!r.ok }); return { ...r, etat: etatIA() }; });
+  g('ia:oublier', () => { iaCle.oublier(); journal.evt('cartel', 'ia-cle-oubliee'); return etatIA(); });
+  g('ia:gamme', (gm) => { if (cartelIa.GAMMES[gm]) { db.definirReglage('ia_gamme', gm); db.definirReglage('ia_modele_id', ''); } return etatIA(); });
+  g('edition:lireCartelIA', async () => {
+    const image = await cartel.imageIA().catch((e) => { journal.erreur('cartel', 'ia-image', e); return null; });
+    if (!image) return { erreur: 'Lis d’abord un cartel (photo), puis « Relire avec Claude ».' };
+    const gamme = db.reglage('ia_gamme', 'sonnet');
+    const categories = jeu.categories().slice().sort((a, b) => b.n - a.n).map((c) => c.label);
+    const r = await cartelIa.lire({ image, categories, cle: iaCle.lire(), gamme, modeleId: db.reglage('ia_modele_id', '') || undefined });
+    if (r.cout) {
+      db.definirReglage('ia_depense', String((parseFloat(db.reglage('ia_depense', '0')) || 0) + r.cout));
+      if (!r.erreur) db.definirReglage('ia_lectures', String((parseInt(db.reglage('ia_lectures', '0'), 10) || 0) + 1));
+    }
+    if (r.remplace) db.definirReglage('ia_modele_id', r.remplace.apres);
+    return r;
+  });
   // Modele de lecture telecharge d'avance (Wi-Fi) : pret au musee, hors ligne.
   setTimeout(() => cartel.preparer({ reseauPermis: () => reseau.wifi() }), 8000);
   g('edition:importerImage', (octets, meta) => images.importer(new Uint8Array(octets), dossierImagesLocales, { origine: 'depot', ...(meta || {}) }));

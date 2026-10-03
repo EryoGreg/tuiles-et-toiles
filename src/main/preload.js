@@ -16,6 +16,13 @@ contextBridge.exposeInMainWorld('api', {
   // Journal structure : domaine, evenement, details, niveau (DEBUG/INFO/WARN/ERREUR).
   evt: (domaine, quoi, donnees, niveau) => ipcRenderer.send('journal:evt', domaine, quoi, donnees, niveau),
 
+  // Lecture amelioree par Claude : cle API (jamais renvoyee en clair), gamme de modele.
+  ia: {
+    etat: () => ipcRenderer.invoke('ia:etat'),
+    definirCle: (cle) => ipcRenderer.invoke('ia:cle', cle),
+    oublierCle: () => ipcRenderer.invoke('ia:oublier'),
+    gamme: (g) => ipcRenderer.invoke('ia:gamme', g)
+  },
   // Repetition espacee : file du jour, prochaine tuile, note 1..4 (annulable).
   revision: {
     etat: () => ipcRenderer.invoke('revision:etat'),
@@ -60,6 +67,8 @@ contextBridge.exposeInMainWorld('api', {
     // PC (reconnaissance de Windows) : 'fichier' (choix du fichier) | { chemin }
     lireCartel: (source) => ipcRenderer.invoke('edition:lireCartel', source),
     cartelEtat: () => ipcRenderer.invoke('edition:cartelEtat'),
+    // Relire la derniere photo de cartel avec Claude (cle API de l'utilisateur)
+    lireCartelIA: () => ipcRenderer.invoke('edition:lireCartelIA'),
     importerImage: (octets, meta) => ipcRenderer.invoke('edition:importerImage', octets, meta),
     importerImageUrl: (url) => ipcRenderer.invoke('edition:importerImageUrl', url),
     oublierImage: (nom) => ipcRenderer.invoke('edition:oublierImage', nom)

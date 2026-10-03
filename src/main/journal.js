@@ -31,7 +31,9 @@ let MAX = 5 * 1024 * 1024;
 let NB_FICHIERS = 5;
 const SESSION = crypto.randomBytes(3).toString('hex');
 const LONG_MAX = 2000;                  // chaine plus longue : tronquee
-const CLES_SECRETES = /token|secret|password|mot_?de_?passe|authorization|code_?verifier|refresh/i;
+const CLES_SECRETES = /token|secret|password|mot_?de_?passe|authorization|code_?verifier|refresh|api_?key|^cle$/i;
+// Cle API Anthropic, ou qu'elle apparaisse (argument d'un canal, message d'erreur…).
+const RE_CLE_API = /sk-ant-[A-Za-z0-9_-]{8,}/g;
 
 let dossier = null;
 let fichier = null;
@@ -41,7 +43,10 @@ let echo = true;   // recopie sur la sortie standard (terminal de dev)
 
 function resumerValeur(v, profondeur = 0) {
   if (v == null || typeof v === 'number' || typeof v === 'boolean') return v;
-  if (typeof v === 'string') return v.length > LONG_MAX ? v.slice(0, LONG_MAX) + `…[+${v.length - LONG_MAX} car.]` : v;
+  if (typeof v === 'string') {
+    const s = v.replace(RE_CLE_API, 'sk-ant-***');
+    return s.length > LONG_MAX ? s.slice(0, LONG_MAX) + `…[+${s.length - LONG_MAX} car.]` : s;
+  }
   if (typeof v === 'bigint') return String(v);
   if (typeof v === 'function') return '[fonction]';
   if (v instanceof Error) return { erreur: v.message, code: v.code, stack: String(v.stack || '').split('\n').slice(0, 8).join(' | ') };

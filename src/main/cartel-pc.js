@@ -191,7 +191,24 @@ function lancerOcr(image, { timeout = 30000 } = {}) {
   });
 }
 
+let derniere = null;   // derniere photo lue : « Relire avec Claude » la reprend sans la redemander
+
+/**
+ * Image a envoyer a Claude : JPEG, cote <= 1 568 px (au-dela Claude reduit
+ * lui-meme, on paierait l'envoi pour rien), orientation appliquee.
+ * @returns {Promise<{ data: string, media_type: string } | null>}
+ */
+async function imageIA(chemin = derniere) {
+  if (!chemin) return null;
+  const Jimp = require('jimp');
+  const img = await Jimp.read(chemin);
+  if (Math.max(img.bitmap.width, img.bitmap.height) > 1568) img.scaleToFit(1568, 1568);
+  const buf = await img.quality(85).getBufferAsync(Jimp.MIME_JPEG);
+  return { data: buf.toString('base64'), media_type: 'image/jpeg' };
+}
+
 async function lire(chemin) {
+  derniere = chemin;
   const t0 = Date.now();
   if (process.platform !== 'win32') return { erreur: 'La lecture de cartel sur ordinateur demande Windows 10 ou 11.' };
   let prep;
@@ -222,4 +239,4 @@ async function lire(chemin) {
   }
 }
 
-module.exports = { lire, lignesDepuisOcr, blocs, fondSombre, SCRIPT };
+module.exports = { lire, imageIA, lignesDepuisOcr, blocs, fondSombre, SCRIPT, derniere: () => derniere };

@@ -30,7 +30,8 @@ const version = require(path.join(RACINE, 'package.json')).version;
   // 2. Pont + modules du processus principal
   const remplacer = {
     'src/main/images.js': path.join(RACINE, 'src', 'mobile', 'images-import.js'),
-    'src/main/drive.js': path.join(RACINE, 'src', 'mobile', 'drive.js')
+    'src/main/drive.js': path.join(RACINE, 'src', 'mobile', 'drive.js'),
+    'src/main/ia-cle.js': path.join(RACINE, 'src', 'mobile', 'ia-cle.js')
   };
   // Client OAuth Google « Web » (sa connexion native Android s'appuie dessus) :
   // src/mobile/google-config.json { "webClientId": "…" }, hors depot.

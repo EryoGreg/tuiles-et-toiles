@@ -1531,3 +1531,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .notes-revision { gap: 6px; width: 100%; justify-content: space-between; }
   .note-revision { flex: 1 1 0; min-width: 0; padding: 7px 4px; }
 }
+
+/* Lecture du cartel par Claude : bandeau du resultat */
+.cartel-ia { font-size: 12.5px; line-height: 1.45; padding: 8px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--laiton) 12%, transparent); border: 1px solid color-mix(in srgb, var(--laiton) 45%, var(--trait)); color: var(--encre); }

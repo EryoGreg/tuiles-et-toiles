@@ -30,6 +30,8 @@ const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
 const cartelPc = require('./cartel-pc');
 const revision = require('./revision');
+const cartelIa = require('./cartel-ia');
+const iaCle = require('./ia-cle');
 const imagesQualite = require('./images-qualite');
 const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
@@ -264,6 +266,7 @@ app.whenReady().then(() => {
     user: USER, imagesLocales: DOSSIER_IMAGES_LOCALES, pack: PACK, versionApp: app.getVersion()
   });
   drive.configurer({ dossierUser: DOSSIER_USER });
+  iaCle.configurer(DOSSIER_USER);
   // Copie de securite hebdomadaire, silencieuse (copie-securite.js). Une minute
   // apres le lancement (pas pendant le demarrage), puis verifiee toutes les 6 h.
   copieSecurite.configurer({
@@ -507,6 +510,35 @@ gerer('edition:lireCartel', async (_e, source) => {
   return cartelPc.lire(chemin);
 });
 gerer('edition:cartelEtat', () => ({ disponible: process.platform === 'win32' }));
+// Lecture amelioree d'un cartel par Claude (cartel-ia.js), avec la cle API de
+// l'utilisateur (ia-cle.js) : sur la derniere photo lue localement.
+function etatIA() {
+  return {
+    ...iaCle.etat(), gamme: db.reglage('ia_gamme', 'sonnet'),
+    depense: parseFloat(db.reglage('ia_depense', '0')) || 0, lectures: parseInt(db.reglage('ia_lectures', '0'), 10) || 0
+  };
+}
+gerer('ia:etat', () => etatIA());
+gerer('ia:cle', (_e, cle) => { const r = iaCle.definir(cle); journal.evt('cartel', 'ia-cle', { ok: !!r.ok }); return { ...r, etat: etatIA() }; });
+gerer('ia:oublier', () => { iaCle.oublier(); journal.evt('cartel', 'ia-cle-oubliee'); return etatIA(); });
+gerer('ia:gamme', (_e, g) => { if (cartelIa.GAMMES[g]) { db.definirReglage('ia_gamme', g); db.definirReglage('ia_modele_id', ''); } return etatIA(); });
+gerer('edition:lireCartelIA', async () => {
+  const image = await cartelPc.imageIA().catch((e) => { journal.erreur('cartel', 'ia-image', e); return null; });
+  if (!image) return { erreur: 'Lis d’abord un cartel (photo), puis « Relire avec Claude ».' };
+  return lireAvecClaude(image);
+});
+async function lireAvecClaude(image) {
+  const gamme = db.reglage('ia_gamme', 'sonnet');
+  const categories = jeu.categories().slice().sort((a, b) => b.n - a.n).map((c) => c.label);
+  const r = await cartelIa.lire({ image, categories, cle: iaCle.lire(), gamme, modeleId: db.reglage('ia_modele_id', '') || undefined });
+  if (r.cout) {
+    db.definirReglage('ia_depense', String((parseFloat(db.reglage('ia_depense', '0')) || 0) + r.cout));
+    if (!r.erreur) db.definirReglage('ia_lectures', String((parseInt(db.reglage('ia_lectures', '0'), 10) || 0) + 1));
+  }
+  if (r.remplace) db.definirReglage('ia_modele_id', r.remplace.apres);
+  return r;
+}
+
 gerer('edition:choisirImage', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Choisir une image',

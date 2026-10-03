@@ -37,3 +37,7 @@ dist-mobile/
 release-test/
 tests/photos-cartels/
 tests/cartels-synthese/
+# Cle API Claude (lecture amelioree des cartels) : jamais dans le depot
+data/ia-cle.bin
+ia-cle*.txt
+tests/banc-ia/

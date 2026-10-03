@@ -539,6 +539,60 @@ function NouvellePartie({ onLancer }) {
   );
 }
 
+const nomModeleIA = (id) => String(id || '').replace(/^claude-/, '').replace(/-(\d+)-(\d+)$/, ' $1.$2').replace(/-(\d+)$/, ' $1')
+  .replace(/^\w/, (c) => c.toUpperCase());
+
+// Options → Lecture amelioree (Claude) : cle API de l'utilisateur, modele, depense.
+function SectionLectureIA() {
+  const [e, setE] = useState(null);
+  const [saisie, setSaisie] = useState('');
+  const [msg, setMsg] = useState(null);
+  useEffect(() => { window.api.ia.etat().then(setE).catch(() => {}); }, []);
+  if (!e) return null;
+  const enregistrer = async () => {
+    const r = await window.api.ia.definirCle(saisie);
+    if (r.erreur) { setMsg({ erreur: r.erreur }); return; }
+    setSaisie(''); setE(r.etat); setMsg({ ok: 'Clé enregistrée, chiffrée sur cet appareil.' });
+  };
+  const oublier = async () => { setE(await window.api.ia.oublierCle()); setMsg(null); };
+  const gamme = async (g) => setE(await window.api.ia.gamme(g));
+  return (
+    <section>
+      <div className="etiquette">Lecture améliorée (Claude)</div>
+      {e.configure ? (
+        <div className="choix-raccourcis">
+          <span className="options-note" style={{ alignSelf: 'center' }}>Clé : {e.apercu}</span>
+          <button className="bouton-neutre" onClick={oublier}><I.Croix t={14} /> Oublier la clé</button>
+        </div>
+      ) : (
+        <div className="choix-raccourcis">
+          <input className="editeur-input" type="password" autoComplete="off" spellCheck={false}
+            placeholder="Clé API Anthropic (sk-ant-…)" value={saisie} onChange={(x) => setSaisie(x.target.value)}
+            onKeyDown={(x) => { if (x.key === 'Enter') enregistrer(); }} style={{ maxWidth: 360 }} />
+          <button className="bouton-neutre" onClick={enregistrer} disabled={!saisie.trim()}><I.Coche t={14} /> Enregistrer</button>
+        </div>
+      )}
+      {msg && msg.ok && <div className="options-confirmation"><I.Coche t={14} /> {msg.ok}</div>}
+      {msg && msg.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{msg.erreur}</div>}
+      <div className="options-note" style={{ margin: '12px 0 8px' }}>Modèle</div>
+      <div className="choix-raccourcis">
+        {[['sonnet', 'Sonnet 5.5 · conseillé · ~1,5 ct'], ['haiku', 'Haiku 4.5 · moins cher · ~0,5 ct']].map(([g, nom]) => (
+          <button key={g} className={'raccourci-bouton' + (e.gamme === g ? ' pose' : '')} onClick={() => gamme(g)}>
+            {e.gamme === g && <I.Coche t={14} />} {nom}
+          </button>
+        ))}
+      </div>
+      <div className="options-note">
+        {e.lectures ? e.lectures + ' lecture(s) par Claude sur cet appareil, environ ' + (e.depense * 100).toFixed(1).replace('.', ',') + ' centimes de dollar au total. ' : ''}
+        Après une lecture de cartel, « Relire avec Claude » envoie la photo à Anthropic avec ta liste de
+        catégories ; Claude range le texte et choisit des catégories parmi les tiennes. Payant à l’usage sur
+        ton compte (console.anthropic.com), jamais automatique. La clé reste chiffrée sur cet appareil :
+        elle n’est ni synchronisée, ni envoyée ailleurs qu’à Anthropic.
+      </div>
+    </section>
+  );
+}
+
 // Options → Revision espacee : nouvelles tuiles par jour et retention cible
 // (reglages propres a l'appareil ; les notes, elles, sont synchronisees).
 function SectionRevision() {
@@ -1544,6 +1598,19 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
     setCartel(r && (r.erreur || (r.lignes && r.lignes.length)) ? r
       : r ? { erreur: 'Aucun texte trouvé sur la photo. Rapproche-toi du cartel, sans reflet.' } : null);
   };
+  // Relire la meme photo avec Claude (cle API dans Options) : la boite reste
+  // ouverte pendant la lecture, puis montre le resultat de Claude.
+  const [iaPrete, setIaPrete] = useState(false);
+  const [iaEnCours, setIaEnCours] = useState(false);
+  useEffect(() => { window.api.ia.etat().then((e) => setIaPrete(!!e.configure)).catch(() => {}); }, []);
+  const relireAvecClaude = async () => {
+    setIaEnCours(true);
+    let r;
+    try { r = await window.api.edition.lireCartelIA(); }
+    catch (err) { r = { erreur: String(err && err.message || err) }; }
+    setIaEnCours(false);
+    setCartel((avant) => (r && r.erreur && avant && avant.lignes ? { ...avant, erreurIA: r.erreur } : { ...r, cle: Date.now() }));
+  };
   const remplirDepuisCartel = (valeurs) => {
     window.api.evt('edition', 'cartel-remplir', { champs: Object.keys(valeurs) });
     setChamps((x) => ({ ...x, ...valeurs }));
@@ -1788,8 +1855,9 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
       </div>
 
       {cartel && cartel !== 'lecture' && (
-        <BoiteCartel lecture={cartel} actuels={champs} onRemplir={remplirDepuisCartel}
-          onRelire={() => lireCartel(SUR_MOBILE ? 'camera' : 'fichier')} onFermer={() => setCartel(null)} />
+        <BoiteCartel key={cartel.cle || (cartel.ia ? 'ia' : 'local')} lecture={cartel} actuels={champs} onRemplir={remplirDepuisCartel}
+          onRelire={() => lireCartel(SUR_MOBILE ? 'camera' : 'fichier')} onFermer={() => setCartel(null)}
+          onClaude={iaPrete && !cartel.ia ? relireAvecClaude : null} iaEnCours={iaEnCours} />
       )}
       {historique && (
         <BoiteVersions
@@ -1832,7 +1900,7 @@ function joindreLignes(lignes) {
 
 // Proposition de l'analyse, corrigeable : toucher des lignes puis un champ.
 // Rien n'est ecrit avant « Valider » dans l'editeur.
-function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
+function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer, onClaude, iaEnCours }) {
   const [prop, setProp] = useState(() => ({ ...(lecture.proposition || {}) }));
   const [coches, setCoches] = useState(() => Object.fromEntries(CHAMPS_CARTEL.map((c) => {
     const v = (lecture.proposition || {})[c];
@@ -1860,6 +1928,11 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
           <p>{lecture.erreur}</p>
           <div className="actions">
             <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
+            {onClaude && (
+              <button className="bouton-neutre" onClick={onClaude} disabled={iaEnCours}>
+                <I.Echange t={14} /> {iaEnCours ? 'Claude lit le cartel…' : 'Relire avec Claude'}
+              </button>
+            )}
             <button className="bouton-valide" onClick={onRelire}><I.Appareil t={14} /> {SUR_MOBILE ? 'Reprendre une photo' : 'Choisir une autre photo'}</button>
           </div>
         </div>
@@ -1892,6 +1965,15 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
     <div className="recouvrement" onClick={onFermer}>
       <div className="boite-dialogue boite-cartel" onClick={(e) => e.stopPropagation()}>
         <h3>Texte lu sur le cartel</h3>
+        {lecture.ia && (
+          <div className="cartel-ia">
+            Lu par Claude ({nomModeleIA(lecture.modele)}) en {Math.round((lecture.ms || 0) / 100) / 10} s
+            {' '}— {(lecture.cout * 100).toFixed(2).replace('.', ',')} centime(s) de dollar.
+            {lecture.remplace && ' Modèle retiré, remplacé par ' + lecture.remplace.apres + '.'}
+            {' '}Catégories prises dans les tiennes ; vérifie avant de remplir.
+          </div>
+        )}
+        {lecture.erreurIA && <div className="options-note" style={{ color: 'var(--revoir)' }}>{lecture.erreurIA}</div>}
 
         <div className="cartel-propositions">
           {CHAMPS_CARTEL.map((c) => (
@@ -1944,6 +2026,12 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
 
         <div className="actions">
           <button className="bouton-neutre" onClick={onFermer}>Annuler</button>
+          {onClaude && (
+            <button className="bouton-neutre" onClick={onClaude} disabled={iaEnCours}
+              title="Envoie cette photo à Claude (payant, environ 1 à 2 centimes) : meilleure lecture, catégories prises dans les tiennes">
+              <I.Echange t={14} /> {iaEnCours ? 'Claude lit le cartel…' : 'Relire avec Claude'}
+            </button>
+          )}
           <button className="bouton-valide" onClick={remplir} disabled={!choisis.length}>
             <I.Coche t={14} /> {choisis.length ? 'Remplir ' + choisis.length + ' champ' + (choisis.length > 1 ? 's' : '') : 'Rien de coché'}
           </button>
@@ -2665,6 +2753,9 @@ function Options({ etat, onEtat, aller }) {
 
       <div className="filet" />
       <SectionRevision />
+
+      <div className="filet" />
+      <SectionLectureIA />
 
       <div className="filet" />
 
