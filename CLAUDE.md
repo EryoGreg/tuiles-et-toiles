@@ -399,6 +399,28 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   ligne, ~0,7 s) → blocs reconstitués par écarts verticaux / tailles (`blocs()`, Windows n'en donne
   pas) → même `cartel-analyse.js` et même `BoiteCartel`. Test : `tests/cartel-pc.test.js` (vraie
   lecture sur une image fabriquée).
+  **Banc d'essai** (`tests/banc-cartels.js`, pas dans `npm test`) : note par champ (exact / proche / faux) et
+  taux d'erreur de lecture, sur les vraies photos (`tests/photos-cartels/`, hors dépôt) ou sur des cartels
+  fabriqués (`python tools/fabriquer-cartels.py [n] [graine]` → `tests/cartels-synthese/` : œuvres du pack,
+  5 mises en page, polices Windows, 4 niveaux de dégradation). Mesures du 03/10/2026 en local : photos
+  réelles 86 % de champs exacts, synthèse 60 % (lecture brute 8 % d'erreur : c'est le **rangement** par
+  règles qui pèche, et les photos floues / fond sombre).
+  **Lecture améliorée par Claude** (`src/main/cartel-ia.js`, commun PC / mobile, SDK `@anthropic-ai/sdk`) :
+  bouton « Relire avec Claude » dans la boîte du cartel, sur la **même photo** (`cartel-pc.imageIA` /
+  `mobile/cartel.imageIA` : JPEG ≤ 1 568 px). Envoie la photo + les catégories existantes (les plus
+  fréquentes d'abord) ; sortie JSON imposée (`output_config.format`, schéma `SCHEMA`) : lignes + rôles +
+  champs, **tags = catégories prises dans le vocabulaire de l'utilisateur**. Gamme (`ia_gamme`) : `sonnet`
+  (`claude-sonnet-5-5`, effort `low`, reprise serveur en cas de refus `fallbacks: "default"`) par défaut,
+  `haiku` (`claude-haiku-4-5`, sans effort) en option. **Modèle retiré (404)** : plus récent de la même gamme
+  sur le compte (Models API), sinon gamme au-dessus, jamais Opus d'office ; retenu dans `ia_modele_id` et dit
+  dans la boîte. Clé API **de l'utilisateur** (`ia-cle.js` : safeStorage sur PC → `ia-cle.bin` ;
+  `mobile/ia-cle.js` : `/data/ia-cle.json`), jamais synchronisée ; le journal masque toute chaîne `sk-ant-…`
+  et les champs `cle` / `apiKey`. Dépense cumulée (`ia_depense`, `ia_lectures`) dans Options → Lecture
+  améliorée. Erreurs en clair (clé refusée, crédit épuisé, limite, panne, hors ligne). Test :
+  `tests/cartel-ia.test.js` (faux client, aucun appel). **Mesure** (15 cartels les plus mal lus en local,
+  Sonnet 5.5) : 96 % de champs exacts (100 % exacts ou proches) contre 15 % en local, ~0,8 centime de
+  dollar par cartel (1,7 pour un long texte), 3 à 8 s. Banc : `--ia [--haiku]`, clé dans `ia-cle-dev.txt` à
+  la racine (ignoré par git).
 - `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
   `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
 
