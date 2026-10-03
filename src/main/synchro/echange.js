@@ -35,6 +35,7 @@ function resumer(ops, existaitAvant) {
   const nouvelles = new Set(), modifiees = new Set(), supprimees = new Set(), restaurees = new Set();
   const corrections = new Set();
   let marques = 0, archives = 0, revisions = 0;
+  const notes = new Set();
   for (const op of ops) {
     const v = op.valeur == null ? null : JSON.parse(op.valeur);
     if (op.entite === 'locale' && op.champ === '_existe') {
@@ -46,11 +47,12 @@ function resumer(ops, existaitAvant) {
     else if (op.entite === 'tag') marques++;
     else if (op.entite === 'archive') archives++;
     else if (op.entite === 'revision' && v) revisions++;
+    else if (op.entite === 'note') notes.add(op.cle);
   }
   for (const c of [...nouvelles, ...supprimees, ...restaurees]) modifiees.delete(c);
   return {
     tuilesNouvelles: nouvelles.size, tuilesModifiees: modifiees.size, tuilesSupprimees: supprimees.size,
-    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives, revisions
+    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives, revisions, notes: notes.size
   };
 }
 

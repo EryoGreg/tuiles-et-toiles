@@ -89,6 +89,8 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   g('revision:tirer', (exclure) => revision.tirer(Array.isArray(exclure) ? exclure : []));
   g('revision:noter', ({ id, note }) =>
     annuler.action('Note « ' + (NOMS_NOTES[note] || note) + ' » sur ' + refDe(id), () => revision.noter(id, note)));
+  g('notes:lire', (id) => edition.lireNote(id));
+  g('notes:ecrire', ({ id, texte }) => annuler.action('Note sur ' + refDe(id), () => edition.ecrireNote(id, texte)));
   g('tags:effacerTout', () => ({
     supprimes: annuler.action('Effacement de toutes les marques', () => db.effacerTousLesTags()),
     comptes: db.comptesTags()

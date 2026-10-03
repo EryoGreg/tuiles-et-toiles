@@ -73,7 +73,7 @@ export function CarteTuile({ o, onOuvrir, onRetirer, nomRetirer, onMenu }) {
         ? <img className="carte-galerie-image" src={o.vignette || o.image} alt="" loading="lazy" />
         : <div className="carte-galerie-image carte-galerie-image-vide" />}
       <div className="carte-galerie-corps">
-        <span className="numero">#{o.ref}{o.conflit && <PastilleConflit />}</span>
+        <span className="numero">#{o.ref}{o.conflit && <PastilleConflit />}{o.aNote && <span className="carte-note" title="Ma note"><I.Note t={12} /></span>}</span>
         <div className="carte-galerie-titre">{o.titre || '—'}</div>
         <div className="carte-galerie-artiste">
           {o.artiste || '—'}{o.date ? ' · ' + o.date : ''}
@@ -209,9 +209,9 @@ export function RecouvrementApercu({ id, onFermer, onEtat }) {
   useEffect(() => {
     const clavier = (e) => {
       if (e.key === 'Escape') {
-        // Une vue image plein cadre est ouverte par-dessus : la laisser se
-        // fermer d'abord, ne pas refermer tout l'apercu du meme coup.
-        if (document.querySelector('.recouvrement-image')) return;
+        // Une vue image plein cadre ou la boite « Ma note » est ouverte par-dessus :
+        // la laisser se fermer d'abord, ne pas refermer tout l'apercu du meme coup.
+        if (document.querySelector('.recouvrement-image, .boite-note')) return;
         onFermer();
         return;
       }

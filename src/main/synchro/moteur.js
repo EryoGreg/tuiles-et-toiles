@@ -40,7 +40,11 @@ const TAGS = ['livre', 'etoile', 'bad_smiley'];
 // revision : cle = oeuvre_id, champ = <appareil>.<horodatage base 36> (un seul
 // ecrivain), valeur = { n: 1..4, le } — une note de repetition espacee ; NULL
 // = note annulee (Ctrl+Z). Ajout seulement : jamais de conflit.
-const ENTITES = ['locale', 'override', 'archive', 'tag', 'stat', 'revision'];
+// note : cle = oeuvre_id, champ = '_', valeur = texte libre (Mes notes) ; NULL
+// = note effacee. Derniere ecriture gagne, conflit si deux appareils l'ont
+// changee sans se voir (ecran Conflits).
+const ENTITES = ['locale', 'override', 'archive', 'tag', 'stat', 'revision', 'note'];
+const NOTE_MAX = 20000;
 const RE_APPAREIL = /^[0-9a-f]{8}$/;
 const RE_REVISION = /^[0-9a-f]{8}\.[0-9a-z]{1,16}$/;
 
@@ -120,6 +124,14 @@ function projeter(ctx, entite, cle, champ, val, hlc) {
       if (val == null) d.prepare('DELETE FROM user_tags WHERE oeuvre_id=? AND tag=?').run(cle, champ);
       else d.prepare('INSERT OR REPLACE INTO user_tags (oeuvre_id, tag, cree_le) VALUES (?, ?, ?)').run(cle, champ, t);
       return;
+    case 'note':
+      if (val == null || String(val).trim() === '') d.prepare('DELETE FROM user_notes WHERE oeuvre_id=?').run(cle);
+      else {
+        const { normaliser } = require('../masques');
+        d.prepare('INSERT OR REPLACE INTO user_notes (oeuvre_id, texte, recherche, modifie_le) VALUES (?, ?, ?, ?)')
+          .run(cle, String(val), normaliser(String(val)), t);
+      }
+      return;
     case 'revision':
       if (val == null) d.prepare('DELETE FROM user_revisions WHERE oeuvre_id=? AND rid=?').run(cle, champ);
       else d.prepare('INSERT OR REPLACE INTO user_revisions (oeuvre_id, rid, note, le) VALUES (?, ?, ?, ?)').run(cle, champ, val.n, val.le);
@@ -154,7 +166,7 @@ function tetes(ctx, entite, cle, champ) {
 }
 
 function estVisible(entite) {
-  return entite === 'locale' || entite === 'override';
+  return entite === 'locale' || entite === 'override' || entite === 'note';
 }
 
 /** Deux valeurs (JSON brut) different-elles pour l'utilisateur ? */
@@ -324,6 +336,8 @@ function valide(op) {
   if (op.base != null && typeof op.base !== 'string') return false;
   const okValeur = op.entite === 'stat'
     ? RE_APPAREIL.test(op.champ) && jsonOk(op.valeur, (v) => v === null || (v && Number.isInteger(v.vues) && v.vues >= 0))
+    : op.entite === 'note'
+      ? op.champ === '_' && jsonOk(op.valeur, (v) => v === null || (typeof v === 'string' && v.length <= NOTE_MAX))
     : op.entite === 'revision'
       ? RE_REVISION.test(op.champ) && jsonOk(op.valeur, (v) => v === null
         || (v && Number.isInteger(v.n) && v.n >= 1 && v.n <= 4 && typeof v.le === 'string' && !Number.isNaN(Date.parse(v.le))))

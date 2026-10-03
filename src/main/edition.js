@@ -481,6 +481,27 @@ function trancherPack(idConflit, choix) {
   return { ok: true };
 }
 
+/**
+ * Mes notes : note libre et personnelle d'une tuile (pack ou locale).
+ * Ecriture ordinaire synchronisee (entite 'note'), annulable ; vide = effacee.
+ * Ne touche ni la vue, ni les masques (la note n'y entre jamais).
+ */
+function lireNote(id) {
+  const r = db.instance().prepare('SELECT texte, modifie_le FROM user_notes WHERE oeuvre_id = ?').get(id);
+  return r ? { texte: r.texte, modifieLe: r.modifie_le } : { texte: '', modifieLe: null };
+}
+
+function ecrireNote(id, texte) {
+  const t = String(texte == null ? '' : texte).replace(/\r\n/g, '\n').replace(/\s+$/, '');
+  if (t.length > 20000) return { erreur: 'Note trop longue (20 000 caractères au plus).' };
+  if (!db.oeuvre(id) && !db.instance().prepare('SELECT 1 FROM pack.oeuvres WHERE id = ?').get(id)) return { erreur: 'tuile introuvable' };
+  const avant = lireNote(id).texte;
+  if (avant === t) return { ok: true, inchangee: true };
+  etat.ecrire('note', id, '_', t || null);
+  journal.evt('edition', 'note', { id, avant: journal.decrireTexte(avant), apres: journal.decrireTexte(t) });
+  return { ok: true };
+}
+
 function appliquer() {
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
@@ -489,7 +510,7 @@ function appliquer() {
 
 module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
-  conflitsPack, trancherPack,
+  conflitsPack, trancherPack, lireNote, ecrireNote,
   rafraichir: appliquer,
   imagesReferencees
 };

@@ -282,6 +282,8 @@ export function Partie({ filtre, onChanger, onEtat }) {
 
   useEffect(() => {
     const clavier = (e) => {
+      if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;   // saisie (Ma note)
+      if (document.querySelector('.boite-note')) return;
       if (e.code === 'Space') { e.preventDefault(); reveler(null); }
       if (e.code === 'ArrowRight') tirer();
       if (e.code === 'ArrowLeft') precedente();

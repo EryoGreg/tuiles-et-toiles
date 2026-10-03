@@ -16,6 +16,20 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   (depuis 0.3.2, démarrage rapide : le portable se décompresse à chaque lancement), raccourcis
   bureau / menu / barre des tâches + détection des raccourcis périmés au lancement
 - **S1 du modèle pack** : socle 2 bases (voir « Architecture données »)
+- **Interface découpée** (étape 1 de Bristol, 03/10/2026) : `src/renderer/App.jsx` = coquille (barre,
+  navigation, bandeaux, raccourcis) ; le reste par domaine : `commun/` (contextes, préférences, utilitaires,
+  boîtes), `tuile/` (Tuile, cartes, aperçu, menu contextuel, Ma note), `jeu/` (partie, révision),
+  `galeries/` (Bibliothèque, Livre / Étoile / À revoir, filtres), `edition/` (page Édition, éditeur, cartel,
+  journal), `options/` (Options, sections, mise à jour, rapport), `pages/` (Conflits, Corbeille). Découpe faite
+  par `scripts/decouper-app.js` (code inchangé ; `--verifier` liste tout nom non défini).
+- **Mes notes** (0.3.15) : note libre et personnelle par tuile (pack ou locale), entité synchronisée
+  **`note`** (cle = id, champ `_`, valeur = texte, ≤ 20 000 car. ; vide = effacée ; conflit « Ma note » si
+  deux appareils la changent sans se voir), projetée dans `user_notes` (avec `recherche` normalisée).
+  **Jamais au tirage ni dans les masques** (elle contient souvent la réponse) : la tuile n'a que `aNote`.
+  Bouton « Ma note » à côté des marques (`tuile/Note.jsx`, `BoiteNote`) : note masquée tant que la tuile
+  n'est pas révélée (« Afficher quand même »), Ctrl+Entrée ; champ « Ma note » dans l'éditeur ; pastille sur
+  les cartes ; la recherche de la Bibliothèque cherche aussi dans les notes, filtre « Avec note ». Annulable
+  (Ctrl+Z). `edition.lireNote` / `ecrireNote`, canaux `notes:*`. Test : `tests/notes.test.js`.
 
 **Fait — Édition (ajouts locaux).** Découpage :
 
@@ -37,7 +51,7 @@ Electron + React + SQLite. Windows, mono-utilisateur.
   droit, ou appui long au doigt (`useAppuiLong`, 500 ms, le toucher suivant n'ouvre pas l'aperçu) →
   Agrandir, Modifier (`NavContext.modifierTuile(id)` → page Édition, éditeur ouvert), Livre / Étoile /
   À revoir (cochés), Mettre à la corbeille (confirmation). Mêmes canaux que les boutons (annulable,
-  synchronisé). `useMenuTuile` (App.jsx).
+  synchronisé). `useMenuTuile` (`tuile/Cartes.jsx`).
 
 **En cours — Sauvegarde / synchro Google Drive.** Ce qui voyage : `utilisateur.db`
 + `images-locales/`. Jamais `pack.db`. Découpage :

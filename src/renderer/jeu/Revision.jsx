@@ -78,6 +78,7 @@ export function Revision({ onChanger, onEtat }) {
     const clavier = (e) => {
       if (!tuile || tuile.fini) return;
       if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+      if (document.querySelector('.boite-note')) return;
       if (e.code === 'Space') { e.preventDefault(); reveler(null); }
       if (revele && ['1', '2', '3', '4'].includes(e.key)) noter(Number(e.key));
       if (e.key.toLowerCase() === 'l') marquer('livre');

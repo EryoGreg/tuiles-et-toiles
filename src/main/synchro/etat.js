@@ -18,6 +18,7 @@
  *   archive   cle = p:…           champ = '_'            valeur = 1
  *   tag       cle = oeuvre_id     champ = livre | etoile | bad_smiley   valeur = 1
  *   revision  cle = oeuvre_id     champ = <appareil>.<t36>   valeur = { n: 1..4, le }
+ *   note      cle = oeuvre_id     champ = '_'                valeur = texte (Mes notes)
  * valeur NULL = absent (tag retire, override annule).
  * Tuile supprimee : _existe = { vu } (pierre tombale, voir moteur.js).
  *

@@ -257,7 +257,7 @@ function purgerTombes(ctx, opts = {}) {
   const d = ctx.d;
   const conflit = d.prepare("SELECT 1 FROM conflits WHERE entite='locale' AND cle=? AND champ='_existe' AND resolu=0");
   const contenu = d.prepare(`SELECT entite, champ FROM etat WHERE cle=? AND valeur IS NOT NULL
-    AND entite IN ('locale', 'tag', 'stat', 'revision') AND NOT (entite='locale' AND champ='_existe')`);
+    AND entite IN ('locale', 'tag', 'stat', 'revision', 'note') AND NOT (entite='locale' AND champ='_existe')`);
   const videes = [];
   d.transaction(() => {
     for (const r of d.prepare("SELECT cle, valeur, hlc FROM etat WHERE entite='locale' AND champ='_existe'").all()) {

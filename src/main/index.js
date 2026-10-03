@@ -741,6 +741,10 @@ gerer('revision:tirer', (_e, exclure) => revision.tirer(Array.isArray(exclure) ?
 gerer('revision:noter', (_e, { id, note }) =>
   annuler.action('Note « ' + (NOMS_NOTES[note] || note) + ' » sur ' + refDe(id), () => revision.noter(id, note)));
 
+// Mes notes (edition.lireNote / ecrireNote) : ecriture synchronisee, annulable.
+gerer('notes:lire', (_e, id) => edition.lireNote(id));
+gerer('notes:ecrire', (_e, { id, texte }) => annuler.action('Note sur ' + refDe(id), () => edition.ecrireNote(id, texte)));
+
 gerer('tags:effacerTout', () => ({
   supprimes: annuler.action('Effacement de toutes les marques', () => db.effacerTousLesTags()),
   comptes: db.comptesTags()

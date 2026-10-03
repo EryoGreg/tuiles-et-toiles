@@ -119,7 +119,7 @@ export function SelecteurTags({ choisies, onChoisies, soustractif, onSoustractif
 // ['numero'] seul pour la Bibliotheque (pas de date d'ajout). `tags`
 // (optionnel) : { choisies, onChoisies, soustractif, onSoustractif } ->
 // affiche le selecteur de tags a droite de la recherche (Bibliotheque).
-export function BarreFiltres({ triModes, tri, onTri, sens, onSens, q, onQ, tags }) {
+export function BarreFiltres({ triModes, tri, onTri, sens, onSens, q, onQ, tags, avecNote }) {
   const multi = triModes.length > 1;
   const { colonnes, cycler } = useContext(GrilleContext);
   return (
@@ -152,9 +152,15 @@ export function BarreFiltres({ triModes, tri, onTri, sens, onSens, q, onQ, tags 
         type="text"
         value={q}
         onChange={(e) => onQ(e.target.value)}
-        placeholder="Rechercher : titre, artiste, lieu, description, tags, numéro…"
+        placeholder={'Rechercher : titre, artiste, lieu, description, tags, numéro' + (avecNote ? ', mes notes…' : '…')}
       />
       {tags && <SelecteurTags {...tags} />}
+      {avecNote && (
+        <button className={'tri-bouton' + (avecNote.actif ? ' actif' : '')} onClick={avecNote.basculer}
+          title="Seulement les tuiles qui ont une note personnelle">
+          <I.Note t={14} /> Avec note
+        </button>
+      )}
     </div>
   );
 }
@@ -273,6 +279,7 @@ export function PageBibliotheque({ onEtat, onChoisirTuile }) {
   const [sens, setSens] = usePref('bibliotheque:sens', 'asc');
   const [catsFiltre, setCatsFiltre] = usePref('bibliotheque:categories', []);       // tags selectionnes
   const [soustractif, setSoustractif] = usePref('bibliotheque:soustractif', false);
+  const [avecNote, setAvecNote] = useSession('bibliotheque:avecNote', false);   // Mes notes
   const [resultats, setResultats] = useState(null);
   const [total, setTotal] = useState(null);
   const [apercuId, setApercuId] = useState(null);
@@ -285,6 +292,7 @@ export function PageBibliotheque({ onEtat, onChoisirTuile }) {
       const criteres = {};
       if (q.trim()) criteres.texte = q;
       if (catsFiltre.length) { criteres.categories = catsFiltre; criteres.soustractif = soustractif; }
+      if (avecNote) criteres.avecNote = true;
       const actif = Object.keys(criteres).length > 0;
       const r = await window.api.oeuvres.toutes(actif ? criteres : undefined);
       if (!vivant) return;
@@ -292,7 +300,7 @@ export function PageBibliotheque({ onEtat, onChoisirTuile }) {
       if (!actif) setTotal(r.length);
     }, 120);
     return () => { vivant = false; clearTimeout(t); };
-  }, [q, catsFiltre, soustractif, nonce]);
+  }, [q, catsFiltre, soustractif, nonce, avecNote]);
 
   const fermerApercu = () => { setApercuId(null); setNonce((n) => n + 1); };
   // Mode choix (liste d'Edition) : pas d'apercu, toucher = modifier.
@@ -306,7 +314,7 @@ export function PageBibliotheque({ onEtat, onChoisirTuile }) {
     return () => setRetour(null);
   }, [apercuId, choix]);
 
-  const filtre = q.trim().length > 0 || catsFiltre.length > 0;
+  const filtre = q.trim().length > 0 || catsFiltre.length > 0 || avecNote;
   const affichees = useMemo(
     () => (resultats ? trier(resultats, tri, sens) : null),
     [resultats, tri, sens]
@@ -335,6 +343,7 @@ export function PageBibliotheque({ onEtat, onChoisirTuile }) {
           choisies: catsFiltre, onChoisies: setCatsFiltre,
           soustractif, onSoustractif: setSoustractif
         }}
+        avecNote={{ actif: avecNote, basculer: () => setAvecNote((x) => !x) }}
       />
 
       {!affichees ? (

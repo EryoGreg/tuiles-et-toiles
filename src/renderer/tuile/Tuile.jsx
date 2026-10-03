@@ -1,6 +1,7 @@
 // Decoupe d'App.jsx (etape 1 de Bristol) : code inchange, voir scripts/decouper-app.js.
 import { useEffect, useState } from 'react';
 import * as I from '../icones.jsx';
+import { BoiteNote } from './Note.jsx';
 
 /* ------------------------------------------------------------------- jeu */
 
@@ -19,7 +20,10 @@ export function Tuile({
   // Vue plein cadre de l'image (85% de la fenetre) : locale, pas dans
   // l'historique de Jeu — changer de tuile referme toujours la vue.
   const [agrandie, setAgrandie] = useState(false);
-  useEffect(() => { setAgrandie(false); }, [tuile && tuile.id]);
+  // Mes notes : boite ouverte, et presence de note (mise a jour sans retirer la tuile).
+  const [noteOuverte, setNoteOuverte] = useState(false);
+  const [aNote, setANote] = useState(null);
+  useEffect(() => { setAgrandie(false); setNoteOuverte(false); setANote(null); }, [tuile && tuile.id]);
   useEffect(() => {
     if (!agrandie) return undefined;
     const clavier = (e) => { if (e.key === 'Escape') setAgrandie(false); };
@@ -56,6 +60,13 @@ export function Tuile({
           <Icone t={32} />
         </button>
       ))}
+      <button
+        className={'marque note' + ((aNote == null ? tuile.aNote : aNote) ? ' on' : '')}
+        onClick={() => setNoteOuverte(true)}
+        title={(aNote == null ? tuile.aNote : aNote) ? 'Ma note (cachée jusqu’à la révélation)' : 'Ajouter une note personnelle'}
+      >
+        <I.Note t={30} />
+      </button>
     </div>
   );
 
@@ -177,6 +188,11 @@ export function Tuile({
 
         {!apercu && <div className="suivante" onClick={onSuivante} />}
       </div>
+
+      {noteOuverte && (
+        <BoiteNote tuile={tuile} masquee={!apercu && !revele}
+          onFermer={() => setNoteOuverte(false)} onEnregistree={(oui) => setANote(oui)} />
+      )}
 
       {/* Sous la tuile, alignee sur elle (pas sur le rail) : actions. En
           apercu (tuile agrandie depuis une galerie) tout est deja visible :

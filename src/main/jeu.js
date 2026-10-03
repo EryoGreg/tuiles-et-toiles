@@ -114,7 +114,9 @@ function tuile(id, f = null) {
       tags: tagsAffiche,
       date: null                                  // jamais revelee au tirage
     },
-    tagsUtilisateur: db.tagsDe(o.id)
+    tagsUtilisateur: db.tagsDe(o.id),
+    // Seulement la presence : le texte de la note peut contenir la reponse.
+    aNote: db.oeuvresAvecNote().has(o.id)
   };
 }
 
@@ -183,7 +185,7 @@ function apercuCategories({ cats = [], soustractif = false } = {}) {
  * Oeuvre complete, prete a afficher (hors tirage, rien n'y est masque).
  * @param {Set<string>} [enConflit] ids en conflit de synchro (db.oeuvresEnConflit)
  */
-function completer(o, enConflit) {
+function completer(o, enConflit, avecNote) {
   return {
     id: o.id,
     ref: o.ref,
@@ -203,7 +205,8 @@ function completer(o, enConflit) {
     // Date d'ajout de la tuile (locale : sa creation, sur l'appareil ou elle
     // a ete creee ; oeuvre du pack : null = plus ancienne que tout ajout).
     ajouteLe: o.cree_le || null,
-    conflit: !!(enConflit && enConflit.has(o.id))
+    conflit: !!(enConflit && enConflit.has(o.id)),
+    aNote: !!(avecNote && avecNote.has(o.id))
   };
 }
 
@@ -241,14 +244,15 @@ function apercu(id) {
       tags: o.tags,
       date: o.date
     },
-    tagsUtilisateur: db.tagsDe(o.id)
+    tagsUtilisateur: db.tagsDe(o.id),
+    aNote: db.oeuvresAvecNote().has(o.id)
   };
 }
 
 /** Tout reveler : renvoie l'oeuvre complete, date comprise. */
 function reveler(id) {
   const o = db.oeuvre(id);
-  return o ? completer(o, db.oeuvresEnConflit()) : null;
+  return o ? completer(o, db.oeuvresEnConflit(), db.oeuvresAvecNote()) : null;
 }
 
 /**
@@ -256,8 +260,8 @@ function reveler(id) {
  * ordre chronologique d'ajout. `texte` : filtre de recherche permissif.
  */
 function listerParTag(tag, texte) {
-  const c = db.oeuvresEnConflit();
-  return db.parTagUtilisateur(tag, texte || '').map((o) => completer(o, c));
+  const c = db.oeuvresEnConflit(), n = db.oeuvresAvecNote();
+  return db.parTagUtilisateur(tag, texte || '').map((o) => completer(o, c, n));
 }
 
 /**
@@ -266,8 +270,8 @@ function listerParTag(tag, texte) {
  * cotes), chaque mot devant apparaitre quelque part hors image.
  */
 function listerToutes(criteres) {
-  const c = db.oeuvresEnConflit();
-  return db.chercher({ ...(criteres || {}), limite: 100000 }).map((o) => completer(o, c));
+  const c = db.oeuvresEnConflit(), n = db.oeuvresAvecNote();
+  return db.chercher({ ...(criteres || {}), limite: 100000 }).map((o) => completer(o, c, n));
 }
 
 function reinitialiserSac() {

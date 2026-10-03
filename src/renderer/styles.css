@@ -1535,3 +1535,15 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 /* Lecture du cartel par Claude : bandeau du resultat */
 .cartel-ia { font-size: 12.5px; line-height: 1.45; padding: 8px 12px; border-radius: 8px;
   background: color-mix(in srgb, var(--laiton) 12%, transparent); border: 1px solid color-mix(in srgb, var(--laiton) 45%, var(--trait)); color: var(--encre); }
+
+/* Mes notes */
+.marque.note { color: var(--discret); }
+.marque.note.on { color: var(--laiton); }
+.boite-note { width: min(560px, calc(100vw - 24px)); display: flex; flex-direction: column; gap: 10px; }
+.boite-note h3 { margin-bottom: 0; }
+.note-zone { min-height: 160px; resize: vertical; }
+.note-masquee { padding: 14px; border: 1px dashed var(--trait); border-radius: 10px; color: var(--attenue); font-size: 13px; }
+.note-masquee p { margin: 0 0 10px; }
+.carte-note { display: inline-flex; margin-left: 6px; vertical-align: -1px; color: var(--laiton); }
+.champ-note .etiquette { display: inline-flex; align-items: center; gap: 5px; }
+.champ-note textarea { min-height: 70px; }

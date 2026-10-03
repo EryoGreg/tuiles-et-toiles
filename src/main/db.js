@@ -167,6 +167,16 @@ CREATE TABLE IF NOT EXISTS user_revisions (
   PRIMARY KEY (oeuvre_id, rid)
 );
 
+-- Mes notes : une note libre par tuile (pack ou locale), personnelle,
+-- synchronisee (entite 'note'). Jamais dans les masques ni au tirage (elle
+-- contient souvent la reponse). recherche = texte normalise (Bibliotheque).
+CREATE TABLE IF NOT EXISTS user_notes (
+  oeuvre_id   TEXT PRIMARY KEY,
+  texte       TEXT NOT NULL,
+  recherche   TEXT,
+  modifie_le  TEXT
+);
+
 -- Ops recues d'une entite que cette version ne connait pas (appareil plus
 -- recent) : gardees telles quelles, appliquees quand une mise a jour de l'appli
 -- apprend l'entite (synchro/etat.js preparer). Sinon elles seraient perdues :
@@ -456,11 +466,21 @@ function clausesTexte(texte, colRecherche = 'recherche', colRef = 'ref') {
  * parCategorie. soustractif=false -> l'oeuvre porte AU MOINS UN des tags ;
  * soustractif=true -> elle les porte TOUS.
  */
-function chercher({ texte = '', categories = null, soustractif = false, limite = 200 } = {}) {
+function chercher({ texte = '', categories = null, soustractif = false, limite = 200, avecNote = false } = {}) {
   const { normaliser } = require('./masques');
   let sql = 'SELECT * FROM oeuvres_effectives WHERE 1 = 1';
-  const { sql: cs, params } = clausesTexte(texte);
-  for (const c of cs) sql += ' AND ' + c;
+  // Chaque mot doit apparaitre dans la tuile OU dans sa note personnelle.
+  const { sql: cs, params: p0 } = clausesTexte(texte);
+  const params = [];
+  let q = 0;
+  for (const c of cs) {
+    const k = c.split('?').length - 1;          // 1 parametre (mot) ou 2 (nombre : texte + numero)
+    const mot = p0.slice(q, q + k);
+    sql += ` AND (${c} OR id IN (SELECT oeuvre_id FROM user_notes WHERE (' ' || recherche) LIKE ?))`;
+    params.push(...mot, mot[0]);                 // mot[0] = '% <mot>%' : debut de mot dans la note
+    q += k;
+  }
+  if (avecNote) sql += ' AND id IN (SELECT oeuvre_id FROM user_notes)';
   sql += ' ORDER BY ref';
   let rows = instance().prepare(sql).all(...params);
 
@@ -537,6 +557,11 @@ function parTagUtilisateur(tag, texte = '') {
  * Oeuvres (id) portant au moins un conflit de synchro ouvert : pastille
  * « conflit » sur leurs cartes et dans l'editeur.
  */
+/** Ids des tuiles qui ont une note personnelle (pastille des cartes, bouton de la tuile). */
+function oeuvresAvecNote() {
+  return new Set(instance().prepare('SELECT oeuvre_id FROM user_notes').all().map((r) => r.oeuvre_id));
+}
+
 function oeuvresEnConflit() {
   return new Set(instance().prepare('SELECT DISTINCT cle FROM conflits WHERE resolu = 0').all().map((r) => r.cle));
 }
@@ -589,7 +614,7 @@ function definirEtatSync(cle, valeur) {
 }
 
 module.exports = {
-  ouvrir, surOuverture, instance, fermer, exporterVers, migrer, reconstruireVue, oeuvresEnConflit, SCHEMA_PACK, SCHEMA_USER,
+  ouvrir, surOuverture, instance, fermer, exporterVers, migrer, reconstruireVue, oeuvresEnConflit, oeuvresAvecNote, SCHEMA_PACK, SCHEMA_USER,
   CHAMPS_TXT,
   compterOeuvres, oeuvre, packMeta, chercher, parCategorie, parNumero,
   tagsDe, basculerTag, parTagUtilisateur, comptesTags, effacerTousLesTags,

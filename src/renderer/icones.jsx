@@ -160,3 +160,11 @@ export const Loupe = ({ t = 19 }) => (
     <path d="m20 20-4.2-4.2" />
   </svg>
 );
+
+export const Note = ({ t = 19 }) => (
+  <svg {...base(t)}>
+    <path d="M5 3.5h10.5L19 7v13.5H5Z" />
+    <path d="M15 3.5V7.5h4" />
+    <path d="M8.5 11.5h7M8.5 15h7M8.5 18h4" />
+  </svg>
+);

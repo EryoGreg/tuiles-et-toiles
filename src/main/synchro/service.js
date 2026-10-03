@@ -533,12 +533,13 @@ function listeConflits() {
     correction: c.correction, ancienPack: c.ancienPack, nouveauPack: c.nouveauPack
   }));
   return pack.concat(etat.conflits().map((c) => {
-    const o = db.oeuvre(c.cle);
+    const o = db.oeuvre(c.cle) || db.instance().prepare('SELECT * FROM pack.oeuvres WHERE id = ?').get(c.cle);
     const l = c.entite === 'locale' ? etat.lignes('locale', c.cle) : {};
     const titre = (o && o.titre) || (l.titre && l.titre.valeur) || '(sans titre)';
     const ref = (o && o.ref) || (l.ref_local && l.ref_local.valeur) || null;
     const base = {
-      id: c.id, entite: c.entite, cle: c.cle, champ: c.champ, libelle: LIBELLES[c.champ] || c.champ,
+      id: c.id, entite: c.entite, cle: c.cle, champ: c.champ,
+      libelle: c.entite === 'note' ? 'Ma note' : LIBELLES[c.champ] || c.champ,
       oeuvre: { titre, ref, locale: c.entite === 'locale' }, detecteLe: c.detecte_le
     };
     if (c.entite === 'locale' && c.champ === '_existe') {

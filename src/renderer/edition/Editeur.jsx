@@ -61,6 +61,13 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const imageInitiale = initial.image;
 
   const [champs, setChamps] = useState(initial);
+  // Mes notes : a part des champs de la tuile (jamais au tirage, hors masques).
+  const [note, setNote] = useState('');
+  const [noteInitiale, setNoteInitiale] = useState('');
+  useEffect(() => {
+    if (mode !== 'modifier') return;
+    window.api.notes.lire(tuile.id).then((r) => { setNote(r.texte || ''); setNoteInitiale(r.texte || ''); });
+  }, [mode, tuile && tuile.id]);
   const [imgInfo, setImgInfo] = useState(null);
   const [imgErreur, setImgErreur] = useState(null);
   const [imgEnCours, setImgEnCours] = useState(false);
@@ -116,7 +123,8 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
 
   const set = (c) => (e) => setChamps((x) => ({ ...x, [c]: e.target.value }));
 
-  const dirty = !memeChamps(champs, initial);
+  const noteChangee = note.replace(/\s+$/, '') !== noteInitiale;
+  const dirty = !memeChamps(champs, initial) || noteChangee;
   const peutValider = mode === 'modifier'
     ? dirty
     : (champs.titre.trim().length > 0 || champs.image.trim().length > 0);
@@ -190,9 +198,16 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
     if (!peutValider || enCours) return;
     setEnCours(true);
     try {
-      onFini(mode === 'modifier'
-        ? await window.api.edition.modifier(tuile.id, champs)
-        : await window.api.edition.creer(champs));
+      let r;
+      if (mode === 'modifier') {
+        r = !memeChamps(champs, initial)
+          ? await window.api.edition.modifier(tuile.id, champs)
+          : { id: tuile.id, ref: tuile.ref };   // seule la note a change
+      } else {
+        r = await window.api.edition.creer(champs);
+      }
+      if (noteChangee && r && r.id && !r.erreur) await window.api.notes.ecrire(r.id, note);
+      onFini(r);
     } catch (e) {
       window.api.evt('edition', mode + '-exception', { id: tuile && tuile.id, message: String(e && e.message || e) }, 'ERREUR');
       setEnCours(false);
@@ -296,6 +311,16 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
 
               <ChampEdit etiquette="Tags" v={champs.tags} onChange={set('tags')}
                 placeholder="séparés par des virgules" />
+
+              <div className="champ champ-description champ-note">
+                <div className="etiquette"><I.Note t={12} /> Ma note — personnelle, jamais affichée au tirage</div>
+                <textarea
+                  className="editeur-textarea"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Un moyen mnémotechnique, une confusion à éviter, un lien avec une autre œuvre…"
+                />
+              </div>
             </div>
           </div>
         </div>

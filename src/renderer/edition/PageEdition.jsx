@@ -37,7 +37,7 @@ export function PageEdition({ onEtat }) {
   const finiModif = (r) => {
     setMode('liste');
     if (onEtat) onEtat();
-    notifier(`#${r.ref} enregistrée${r.masques === 0 ? ' — 0 masque valide' : ` (${r.masques} masques)`}.`);
+    notifier(`#${r.ref} enregistrée${r.masques == null ? '' : r.masques === 0 ? ' — 0 masque valide' : ` (${r.masques} masques)`}.`);
   };
   const ouvrir = async (o) => {
     const t = await window.api.edition.tuile(o.id);

@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('api', {
   // Journal structure : domaine, evenement, details, niveau (DEBUG/INFO/WARN/ERREUR).
   evt: (domaine, quoi, donnees, niveau) => ipcRenderer.send('journal:evt', domaine, quoi, donnees, niveau),
 
+  // Mes notes : note personnelle d'une tuile (jamais au tirage), synchronisee.
+  notes: {
+    lire: (id) => ipcRenderer.invoke('notes:lire', id),
+    ecrire: (id, texte) => ipcRenderer.invoke('notes:ecrire', { id, texte })
+  },
   // Lecture amelioree par Claude : cle API (jamais renvoyee en clair), gamme de modele.
   ia: {
     etat: () => ipcRenderer.invoke('ia:etat'),

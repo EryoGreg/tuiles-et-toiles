@@ -101,6 +101,7 @@ export function direChangements(s, images) {
   n('marques', 'marque', 'marques');
   n('archives', 'archivage', 'archivages');
   n('revisions', 'note de révision', 'notes de révision');
+  n('notes', 'note personnelle', 'notes personnelles');
   if (images) l.push(images + ' image' + (images > 1 ? 's' : ''));
   return l.join(', ');
 }
