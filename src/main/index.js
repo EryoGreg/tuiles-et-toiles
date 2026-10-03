@@ -563,11 +563,11 @@ gerer('copie:ouvrir', async () => {
 gerer('drive:etat', () => drive.etat());
 gerer('drive:connecter', async () => {
   const r = await drive.connecter();
-  if (r.connecte) db.definirEtatSync('drive_pause_auto', '');
+  if (r.connecte) synchro.sessionRetablie();
   journal.evt('drive', 'connecter', { connecte: !!r.connecte, erreur: r.erreur || null });
   return { ...drive.etat(), ...r };
 });
-gerer('drive:deconnecter', () => { drive.deconnecter(); journal.evt('drive', 'deconnecter'); return drive.etat(); });
+gerer('drive:deconnecter', () => { drive.deconnecter(); synchro.sessionRetablie(); journal.evt('drive', 'deconnecter'); return drive.etat(); });
 // Jeton refuse par Google en cours de synchro : drive.js relance le flux
 // OAuth ; le rendu l'apprend par la progression de la synchro (etape reconnexion).
 const surReconnexionDrive = () => () => journal.evt('drive', 'reconnexion-auto');
@@ -586,27 +586,21 @@ const synchroAuto = creerAuto({
     const c = [];
     // Appareil neuf en attente de « remplace-t-il un autre ? » : rien d'automatique.
     if (synchro.decisionEnAttente()) return c;
-    if (drive.etat().connecte && !db.etatSync('drive_pause_auto')) c.push('drive');
+    if (drive.etat().connecte && !synchro.sessionExpiree()) c.push('drive');
     const dossier = etat.appareil().dossier_synchro;
     if (dossier && fs.existsSync(dossier)) c.push('dossier');
     return c;
   },
-  lancer: async (cible) => {
-    const r = cible === 'drive'
-      ? await synchro.synchroniserDrive(null, null, { auto: true })
-      : await synchro.synchroniser({ auto: true });
-    if (r && r.jetonMort) {
-      db.definirEtatSync('drive_pause_auto', new Date().toISOString());
-      journal.avertir('synchro', 'auto-drive-pause', { raison: 'session Google expiree' });
-    }
-    return r;
-  },
+  // Session refusee : service.noterSession la garde (synchro auto Drive en pause).
+  lancer: (cible) => (cible === 'drive'
+    ? synchro.synchroniserDrive(null, null, { auto: true })
+    : synchro.synchroniser({ auto: true })),
   aEnvoyer: () => db.instance().prepare('SELECT COUNT(*) n FROM changements WHERE pousse=0').get().n,
   conflitsOuverts: () => db.instance().prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n,
   journal
 });
 function etatAuto() {
-  return { actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: db.etatSync('drive_pause_auto') || null };
+  return { actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: synchro.sessionExpiree() };
 }
 
 // Synchro par dossier partage (E2c) : fusion ligne a ligne, rien n'est ecrase.
@@ -624,16 +618,8 @@ gerer('synchro:choisirDossier', async () => {
 gerer('synchro:oublier', () => { journal.evt('synchro', 'oublier-dossier'); return synchro.oublierDossier(); });
 // Bilan detaille journalise par synchro/service.js (domaine synchro).
 gerer('synchro:synchroniser', () => synchro.synchroniser());
-gerer('synchro:drive', async (e) => {
-  const r = await synchro.synchroniserDrive(surReconnexionDrive(e));
-  // Synchro manuelle reussie : la synchro auto Drive reprend (pause posee par
-  // une session expiree, voir synchroAuto).
-  if (!r.erreur && db.etatSync('drive_pause_auto')) {
-    db.definirEtatSync('drive_pause_auto', '');
-    journal.evt('synchro', 'auto-drive-reprise');
-  }
-  return r;
-});
+// Session expiree notee / oubliee par service.noterSession (auto comme manuelle).
+gerer('synchro:drive', (e) => synchro.synchroniserDrive(surReconnexionDrive(e)));
 
 // Mise a jour : verification (au lancement si maj_auto, ou bouton Options),
 // telechargement avec progression, puis installation = relance sur le nouvel exe.

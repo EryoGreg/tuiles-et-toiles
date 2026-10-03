@@ -2062,9 +2062,13 @@ function Options({ etat, onEtat, aller }) {
     const r = await window.api.drive.connecter();
     setDrvOccupe(false); setDrvAction(null);
     setDrv(r);
+    setSyn(await window.api.synchro.etat());
     if (r.erreur) drvFlash({ erreur: r.erreur });
   };
-  const drvDeconnecter = async () => { setDrv(await window.api.drive.deconnecter()); };
+  const drvDeconnecter = async () => {
+    setDrv(await window.api.drive.deconnecter());
+    setSyn(await window.api.synchro.etat());
+  };
 
   // Progression de la synchro, tenue par le processus principal : une page
   // (re)ouverte pendant une synchro l'affiche aussitot, et le bilan arrive
@@ -2174,10 +2178,13 @@ function Options({ etat, onEtat, aller }) {
     setDrvMsg(null);
     const r = await window.api.synchro.drive();
     setDrv(await window.api.drive.etat());
+    setSyn(await window.api.synchro.etat());
     annoncer(r, 'drive');
   };
   const syncDrive = prog.enCours && prog.par === 'drive';
   const syncDossier = prog.enCours && prog.par === 'dossier';
+  // Session Google refusee (date) : affichee a la place de « Connecte » (service.noterSession).
+  const sessionExpiree = (syn && syn.sessionExpiree) || null;
 
   useEffect(() => { window.api.raccourcis.etat().then(setRaccourcis); }, []);
 
@@ -2312,8 +2319,11 @@ function Options({ etat, onEtat, aller }) {
 
       <div className="filet" />
 
+      {/* Synchronisation : un seul etat affiche (connecte / session expiree / non
+          connecte), puis le reglage automatique, les appareils et (PC) le dossier
+          partage replie. */}
       <section>
-        <div className="etiquette">Google Drive</div>
+        <div className="etiquette">Synchronisation</div>
         {!drv ? (
           <div className="options-note">…</div>
         ) : !drv.configure ? (
@@ -2322,51 +2332,62 @@ function Options({ etat, onEtat, aller }) {
           </div>
         ) : !drv.connecte ? (
           <>
+            <div className="synchro-etat"><span>Non connecté à Google Drive.</span></div>
             <button className="bouton-neutre" onClick={drvConnecter} disabled={drvOccupe}>
               <I.Nuage t={16} /> {drvOccupe ? 'Connexion…' : 'Connecter Google Drive'}
             </button>
             <div className="options-note">
-              Ouvre le navigateur pour autoriser l’accès. L’application ne voit que le
-              dossier « Tuiles et Toiles » qu’elle crée dans ton Drive — rien d’autre.
+              Tes tuiles, marques et corrections passent d’un appareil à l’autre par ton Google
+              Drive. {SUR_MOBILE ? 'Choisis ton compte Google' : 'Ouvre le navigateur pour autoriser l’accès'} :
+              l’application ne voit que le dossier « Tuiles et Toiles » qu’elle crée dans ton
+              Drive — rien d’autre.
             </div>
           </>
         ) : (
           <>
+            {sessionExpiree ? (
+              <div className="synchro-etat alerte">
+                <span>
+                  <strong>Session Google expirée</strong> (depuis le {new Date(sessionExpiree).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}) :
+                  la synchro est en pause. Reconnecte {drv.email || 'ton compte Google'}.
+                </span>
+              </div>
+            ) : (
+              <div className="synchro-etat ok">
+                <I.Coche t={14} />
+                <span>
+                  Connecté à Google Drive : {drv.email || 'compte Google'}.{' '}
+                  {syn && syn.derniereDrive
+                    ? 'Dernière synchro le ' + new Date(syn.derniereDrive.le).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) + '.'
+                    : 'Jamais synchronisé depuis cet appareil.'}
+                </span>
+              </div>
+            )}
             <div className="choix-raccourcis">
-              <button className="bouton-neutre" onClick={drvSynchroniser} disabled={drvOccupe || prog.enCours}>
-                <I.Echange t={16} /> {syncDrive ? 'Synchro en cours…' : 'Synchroniser'}
+              <button className={sessionExpiree ? 'bouton-valide' : 'bouton-neutre'} onClick={drvSynchroniser} disabled={drvOccupe || prog.enCours}>
+                <I.Echange t={16} /> {syncDrive ? 'Synchro en cours…' : sessionExpiree ? 'Reconnecter et synchroniser' : 'Synchroniser'}
               </button>
               <button className="bouton-neutre" onClick={drvDeconnecter} disabled={drvOccupe || prog.enCours}>
                 <I.Croix t={14} /> Déconnecter
               </button>
             </div>
-            <div className="options-note">
-              Connecté : {drv.email || 'compte Google'}.{' '}
-              {syn && syn.derniereDrive
-                ? 'Dernière synchro le ' + new Date(syn.derniereDrive.le).toLocaleString('fr-FR') + '.'
-                : 'Jamais synchronisé depuis ce poste.'}
-              {syn && syn.conflits ? ' ' + syn.conflits + ' conflit(s) à trancher.' : ''}
-            </div>
+            {syn && syn.conflits > 0 && (
+              <div className="options-note">{syn.conflits} conflit(s) à trancher.</div>
+            )}
             {!drvMsg && syn && syn.derniereDrive && (
               <div className="options-note">Dernière fois : {phraseBilan(syn.derniereDrive)}</div>
             )}
-            {!drvMsg && syn && syn.echec && syn.echec.par === 'drive' && (
+            {!drvMsg && syn && syn.echec && syn.echec.par === 'drive' && syn.echec.type !== 'session' && (
               <div className="options-note" style={{ color: syn.echec.type === 'reseau' ? undefined : 'var(--revoir)' }}>
                 Dernier échec{syn.echec.auto ? ' (synchro automatique)' : ''}, le {new Date(syn.echec.le).toLocaleString('fr-FR')} : {syn.echec.libelle}.
               </div>
             )}
-            <div className="options-note">
-              <strong>Synchroniser</strong> envoie les changements faits sur cet appareil et
-              récupère ceux de tes autres appareils. Rien n’est écrasé : chaque modification
-              est fusionnée. Si une même tuile a été modifiée des deux côtés, la version la plus
-              récente s’affiche et l’autre t’est proposée dans « Conflits ».
-            </div>
           </>
         )}
         {drvAction && (
           <div className="drive-encours">
             <span className="drive-pastille" />
-            Connexion à Google Drive — autorise l’accès dans le navigateur…
+            Connexion à Google Drive — autorise l’accès {SUR_MOBILE ? 'à l’écran' : 'dans le navigateur'}…
           </div>
         )}
         {syncDrive && <ProgressionSynchro p={prog} titre="Synchro avec Google Drive" />}
@@ -2376,6 +2397,57 @@ function Options({ etat, onEtat, aller }) {
         )}
         {drvMsg && drvMsg.erreur && (
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{drvMsg.erreur}</div>
+        )}
+
+        {syn && drv && (drv.connecte || syn.dossier) && (
+          <>
+            <div className="sous-etiquette">Automatique</div>
+            <div className="choix-raccourcis">
+              <button
+                className={'raccourci-bouton' + (syn.auto && syn.auto.actif ? ' pose' : '')}
+                onClick={async () => {
+                  await window.api.reglages.definir('synchro_auto', syn.auto && syn.auto.actif ? '0' : '1');
+                  setSyn(await window.api.synchro.etat());
+                }}
+              >
+                {syn.auto && syn.auto.actif ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
+                Synchroniser automatiquement
+              </button>
+              {syn.auto && syn.auto.mobile && (
+                <button
+                  className={'raccourci-bouton' + (syn.auto.wifiSeulement ? ' pose' : '')}
+                  onClick={async () => {
+                    await window.api.reglages.definir('synchro_wifi', syn.auto.wifiSeulement ? '0' : '1');
+                    setSyn(await window.api.synchro.etat());
+                  }}
+                >
+                  {syn.auto.wifiSeulement ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
+                  Seulement en Wi-Fi
+                </button>
+              )}
+            </div>
+            {sessionExpiree && drv.connecte && syn.auto && syn.auto.actif && (
+              <div className="options-note" style={{ color: 'var(--revoir)' }}>
+                En pause tant que la session Google est expirée (voir plus haut).
+              </div>
+            )}
+            {syn.auto && syn.auto.mobile && syn.auto.wifiSeulement && !syn.auto.wifi && (
+              <div className="auto-avis">
+                <span>En données mobiles : la synchro automatique attend le Wi-Fi. Tu peux synchroniser maintenant quand même.</span>
+                {drv.connecte && !sessionExpiree && (
+                  <button className="bouton-neutre" onClick={drvSynchroniser} disabled={syncDrive}>
+                    <I.Nuage t={14} /> Synchroniser maintenant
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="options-note">
+              Au lancement, une vingtaine de secondes après chaque modification, toutes les 15 minutes
+              et à la fermeture. Rien n’est écrasé : chaque modification est fusionnée ; si une tuile a
+              été modifiée des deux côtés, la plus récente s’affiche et l’autre attend dans « Conflits ».
+              Sans connexion, elle réessaie plus tard ; elle ne demande jamais de reconnexion toute seule.
+            </div>
+          </>
         )}
       </section>
 
@@ -2394,67 +2466,12 @@ function Options({ etat, onEtat, aller }) {
 
       {syn && drv && (drv.connecte || syn.dossier) && <SectionAppareils syn={syn} drv={drv} onSyn={setSyn} />}
 
-      {syn && drv && (drv.connecte || syn.dossier) && (
-        <>
-          <div className="filet" />
-          <section>
-            <div className="etiquette">Synchro automatique</div>
-            <button
-              className={'raccourci-bouton' + (syn.auto && syn.auto.actif ? ' pose' : '')}
-              onClick={async () => {
-                await window.api.reglages.definir('synchro_auto', syn.auto && syn.auto.actif ? '0' : '1');
-                setSyn(await window.api.synchro.etat());
-              }}
-            >
-              {syn.auto && syn.auto.actif ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
-              Synchroniser automatiquement
-            </button>
-            {syn.auto && syn.auto.mobile && (
-              <button
-                className={'raccourci-bouton' + (syn.auto.wifiSeulement ? ' pose' : '')}
-                onClick={async () => {
-                  await window.api.reglages.definir('synchro_wifi', syn.auto.wifiSeulement ? '0' : '1');
-                  setSyn(await window.api.synchro.etat());
-                }}
-              >
-                {syn.auto.wifiSeulement ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
-                Seulement en Wi-Fi
-              </button>
-            )}
-            {syn.auto && syn.auto.mobile && syn.auto.wifiSeulement && !syn.auto.wifi && (
-              <div className="auto-avis">
-                <span>En données mobiles : la synchro automatique attend le Wi-Fi. Tu peux synchroniser maintenant quand même.</span>
-                {drv.connecte && (
-                  <button className="bouton-neutre" onClick={drvSynchroniser} disabled={syncDrive}>
-                    <I.Nuage t={14} /> Synchroniser maintenant
-                  </button>
-                )}
-              </div>
-            )}
-            {syn.auto && syn.auto.pauseDrive && drv.connecte && (
-              <div className="auto-avis alerte">
-                <span>Session Google expirée : la synchro automatique avec Drive est en pause jusqu’à une synchro faite à la main.</span>
-                <button className="bouton-neutre" onClick={drvSynchroniser} disabled={syncDrive}>
-                  <I.Nuage t={14} /> Synchroniser et autoriser l’accès
-                </button>
-              </div>
-            )}
-            <div className="options-note">
-              Au lancement, une vingtaine de secondes après chaque modification, toutes les 15 minutes
-              et à la fermeture de l’appli s’il reste des changements à envoyer. Silencieuse : sans
-              connexion, elle réessaie plus tard ; elle n’ouvre jamais le navigateur toute seule.
-            </div>
-          </section>
-        </>
-      )}
-
       {/* Dossier partage et sauvegarde .zip : propres au PC (dialogues de fichiers). */}
       {etat.forme !== 'mobile' && (
       <>
-      <div className="filet" />
-
+      <details className="options-replie" open={syn && syn.dossier ? true : undefined}>
+        <summary>Autre méthode : dossier partagé (clé USB, OneDrive…)</summary>
       <section>
-        <div className="etiquette">Synchro entre appareils</div>
         {!syn ? (
           <div className="options-note">Chargement…</div>
         ) : !syn.dossier ? (
@@ -2509,6 +2526,7 @@ function Options({ etat, onEtat, aller }) {
           <div className="options-note" style={{ color: 'var(--revoir)' }}>{synMsg.erreur}</div>
         )}
       </section>
+      </details>
 
       <div className="filet" />
 

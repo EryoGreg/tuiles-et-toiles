@@ -194,10 +194,9 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   synchro.configurer({ dossierUser: '/data', imagesLocales: dossierImagesLocales, surProgression: (p) => emettre('synchro:progression', p) });
   const auto = creerAuto({
     actif: () => db.reglage('synchro_auto', '1') === '1',
-    cibles: () => (!synchro.decisionEnAttente() && drive.etat().connecte && !db.etatSync('drive_pause_auto') ? ['drive'] : []),
+    cibles: () => (!synchro.decisionEnAttente() && drive.etat().connecte && !synchro.sessionExpiree() ? ['drive'] : []),
     lancer: async () => {
       const r = await synchro.synchroniserDrive(null, null, { auto: true });
-      if (r && r.jetonMort) db.definirEtatSync('drive_pause_auto', new Date().toISOString());
       surEcriture();
       return r;
     },
@@ -208,23 +207,19 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
     journal
   });
   const etatAuto = () => ({
-    actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: db.etatSync('drive_pause_auto') || null,
+    actif: db.reglage('synchro_auto', '1') === '1', pauseDrive: synchro.sessionExpiree(),
     wifiSeulement: db.reglage('synchro_wifi', '1') === '1', wifi: reseau.wifi(), mobile: true
   });
 
   g('drive:etat', () => drive.etat());
   g('drive:connecter', async () => {
     const r = await drive.connecter();
-    if (r.connecte) db.definirEtatSync('drive_pause_auto', '');
+    if (r.connecte) synchro.sessionRetablie();
     return { ...drive.etat(), ...r };
   });
-  g('drive:deconnecter', () => { drive.deconnecter(); return drive.etat(); });
+  g('drive:deconnecter', () => { drive.deconnecter(); synchro.sessionRetablie(); return drive.etat(); });
   g('synchro:etat', () => ({ ...synchro.etat(), auto: etatAuto() }));
-  g('synchro:drive', async () => {
-    const r = await synchro.synchroniserDrive(() => journal.evt('drive', 'reconnexion-auto'));
-    if (!r.erreur && db.etatSync('drive_pause_auto')) db.definirEtatSync('drive_pause_auto', '');
-    return r;
-  });
+  g('synchro:drive', () => synchro.synchroniserDrive(() => journal.evt('drive', 'reconnexion-auto')));
   g('appareils:liste', () => synchro.listeAppareils());
   g('appareils:retirer', ({ id, retirer }) => synchro.retirerAppareil(id, retirer !== false));
   g('appareils:renommer', (nom) => synchro.renommer(nom));

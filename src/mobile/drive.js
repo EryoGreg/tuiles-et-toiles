@@ -10,8 +10,13 @@
  * client « Web » dont l'identifiant est passe a initialize (webClientId).
  *
  * Pas de refresh token cote appli : le systeme garde l'autorisation, un jeton
- * d'acces (1 h) est redemande sans rien afficher (getAuthorizationCode). S'il
- * faut de nouveau un choix de compte, c'est connecter() (jamais en auto).
+ * d'acces (1 h) est redemande sans rien afficher par le module natif JetonDrive
+ * (JetonDrivePlugin.java, AuthorizationClient des services Google). PAS par
+ * SocialLogin.getAuthorizationCode : il exige un jeton d'identite valide, qui
+ * expire 1 h apres la connexion (« User is not logged in ») -> jusqu'en 0.3.11
+ * la synchro auto mobile se croyait deconnectee une heure apres chaque
+ * connexion. S'il faut de nouveau un choix de compte, c'est connecter()
+ * (jamais en auto).
  *
  * Les appels Drive eux-memes : src/main/drive-api.js, commun avec le PC.
  */
@@ -21,15 +26,31 @@ const journal = require('../main/journal');
 const { SocialLogin } = require('@capgo/capacitor-social-login');
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.file', 'email', 'profile'];
-const FICHIER = '/data/drive.json';   // { connecte, email } : pas de secret
+let FICHIER = '/data/drive.json';   // { connecte, email } : pas de secret
 
 let cfg = { webClientId: null };
+let jetonNatif = null;   // tests : remplace le module natif JetonDrive
 let initialise = null;
 let jeton = null;   // { token, expire }
 
 const { api } = require('../main/drive-api')({ fetch: (u, o) => fetch(u, o), journal });
 
-function configurer(c) { cfg = { ...cfg, ...c }; }
+function configurer(c) {
+  const { fichier, jetonNatif: jn, ...reste } = c || {};
+  if (fichier) FICHIER = fichier;
+  if (jn !== undefined) jetonNatif = jn;
+  cfg = { ...cfg, ...reste };
+}
+
+/** Module natif JetonDrive : (email) -> Promise<{ accessToken }>, ou null hors Android. */
+function natif() {
+  if (jetonNatif) return jetonNatif;
+  const C = typeof window !== 'undefined' && window.Capacitor;
+  if (!C || !C.isNativePlatform || !C.isNativePlatform()) return null;
+  const P = C.registerPlugin('JetonDrive');
+  jetonNatif = (email) => P.jeton({ email: email || '' });
+  return jetonNatif;
+}
 
 function lire() { try { return JSON.parse(fs.readFileSync(FICHIER, 'utf8')); } catch { return null; } }
 
@@ -83,10 +104,33 @@ function erreurJetonMort(detail) {
   return e;
 }
 
+/** Erreur reseau des services Google (ApiException 7 : NETWORK_ERROR). */
+function erreurReseau(e) {
+  const m = String(e && e.message || e);
+  return /^7:|network|timeout|unavailable/i.test(m);
+}
+
 /** Jeton d'acces, redemande sans interface si besoin. */
 const oauth = {
   async getAccessToken() {
     if (jeton && jeton.expire > Date.now()) return { token: jeton.token };
+    const n = natif();
+    if (n) {
+      const t0 = Date.now();
+      try {
+        const r = await n(etat().email);
+        if (!r || !r.accessToken) throw Object.assign(new Error('jeton vide'), { code: 'VIDE' });
+        memoriser(r.accessToken);
+        journal.evt('drive', 'jeton-natif', { ms: Date.now() - t0 }, 'DEBUG');
+        return { token: r.accessToken };
+      } catch (e) {
+        const code = e && e.code;
+        journal.avertir('drive', 'jeton-natif-refuse', { code: code || null, erreur: String(e && e.message || e), ms: Date.now() - t0 });
+        if (code === 'INTERACTION') throw erreurJetonMort('accès Drive à autoriser de nouveau');
+        if (erreurReseau(e)) throw new Error('Jeton Google hors ligne (' + String(e && e.message || e) + ').');
+        // Autre echec du module natif : ancien chemin en secours.
+      }
+    }
     await initialiser();
     let r;
     try { r = await SocialLogin.getAuthorizationCode({ provider: 'google' }); }
@@ -119,4 +163,4 @@ async function avecReconnexion(op, surReconnexion, surReconnecte, { sansReconnex
   catch (e) { journal.erreur('drive', 'operation-echec-apres-reconnexion', e); return { erreur: e.message || String(e), reconnecte: true }; }
 }
 
-module.exports = { configurer, etat, connecter, deconnecter, api, avecReconnexion };
+module.exports = { configurer, etat, connecter, deconnecter, api, avecReconnexion, oauth };

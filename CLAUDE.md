@@ -233,6 +233,16 @@ Electron + React + SQLite. Windows, mono-utilisateur.
       (Options → section Google Drive), effacé au succès suivant ; synchro auto en échec → bandeau
       global (sauf `reseau` : règle 1, silencieux).
     - Tests : `tests/synchro-rapide.test.js` (faux Drive aux appels comptés, aussi par HTTP).
+  - **Session expirée, un seul état (0.3.12)** — `service.noterSession` (appelé par
+    `synchroniserDrive`, auto **et** manuelle) : échec typé `session` → `sync.drive_pause_auto` = date
+    (gardée si déjà posée) ; synchro Drive réussie, `drive:connecter` ou `drive:deconnecter` →
+    `sessionRetablie()`. Exposé `synchro.etat().sessionExpiree` (et `auto.pauseDrive`). Avant, seule la
+    synchro auto le notait et Options affichait « Connecté » à côté d'un encadré « Session expirée ».
+    **Options → Synchronisation** (ex-sections Google Drive + Synchro automatique fusionnées) : bloc
+    d'état unique (`.synchro-etat` : connecté + dernière synchro / **session expirée** + bouton
+    « Reconnecter et synchroniser » / non connecté), puis « Automatique » (`.sous-etiquette`),
+    Appareils, et sur PC le dossier partagé replié (`details.options-replie`, ouvert s'il est utilisé).
+    Tests dans `synchro-rapide.test.js`.
   - **À faire, PC et mobile :**
     - Conflit « MAJ de pack contre correction locale » (`valeur_source`) : à afficher à la
       première mise à jour de pack.
@@ -298,6 +308,13 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   client Android « Tuiles et Toiles - Android (debug) ». `MainActivity.java` implémente
   `ModifiedMainActivityForSocialLoginPlugin` et relaie `onActivityResult` au module : sans ça, le
   module refuse l'autorisation Drive (« You CANNOT use scopes without modifying the main activity »).
+  **Jeton Drive sans interface = module natif `JetonDrivePlugin.java`** (`Identity.getAuthorizationClient
+  ().authorize(drive.file)`, compte de `drive.json`) : jeton neuf tant que l'accès reste accordé ;
+  `hasResolution` → rejet `INTERACTION` (session expirée, jamais d'écran depuis le module) ; ApiException 7
+  → erreur réseau (pas de pause). **Pas `SocialLogin.getAuthorizationCode`** (gardé en secours) : il
+  exige un jeton d'identité valide, qui expire 1 h après la connexion (« User is not logged in ») — jusqu'en
+  0.3.11 la synchro auto mobile se croyait déconnectée une heure après chaque connexion. Test :
+  `tests/mobile-drive.test.js` (modules simulés).
 - **Stockage (vfs)** : chaque fichier en **morceaux de < 60 Ko** dans IndexedDB (clé = `{ mtime,
   taille, n }`, morceaux `clé␀#i`, une transaction par sauvegarde). Au-delà, Chromium range la
   valeur dans un fichier annexe qui peut manquer si l'appli est tuée en pleine écriture →

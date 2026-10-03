@@ -366,6 +366,79 @@ async function tout() {
     assert.equal(service.etat().echec, null);
   });
 
+  console.log('session Google expiree : un seul etat (0.3.12)');
+
+  const jetonMort = (faux) => ({
+    ...faux,
+    lister: async () => { const e = new Error('Session Google expirée (invalid_grant).'); e.jetonMort = true; throw e; },
+    jetonChangements: async () => { const e = new Error('Session Google expirée (invalid_grant).'); e.jetonMort = true; throw e; },
+    changements: async () => { const e = new Error('Session Google expirée (invalid_grant).'); e.jetonMort = true; throw e; }
+  });
+
+  await test('synchro AUTO refusee (jeton mort) : session expiree notee, typee « session »', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    assert.equal(service.sessionExpiree(), null);
+    const r = await auto(jetonMort(faux));
+    assert.equal(r.typeErreur, 'session');
+    assert.ok(service.sessionExpiree(), 'date notee');
+    assert.equal(service.etat().sessionExpiree, service.sessionExpiree());
+  });
+
+  await test('synchro MANUELLE refusee : notee aussi (avant : seulement en auto -> « Connecte » affiche a tort)', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    await manuelle(jetonMort(faux));
+    assert.ok(service.sessionExpiree());
+  });
+
+  await test('date de la premiere expiration gardee, puis effacee par une synchro reussie', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    await auto(jetonMort(faux));
+    const d1 = service.sessionExpiree();
+    await new Promise((ok) => setTimeout(ok, 5));
+    await manuelle(jetonMort(faux));
+    assert.equal(service.sessionExpiree(), d1);
+    assert.ok(!(await manuelle(faux)).erreur);
+    assert.equal(service.sessionExpiree(), null);
+    assert.equal(service.etat().sessionExpiree, null);
+  });
+
+  await test('autres echecs (reseau, panne, synchro deja en cours) : la session expiree reste', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    await auto(jetonMort(faux));
+    const d1 = service.sessionExpiree();
+    const panne = async () => { throw new Error('fetch failed'); };
+    const horsLigne = { ...faux, lister: panne, jetonChangements: panne, changements: panne };
+    assert.equal((await manuelle(horsLigne)).typeErreur, 'reseau');
+    assert.equal(service.sessionExpiree(), d1);
+    const [r1, r2] = await Promise.all([manuelle(faux), manuelle(faux)]);
+    assert.match(r2.erreur, /déjà en cours/);
+    assert.ok(!r1.erreur);
+    assert.equal(service.sessionExpiree(), null, 'la synchro reussie l\'efface');
+  });
+
+  await test('erreur reseau seule : jamais « session expiree » (pas de pause de la synchro auto)', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    const panne = async () => { throw new Error('fetch failed'); };
+    const horsLigne = { ...faux, lister: panne, jetonChangements: panne, changements: panne };
+    await auto(horsLigne);
+    assert.equal(service.sessionExpiree(), null);
+  });
+
+  await test('connexion refaite (sessionRetablie) : etat efface', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    await auto(jetonMort(faux));
+    service.sessionRetablie();
+    assert.equal(service.sessionExpiree(), null);
+    service.sessionRetablie();   // sans effet si rien a effacer
+    assert.equal(service.sessionExpiree(), null);
+  });
+
   await test('decision « remplace-t-il un autre ? » : pas un echec', async () => {
     viderCaches();
     const faux = creerFauxDrive();

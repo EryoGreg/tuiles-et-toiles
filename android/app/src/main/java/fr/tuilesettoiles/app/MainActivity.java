@@ -26,6 +26,7 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         registerPlugin(MiseAJourPlugin.class);
         registerPlugin(LectureTextePlugin.class);
         registerPlugin(IdentitePlugin.class);
+        registerPlugin(JetonDrivePlugin.class);
         super.onCreate(savedInstanceState);
     }
 

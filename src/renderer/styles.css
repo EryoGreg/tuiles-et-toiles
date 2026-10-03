@@ -1224,6 +1224,19 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .auto-avis { background: var(--surface-2); border-color: var(--trait); color: var(--attenue); }
 .auto-avis.alerte { border-color: color-mix(in srgb, var(--revoir) 60%, var(--trait)); color: var(--encre); }
+.sous-etiquette { font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--discret); margin: 22px 0 8px; }
+.synchro-etat {
+  display: flex; align-items: flex-start; gap: 8px; max-width: 520px;
+  padding: 10px 14px; margin: 4px 0 12px; border-radius: 10px; font-size: 13px; line-height: 1.45;
+  background: var(--surface-2); border: 1px solid var(--trait); color: var(--attenue);
+}
+.synchro-etat svg { flex: none; margin-top: 3px; }
+.synchro-etat.ok { color: var(--encre); }
+.synchro-etat.ok svg { color: var(--laiton); }
+.synchro-etat.alerte { border-color: color-mix(in srgb, var(--revoir) 60%, var(--trait)); color: var(--encre); }
+.options-replie { margin: 26px 0 0; }
+.options-replie > summary { cursor: pointer; font-size: 13px; color: var(--attenue); margin-bottom: 12px; }
+.options-replie > summary:hover { color: var(--encre); }
 .decision-bandeau > span, .auto-avis > span { flex: 1 1 260px; }
 .boite-remplacement { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); overflow-y: auto; }
 .remplacement-liste { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }

@@ -112,12 +112,41 @@ function decisionEnAttente() {
   return d && Array.isArray(d.candidats) && etat.appareil().remplace === undefined ? d : null;
 }
 
+/**
+ * Session Google refusee (jeton mort), en synchro auto OU manuelle : etat garde
+ * (`sync.drive_pause_auto` = date) jusqu'a une connexion ou une synchro Drive
+ * reussie. Options l'affiche a la place de « Connecte » ; la synchro auto Drive
+ * attend (jamais de navigateur sans clic).
+ */
+function noterSession(r) {
+  if (!r || r.decisionRequise) return;
+  const avant = db.etatSync('drive_pause_auto');
+  if (r.typeErreur === 'session' || r.jetonMort) {
+    if (!avant) {
+      db.definirEtatSync('drive_pause_auto', new Date().toISOString());
+      journal.avertir('synchro', 'session-expiree', { auto: !!r.auto, detail: r.detail || r.erreur || null });
+    }
+  } else if (!r.erreur && avant) {
+    sessionRetablie();
+  }
+}
+
+/** Connexion Google refaite ou synchro reussie : la session expiree est oubliee. */
+function sessionRetablie() {
+  if (!db.etatSync('drive_pause_auto')) return;
+  db.definirEtatSync('drive_pause_auto', '');
+  journal.evt('synchro', 'session-retablie');
+}
+
+function sessionExpiree() { return db.etatSync('drive_pause_auto') || null; }
+
 function etatSynchro() {
   const a = etat.appareil();
   return {
     dossier: a.dossier_synchro || null,
     appareil: { id: a.id, nom: a.nom, type: a.type || null, prefixe: a.prefixe_ref, inscrit: !!a.inscrit },
     decision: decisionEnAttente(),
+    sessionExpiree: sessionExpiree(),
     // Dernier echec (type + phrase courte), efface a la synchro reussie suivante.
     echec: lire('synchro_echec'),
     derniere: lire('dossier_derniere'),
@@ -357,6 +386,10 @@ function synchroniser({ auto = false } = {}) {
  *   navigateur ouvert sans clic) -> { erreur, jetonMort }
  */
 function synchroniserDrive(surReconnexion, apiTest, { auto = false } = {}) {
+  return synchroniserDrive0(surReconnexion, apiTest, auto).then((r) => { noterSession(r); return r; });
+}
+
+function synchroniserDrive0(surReconnexion, apiTest, auto) {
   return exclusif('drive', async () => {
     const op = async (oauth) => {
       const api = apiTest || drive.api(oauth);
@@ -605,5 +638,5 @@ function resoudre(id, choix) {
 module.exports = {
   configurer, etat: etatSynchro, definirDossier, oublierDossier,
   synchroniser, synchroniserDrive, resoudre, listeConflits, listeAppareils, retirerAppareil, SOUS_DOSSIER,
-  renommer, choisirRemplacement, decisionEnAttente
+  renommer, choisirRemplacement, decisionEnAttente, sessionExpiree, sessionRetablie
 };
