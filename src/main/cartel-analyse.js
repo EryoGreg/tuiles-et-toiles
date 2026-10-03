@@ -31,7 +31,9 @@ const ANNEE = /^-?\d{1,4}(e|er)?\??$/;
 
 /** « Vers 1890 », « 1632 », « Fin IVe – début Ve siècle apr. J.-C », « milieu du XVIe siècle » */
 function estDate(texte) {
-  const t = norm(texte).replace(/[()[\],;:/–—-]/g, ' ').replace(/\bj\s*\.?\s*c\b\.?/g, 'jc');
+  // « IV e » / « v e » : exposant lu comme une lettre isolee (reconnaissance de Windows).
+  const t = norm(texte).replace(/\b([ivxlc]+) (e|er|eme)\b/g, '$1$2')
+    .replace(/[()[\],;:/–—-]/g, ' ').replace(/\bj\s*\.?\s*c\b\.?/g, 'jc');
   const mots = t.split(' ').filter(Boolean);
   if (!mots.length || mots.length > 10) return false;
   let fort = false;
@@ -112,7 +114,9 @@ function joindre(lignes) {
 
 function analyser(entree) {
   const lignes = (entree || []).map((l, i) => ({
-    i, texte: String(l.texte || '').trim(), bloc: l.bloc == null ? i : l.bloc,
+    // « 7. Aristide Maillol » : numero de vitrine colle au debut de la ligne, retire
+    // (une ligne qui n'est QUE le numero reste, role numero).
+    i, texte: String(l.texte || '').trim().replace(/^\d{1,3}[.)]\s+(?=\D)/, ''), bloc: l.bloc == null ? i : l.bloc,
     hauteur: l.hauteur || (l.cadre && l.cadre.h) || 0
   })).filter((l) => l.texte);
   const role = new Map();
@@ -139,6 +143,17 @@ function analyser(entree) {
     if (role.has(l.i)) continue;
     const voisines = lignes.filter((m) => m.bloc === l.bloc && role.get(m.i) === 'texte');
     if (voisines.some((m) => Math.abs(m.hauteur - l.hauteur) <= 0.15 * Math.max(m.hauteur, l.hauteur, 1))) role.set(l.i, 'texte');
+  }
+  // Ligne prise pour une technique dans un paragraphe (« Cette toile est
+  // presentee… », « Somptueuse robe de soie brodee… ») : entouree de lignes de
+  // texte de meme taille, ou longue phrase suivie de texte, elle en fait partie.
+  for (const l of lignes) {
+    if (role.get(l.i) !== 'technique') continue;
+    const av = lignes.find((m) => m.i === l.i - 1), ap = lignes.find((m) => m.i === l.i + 1);
+    const pareil = (m) => m && m.bloc === l.bloc && role.get(m.i) === 'texte'
+      && Math.abs(m.hauteur - l.hauteur) <= 0.2 * Math.max(m.hauteur, l.hauteur, 1);
+    const phrase = l.texte.length >= 45 || /[.!?]$|\. /.test(l.texte);
+    if ((pareil(av) && pareil(ap)) || (phrase && pareil(ap))) role.set(l.i, 'texte');
   }
   // Bloc de 3 lignes ou plus, surtout longues : un paragraphe, meme sans ligne de 48 car.
   const parBloc = new Map();
@@ -194,7 +209,12 @@ function analyser(entree) {
     if (role.has(l.i)) continue;
     const g = groupes[groupes.length - 1];
     const der = g && g[g.length - 1];
-    if (der && der.i === l.i - 1 && der.bloc === l.bloc && Math.abs(der.hauteur - l.hauteur) <= 0.2 * Math.max(der.hauteur, l.hauteur, 1)) g.push(l);
+    // Suite d'un titre sur deux lignes (« …combat des centaures et des » / « lapithes ») :
+    // tolerance plus large si la ligne commence par une minuscule apres une ligne sans
+    // ponctuation finale (sa hauteur mesuree varie avec les lettres hautes / basses).
+    const suite = der && /^[a-zà-ÿ]/.test(l.texte) && !/[.:;!?]$/.test(der.texte);
+    const tol = suite ? 0.35 : 0.2;
+    if (der && der.i === l.i - 1 && der.bloc === l.bloc && Math.abs(der.hauteur - l.hauteur) <= tol * Math.max(der.hauteur, l.hauteur, 1)) g.push(l);
     else groupes.push([l]);
   }
   const taille = (g) => Math.max(...g.map((l) => l.hauteur));

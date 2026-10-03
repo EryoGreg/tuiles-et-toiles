@@ -38,8 +38,13 @@ function ligne(t, x, y, h) {
   });
 
   await test('lignes remises de haut en bas, vides ignorees', () => {
-    const l = cartel.lignesDepuisOcr({ lignes: [ligne('B', 0, 200, 30), { t: '  ', m: [[0, 0, 5, 5]] }, ligne('A', 0, 100, 30), { t: 'sans mots', m: [] }] });
-    assert.deepEqual(l.map((x) => x.texte), ['A', 'B']);
+    const l = cartel.lignesDepuisOcr({ lignes: [ligne('Bas', 0, 200, 30), { t: '  ', m: [[0, 0, 5, 5]] }, ligne('Haut', 0, 100, 30), { t: 'sans mots', m: [] }] });
+    assert.deepEqual(l.map((x) => x.texte), ['Haut', 'Bas']);
+  });
+
+  await test('bruit (taches, pictogrammes) ignore ; numero garde', () => {
+    const l = cartel.lignesDepuisOcr({ lignes: ['i', 'Fi', 'iii', 'o))', '|', '3', '1.', 'Buire', 'Ève', '10'].map((t, k) => ligne(t, 0, k * 60, 30)) });
+    assert.deepEqual(l.map((x) => x.texte), ['3', '1.', 'Buire', 'Ève', '10']);
   });
 
   await test('blocs : paragraphe serre = un bloc ; grand ecart ou taille differente = nouveau bloc', () => {

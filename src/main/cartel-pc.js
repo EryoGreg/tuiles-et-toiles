@@ -67,7 +67,11 @@ function lignesDepuisOcr(brut) {
   const lignes = [];
   for (const l of (brut && brut.lignes) || []) {
     const mots = (l.m || []).filter((m) => Array.isArray(m) && m.length === 4);
-    if (!mots.length || !String(l.t || '').trim()) continue;
+    const t = String(l.t || '').trim();
+    // Taches, pictogrammes et reflets lus comme 1 a 3 lettres (« i », « Fi »,
+    // « iii », « o)) » d'un logo audio) : du bruit — un numero a un chiffre.
+    // Garde les mots courts reels (« Ève », « Job ») : 3 lettres seulement si traits fins.
+    if (!mots.length || !t || bruit(t)) continue;
     const x = Math.min(...mots.map((m) => m[0]));
     const y = Math.min(...mots.map((m) => m[1]));
     const x2 = Math.max(...mots.map((m) => m[0] + m[2]));
@@ -76,9 +80,39 @@ function lignesDepuisOcr(brut) {
     lignes.push({ texte: String(l.t).trim(), cadre: { x, y, l: x2 - x, h: y2 - y }, hauteur });
   }
   lignes.sort((a, b) => a.cadre.y - b.cadre.y || a.cadre.x - b.cadre.x);
+  fusionnerMemeLigne(lignes);
   const nums = blocs(lignes);
   lignes.forEach((l, i) => { l.bloc = nums[i]; });
   return lignes;
+}
+
+/**
+ * Windows coupe parfois une ligne imprimee en deux au-dela d'un grand blanc
+ * (« Francois Froment Meurice » | « (1804-1874) ») : deux lignes sur la meme
+ * rangee (recouvrement vertical >= 60 %), de taille voisine, la seconde a
+ * droite, sont rejointes. Les colonnes « 1855 … Huile sur toile » (blanc de plus
+ * de 6 hauteurs) restent separees : ce sont deux informations.
+ */
+function fusionnerMemeLigne(lignes) {
+  for (let k = lignes.length - 1; k > 0; k--) {
+    const a = lignes[k - 1], b = lignes[k];
+    const haut = Math.max(a.cadre.y, b.cadre.y), bas = Math.min(a.cadre.y + a.cadre.h, b.cadre.y + b.cadre.h);
+    const recouvre = (bas - haut) / Math.max(1, Math.min(a.cadre.h, b.cadre.h));
+    const h = Math.max(a.hauteur, b.hauteur, 1);
+    const blanc = b.cadre.x - (a.cadre.x + a.cadre.l);
+    if (recouvre >= 0.6 && Math.abs(a.hauteur - b.hauteur) <= 0.35 * h && blanc >= 0 && blanc <= 6 * h) {
+      a.texte = a.texte + ' ' + b.texte;
+      const x2 = Math.max(a.cadre.x + a.cadre.l, b.cadre.x + b.cadre.l), y2 = Math.max(a.cadre.y + a.cadre.h, b.cadre.y + b.cadre.h);
+      a.cadre = { x: a.cadre.x, y: Math.min(a.cadre.y, b.cadre.y), l: x2 - a.cadre.x, h: y2 - Math.min(a.cadre.y, b.cadre.y) };
+      lignes.splice(k, 1);
+    }
+  }
+}
+
+function bruit(t) {
+  if (/\d/.test(t)) return false;
+  const lettres = t.replace(/[^A-Za-zÀ-ÿ]/g, '');
+  return lettres.length <= 2 || (lettres.length <= 3 && /^[il|!()oO\s.,:;'"-]+$/.test(t));
 }
 
 /**
@@ -102,15 +136,39 @@ function blocs(lignes) {
   return out;
 }
 
-/** Reduit l'image (orientation appliquee) dans un PNG temporaire. */
+/**
+ * Reduit l'image (orientation appliquee) dans un PNG temporaire, en niveaux de
+ * gris. Cartel clair sur fond sombre (Cezanne, Orsay) : inverse — la
+ * reconnaissance de Windows lit tres mal le texte blanc (« Huilo sur toilo »).
+ * Fond sombre = luminance mediane de la zone centrale < 45 %.
+ */
 async function preparerImage(chemin) {
   const Jimp = require('jimp');
   const img = await Jimp.read(chemin);
   const { width: w, height: h } = img.bitmap;
   if (Math.max(w, h) > COTE_MAX) img.scaleToFit(COTE_MAX, COTE_MAX);
+  img.greyscale();
+  const inverse = fondSombre(img);
+  if (inverse) img.invert();
+  // Pas de normalize() : sur les photos reelles il fait ressortir les taches du
+  // mur en fausses lettres (« i », « Fi ») sans mieux lire le texte.
   const tmp = path.join(os.tmpdir(), 'tt-cartel-' + process.pid + '-' + Date.now() + '.png');
   await img.writeAsync(tmp);
-  return { tmp, largeurOrigine: w, hauteurOrigine: h };
+  return { tmp, largeurOrigine: w, hauteurOrigine: h, inverse };
+}
+
+/** Luminance mediane (0..255) du centre de l'image (deja en gris), < 115 = fond sombre. */
+function fondSombre(img) {
+  const { width: W, height: H, data } = img.bitmap;
+  const hist = new Array(256).fill(0);
+  let n = 0;
+  const pas = Math.max(1, Math.floor(Math.min(W, H) / 200));
+  for (let y = Math.floor(H * 0.2); y < H * 0.8; y += pas) {
+    for (let x = Math.floor(W * 0.2); x < W * 0.8; x += pas) { hist[data[(y * W + x) * 4]]++; n++; }
+  }
+  let cumul = 0;
+  for (let v = 0; v < 256; v++) { cumul += hist[v]; if (cumul >= n / 2) return v < 115; }
+  return false;
 }
 
 function lancerOcr(image, { timeout = 30000 } = {}) {
@@ -149,7 +207,7 @@ async function lire(chemin) {
     lignes.forEach((l, i) => { l.role = roles[i]; });
     const ms = Date.now() - t0;
     journal.evt('cartel', 'lu', {
-      pc: true, ms, langue: brut.langue, angle: brut.angle, largeur: brut.largeur, hauteur: brut.hauteur,
+      pc: true, ms, langue: brut.langue, angle: brut.angle, largeur: brut.largeur, hauteur: brut.hauteur, inverse: prep.inverse,
       origine: [prep.largeurOrigine, prep.hauteurOrigine],
       lignes: lignes.map((l) => ({ t: l.texte, r: l.role, b: l.bloc, h: l.hauteur, y: l.cadre.y, x: l.cadre.x })),
       propose: champs
@@ -164,4 +222,4 @@ async function lire(chemin) {
   }
 }
 
-module.exports = { lire, lignesDepuisOcr, blocs, SCRIPT };
+module.exports = { lire, lignesDepuisOcr, blocs, fondSombre, SCRIPT };
