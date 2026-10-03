@@ -509,6 +509,24 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
    code qui balaie un dossier (ménage d'images, listes de fichiers) doit ignorer
    `LISEZMOI.txt`.
 
+## Contenus anormaux (04/10/2026)
+
+Testés par `tests/anomalies.test.js` (et injectés au hasard dans `synchro-bilan-proprietes`) : écritures
+non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, SQL, jokers `%` `_`, JSON,
+`__proto__`, chemins piégés, dates absurdes, textes énormes, ops hostiles venues d'un « autre appareil ».
+- **Recherche multi-écritures** : `masques.normaliserRecherche` (Bibliothèque, notes) = `normaliser` pour le
+  latin (pack et masques inchangés — vérifié sur les 431 œuvres) + lettres grecques, cyrilliques, hébraïques,
+  arabes, thaïes, kana, CJK, hangul (avant : « Илья Репин » introuvable). Les masques gardent `normaliser`.
+- **Textes bien formés** : moitié de caractère isolée → « � » à l'écriture (`moteur.bienForme`) **et** à la
+  réception (dans le JSON reçu elle s'écrit `\udXXX`) ; sinon SQLite la changeait seul, registre ≠ table, et
+  la réconciliation réécrivait la valeur à chaque ouverture.
+- **Limites** : champ de tuile 2 000 caractères, description 20 000 (`edition.LIMITES`, refus avec message
+  « Le champ « Titre » est trop long (2 500 caractères, 2 000 au plus) », rien d'écrit ; `maxLength` dans
+  l'éditeur) ; op reçue > 100 000 caractères rejetée (`moteur.VALEUR_MAX`) ; note 20 000.
+- **Jamais de HTML interprété** : React échappe tout (aucun `dangerouslySetInnerHTML`) ; le message d'échec
+  du démarrage mobile passe par `textContent` (avant : `innerHTML` avec le message d'erreur).
+- Clés / champs `__proto__`, `constructor` reçus : sans pollution de prototype ; valeurs non JSON rejetées.
+
 ## Identité des œuvres
 
 - `id` — `p:` + 10 hex, opaque, **gelé dans `data/registre.json`**, jamais

@@ -73,6 +73,7 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const [imgEnCours, setImgEnCours] = useState(false);
   const [survol, setSurvol] = useState(false);
   const [enCours, setEnCours] = useState(false);
+  const [erreurValider, setErreurValider] = useState(null);   // champ trop long…
   const [historique, setHistorique] = useState(null);   // null | 'chargement' | [{ champ, versions }]
   const [aVersions, setAVersions] = useState(false);
   // Lecture du cartel (mobile : ML Kit ; PC : Windows) : null | 'lecture' | { lignes, proposition } | { erreur }
@@ -206,7 +207,8 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
       } else {
         r = await window.api.edition.creer(champs);
       }
-      if (noteChangee && r && r.id && !r.erreur) await window.api.notes.ecrire(r.id, note);
+      if (r && r.erreur) { setErreurValider(r.erreur); setEnCours(false); return; }
+      if (noteChangee && r && r.id) await window.api.notes.ecrire(r.id, note);
       onFini(r);
     } catch (e) {
       window.api.evt('edition', mode + '-exception', { id: tuile && tuile.id, message: String(e && e.message || e) }, 'ERREUR');
@@ -306,6 +308,7 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
                   value={champs.description}
                   onChange={set('description')}
                   spellCheck={false}
+                  maxLength={20000}
                 />
               </div>
 
@@ -326,6 +329,7 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
         </div>
       </div>
 
+      {erreurValider && <div className="options-note" style={{ color: 'var(--revoir)', margin: '8px 0' }}>{erreurValider}</div>}
       <div className="ligne-actions">
         <div className="actions-gauche">
           {mode === 'modifier' && (

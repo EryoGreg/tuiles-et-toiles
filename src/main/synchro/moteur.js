@@ -50,6 +50,27 @@ const RE_REVISION = /^[0-9a-f]{8}\.[0-9a-z]{1,16}$/;
 
 function parse(v) { return v == null ? null : JSON.parse(v); }
 
+// Moitie de caractere compose isolee (emoji coupe, copie abimee) : SQLite la
+// stocke en « � ». Remplacee des l'ecriture (et a la reception) pour que le
+// registre et les tables disent exactement la meme chose — sinon la
+// reconciliation a l'ouverture reecrivait la valeur a chaque lancement.
+const RE_SURROGAT = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+function bienForme(v) {
+  // replace() avec la regex globale (lastIndex remis a 0) ; pas de test() prealable,
+  // qui garderait sa position d'un appel a l'autre.
+  if (typeof v === 'string') return v.replace(RE_SURROGAT, '\uFFFD');
+  if (Array.isArray(v)) return v.map(bienForme);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const [k, x] of Object.entries(v)) o[k] = bienForme(x);
+    return o;
+  }
+  return v;
+}
+// Valeur recue d'un autre appareil au-dela de 100 000 caracteres : rejetee
+// (l'interface plafonne bien en dessous ; rien de legitime n'en approche).
+const VALEUR_MAX = 100000;
+
 // --- lecture ----------------------------------------------------------------
 
 function lire(ctx, entite, cle, champ) {
@@ -127,9 +148,9 @@ function projeter(ctx, entite, cle, champ, val, hlc) {
     case 'note':
       if (val == null || String(val).trim() === '') d.prepare('DELETE FROM user_notes WHERE oeuvre_id=?').run(cle);
       else {
-        const { normaliser } = require('../masques');
+        const { normaliserRecherche } = require('../masques');
         d.prepare('INSERT OR REPLACE INTO user_notes (oeuvre_id, texte, recherche, modifie_le) VALUES (?, ?, ?, ?)')
-          .run(cle, String(val), normaliser(String(val)), t);
+          .run(cle, String(val), normaliserRecherche(String(val)), t);
       }
       return;
     case 'revision':
@@ -281,7 +302,7 @@ function insererOp(ctx, op, pousse, remplace = 0) {
 function ecrire(ctx, entite, cle, champ, val, { force = false } = {}) {
   return ctx.d.transaction(() => {
     const cour = lire(ctx, entite, cle, champ);
-    const v = val == null ? null : JSON.stringify(val);
+    const v = val == null ? null : JSON.stringify(bienForme(val));
     if (!force && (cour ? cour.valeur === v : v == null)) return null;
     const base = cour ? cour.hlc : null;
     const autres = tetes(ctx, entite, cle, champ).map((t) => t.hlc).filter((h) => h !== base);
@@ -331,6 +352,7 @@ function jsonOk(v, verif = () => true) {
 /** Op recue bien formee ? Une op rejetee l'est sur tous les appareils (convergence). */
 function valide(op) {
   if (!op || typeof op.hlc !== 'string' || typeof op.cle !== 'string' || typeof op.champ !== 'string') return false;
+  if (op.valeur != null && (typeof op.valeur !== 'string' || op.valeur.length > VALEUR_MAX + 64)) return false;
   if (!ENTITES.includes(op.entite)) return false;
   if (op.entite === 'tag' && !TAGS.includes(op.champ)) return false;
   if (op.base != null && typeof op.base !== 'string') return false;
@@ -367,6 +389,13 @@ function appliquer(ctx, r, { pousse = 1, remplace = 0 } = {}) {
   }
   if (!valide(r)) return 'rejetee';
   if (ctx.d.prepare('SELECT 1 FROM changements WHERE hlc=?').get(r.hlc)) return 'connue';
+  // Meme regle qu'a l'ecriture locale : textes bien formes (identique sur tous
+  // les appareils). Dans le JSON recu, une moitie isolee est ecrite « \udXXX ».
+  if (r.valeur != null && /\\u[dD][89a-fA-F]|[\uD800-\uDFFF]/.test(r.valeur)) {
+    const brut = JSON.parse(r.valeur);
+    const propre = JSON.stringify(bienForme(brut));
+    if (propre !== JSON.stringify(brut)) r = { ...r, valeur: propre };
+  }
   ctx.horloge.recevoir(r.hlc);
   const op = { hlc: r.hlc, appareil: r.appareil, entite: r.entite, cle: r.cle, champ: r.champ,
     valeur: r.valeur == null ? null : r.valeur, base: r.base || null, vus: r.vus || null };
@@ -409,7 +438,7 @@ function resoudre(ctx, id, choix) {
 }
 
 module.exports = {
-  CHAMPS_LOCALE, TAGS, ENTITES, RE_REVISION,
+  CHAMPS_LOCALE, TAGS, ENTITES, RE_REVISION, bienForme, VALEUR_MAX,
   lire, valeur, lignes, existe, ecrire, supprimerLocale, pierreTombale, emettreStats,
   appliquer, tetes, conflits, resoudre, valide, recalculer: apres
 };

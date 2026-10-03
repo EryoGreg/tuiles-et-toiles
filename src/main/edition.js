@@ -128,6 +128,8 @@ function prochainRefLocal() {
  *   tuile n'apparaitra jamais au tirage).
  */
 function creer(champs = {}) {
+  const trop = tropLong(champs);
+  if (trop) { journal.avertir('edition', 'creer-trop-long', { champ: trop.champ, longueur: texte(champs, trop.champ).length }); return trop; }
   const id = 'local:' + crypto.randomUUID();
   let ref = null;
 
@@ -168,6 +170,8 @@ function tuile(id) {
  *    l'image du pack.
  */
 function modifier(id, champs = {}) {
+  const trop = tropLong(champs);
+  if (trop) { journal.avertir('edition', 'modifier-trop-long', { id, champ: trop.champ, longueur: texte(champs, trop.champ).length }); return trop; }
   const d = db.instance();
   const t0 = Date.now();
   const avant = db.oeuvre(id) || {};
@@ -431,6 +435,21 @@ function texte(champs, c) {
   return String(champs[c] == null ? '' : champs[c]).trim();
 }
 
+// Tailles maximales d'un champ de tuile (caracteres). Au-dela, la tuile n'est
+// pas ecrite : elle voyagerait dans chaque envoi et chaque snapshot de synchro.
+const LIMITES = { description: 20000 };
+const LIMITE_CHAMP = 2000;
+const NOMS_CHAMPS = { titre: 'Titre', artiste: 'Artiste', date: 'Année / période', lieu: 'Conservation', description: 'Description', tags: 'Tags', image: 'Image' };
+/** Premier champ trop long, ou null. */
+function tropLong(champs) {
+  for (const c of CHAMPS) {
+    const n = texte(champs, c).length;
+    const max = LIMITES[c] || LIMITE_CHAMP;
+    if (n > max) return { erreur: 'Le champ « ' + (NOMS_CHAMPS[c] || c) + ' » est trop long (' + n.toLocaleString('fr-FR') + ' caractères, ' + max.toLocaleString('fr-FR') + ' au plus).', champ: c };
+  }
+  return null;
+}
+
 /**
  * MAJ de pack contre correction locale : un champ d'une oeuvre du pack que
  * l'utilisateur a corrige, et que le pack a change DEPUIS (valeur actuelle du
@@ -510,7 +529,7 @@ function appliquer() {
 
 module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
-  conflitsPack, trancherPack, lireNote, ecrireNote,
+  conflitsPack, trancherPack, lireNote, ecrireNote, LIMITES, LIMITE_CHAMP,
   rafraichir: appliquer,
   imagesReferencees
 };

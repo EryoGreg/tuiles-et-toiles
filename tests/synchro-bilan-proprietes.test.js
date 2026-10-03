@@ -68,6 +68,13 @@ function ouvrir(dir) {
   courant = dir;
 }
 
+// Contenus anormaux (voir tests/anomalies.test.js) melanges aux contenus ordinaires.
+const C = String.fromCharCode;
+const ANORMAUX = ['Илья Репин', '清明上河图', 'لوحة', '🎨👨‍👩‍👧', 'Ce' + C(0x301) + 'zanne', 'Mo' + C(0x200B) + 'net',
+  'a' + C(0) + 'b', '</div><script>x</script>', "'; DROP TABLE user_tags; --", '%_%', '__proto__', 'constructor',
+  'l1' + C(13) + C(10) + 'l2', 'casse' + C(0xD800) + 'ici', 'X'.repeat(1990)];
+const texteAuHasard = (rnd, base) => (rnd() < 0.35 ? rnd.choix(ANORMAUX) : base);
+
 /** Tuiles locales en lot : un seul recalcul de la vue (des milliers sans attendre). */
 function creerEnLot(n, prefixeTexte) {
   if (!n) return [];
@@ -143,12 +150,12 @@ function agir(rnd) {
   derniereAction = ['creer', 'creer', 'modifier', 'supprimer', 'restaurer', 'marque', 'note', 'corriger pack', 'archiver pack', 'reviser', 'vue'][a];
   switch (a) {
     case 0: case 1: return creerEnLot(1 + rnd.ent(4), 'Tuile').length > 0;
-    case 2: { if (!locales.length) return false; const id = rnd.choix(locales); edition.modifier(id, { ...edition.tuile(id), titre: 'Modifiee ' + rnd.ent(1e6) }); return true; }
+    case 2: { if (!locales.length) return false; const id = rnd.choix(locales); edition.modifier(id, { ...edition.tuile(id), titre: texteAuHasard(rnd, 'Modifiee ' + rnd.ent(1e6)) }); return true; }
     case 3: if (!locales.length) return false; edition.supprimer(rnd.choix(locales)); return true;
     case 4: { const c = edition.corbeille().filter((x) => x.id.startsWith('local:')); if (!c.length) return false; return !edition.restaurer(rnd.choix(c).id).erreur; }
     case 5: { const ids = [...packIds(), ...locales]; db.basculerTag(rnd.choix(ids), rnd.choix(['livre', 'etoile', 'bad_smiley'])); return true; }
-    case 6: { const ids = [...packIds(), ...locales]; return !!edition.ecrireNote(rnd.choix(ids), rnd() < 0.2 ? '' : 'note ' + rnd.ent(1e6)).ok; }
-    case 7: { const id = rnd.choix(packIds()); const o = edition.tuile(id); edition.modifier(id, { ...o, lieu: 'Lieu ' + rnd.ent(1e6) }); return true; }
+    case 6: { const ids = [...packIds(), ...locales]; return !!edition.ecrireNote(rnd.choix(ids), rnd() < 0.2 ? '' : texteAuHasard(rnd, 'note ' + rnd.ent(1e6))).ok; }
+    case 7: { const id = rnd.choix(packIds()); const o = edition.tuile(id); edition.modifier(id, { ...o, lieu: texteAuHasard(rnd, 'Lieu ' + rnd.ent(1e6)) }); return true; }
     case 8: { const id = rnd.choix(packIds()); edition.supprimer(id); return true; }
     case 9: { const t = revision.tirer([]); if (t.fini) return false; revision.noter(t.id, 1 + rnd.ent(4)); return true; }
     default: jeu.tirer(null); return false;   // vues seules

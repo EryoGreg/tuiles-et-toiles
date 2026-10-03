@@ -345,7 +345,7 @@ function reconstruireVue({ force = false } = {}) {
       ins.run({
         ...e,
         // ref inclus : chercher "L1" ou "329" trouve la tuile.
-        recherche: normaliser([e.ref, ...CHAMPS_TXT.map((c) => e[c] || '')].join(' ')),
+        recherche: require('./masques').normaliserRecherche([e.ref, ...CHAMPS_TXT.map((c) => e[c] || '')].join(' ')),
         masques: JSON.stringify(masques.get(e.id) || [])
       });
     }
@@ -443,7 +443,7 @@ function packMeta() {
  * « 66 » retrouve #066).
  */
 function clausesTexte(texte, colRecherche = 'recherche', colRef = 'ref') {
-  const { normaliser } = require('./masques');
+  const { normaliserRecherche: normaliser } = require('./masques');
   const sql = [];
   const params = [];
   for (const mot of normaliser(texte || '').split(' ').filter(Boolean)) {

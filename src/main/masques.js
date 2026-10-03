@@ -39,6 +39,22 @@ function normaliser(s) {
     .trim();
 }
 
+/**
+ * Normalisation de la RECHERCHE (Bibliotheque, notes) : identique a
+ * normaliser() pour l'alphabet latin — le pack reste trouvable exactement
+ * pareil et les masques n'en dependent pas — mais garde aussi les lettres des
+ * autres ecritures (grec, cyrillique, hebreu, arabe, thai, kana, CJK, hangul).
+ * Avant : « Илья Репин » devenait une chaine vide, introuvable.
+ */
+function normaliserRecherche(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\u0370-\u03ff\u0400-\u052f\u0590-\u05ff\u0600-\u06ff\u0e00-\u0e7f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]+/g, ' ')
+    .trim();
+}
+
 function motsSignificatifs(s) {
   return normaliser(s).split(' ').filter((m) => m.length > 3);
 }
@@ -139,4 +155,4 @@ function decrire(masque) {
   return out;
 }
 
-module.exports = { CHAMPS, BIT, TOUT, calculer, decrire, normaliser, valeur, fuites };
+module.exports = { CHAMPS, BIT, TOUT, calculer, decrire, normaliser, normaliserRecherche, valeur, fuites };

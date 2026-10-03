@@ -106,8 +106,11 @@ async function demarrer() {
 const pret = demarrer();
 pret.catch((e) => {
   console.error(e);
-  document.body.innerHTML = '<p style="font:16px sans-serif;padding:24px">Démarrage impossible : '
-    + String(e && e.message || e) + '</p>';
+  // textContent, pas innerHTML : le message peut citer des donnees (JSON abime…).
+  const p = document.createElement('p');
+  p.style.cssText = 'font:16px sans-serif;padding:24px';
+  p.textContent = 'Démarrage impossible : ' + String(e && e.message || e);
+  document.body.replaceChildren(p);
 });
 
 drive.configurer({ webClientId: typeof __GOOGLE_WEB_CLIENT_ID__ !== 'undefined' ? __GOOGLE_WEB_CLIENT_ID__ : '' });
