@@ -1330,7 +1330,7 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const [enCours, setEnCours] = useState(false);
   const [historique, setHistorique] = useState(null);   // null | 'chargement' | [{ champ, versions }]
   const [aVersions, setAVersions] = useState(false);
-  // Lecture du cartel (mobile) : null | 'lecture' | { lignes, proposition } | { erreur }
+  // Lecture du cartel (mobile : ML Kit ; PC : Windows) : null | 'lecture' | { lignes, proposition } | { erreur }
   const [cartel, setCartel] = useState(null);
   const lireCartel = async (source) => {
     setCartel('lecture');
@@ -1506,13 +1506,20 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
               )}
             </div>
 
-            {SUR_MOBILE && (
+            {SUR_MOBILE ? (
               <div className="cartel-boutons">
                 <button className="bouton-neutre" onClick={() => lireCartel('camera')} disabled={cartel === 'lecture'}>
                   <I.Appareil t={15} /> {cartel === 'lecture' ? 'Lecture…' : 'Lire le cartel'}
                 </button>
                 <button className="bouton-neutre" onClick={() => lireCartel('galerie')} disabled={cartel === 'lecture'}>
                   Cartel depuis la galerie
+                </button>
+              </div>
+            ) : (
+              <div className="cartel-boutons">
+                <button className="bouton-neutre" onClick={() => lireCartel('fichier')} disabled={cartel === 'lecture'}
+                  title="Photo d’un cartel de musée : titre, artiste, date… proposés, à vérifier avant de valider">
+                  <I.Appareil t={15} /> {cartel === 'lecture' ? 'Lecture…' : 'Lire un cartel (photo)…'}
                 </button>
               </div>
             )}
@@ -1578,7 +1585,7 @@ function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
 
       {cartel && cartel !== 'lecture' && (
         <BoiteCartel lecture={cartel} actuels={champs} onRemplir={remplirDepuisCartel}
-          onRelire={() => lireCartel('camera')} onFermer={() => setCartel(null)} />
+          onRelire={() => lireCartel(SUR_MOBILE ? 'camera' : 'fichier')} onFermer={() => setCartel(null)} />
       )}
       {historique && (
         <BoiteVersions
@@ -1649,7 +1656,7 @@ function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer }) {
           <p>{lecture.erreur}</p>
           <div className="actions">
             <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
-            <button className="bouton-valide" onClick={onRelire}><I.Appareil t={14} /> Reprendre une photo</button>
+            <button className="bouton-valide" onClick={onRelire}><I.Appareil t={14} /> {SUR_MOBILE ? 'Reprendre une photo' : 'Choisir une autre photo'}</button>
           </div>
         </div>
       </div>

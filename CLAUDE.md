@@ -369,7 +369,13 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   avant « Valider ». Conservation : cible manuelle seulement, jamais proposée par l'analyse.
   Chaque lecture est journalisée (lignes, rôles, tailles) : un rapport d'erreur suffit pour régler
   les règles sur un cartel raté. Tests : `tests/cartel-analyse.test.js` sur 9 cartels réels
-  retranscrits (`tests/cartels-exemples.js`, hauteurs estimées ; photos hors dépôt). PC : pas encore.
+  retranscrits (`tests/cartels-exemples.js`, hauteurs estimées ; photos hors dépôt).
+  **PC** (`src/main/cartel-pc.js`) : « Lire un cartel (photo)… » dans l'éditeur → fichier choisi (ou
+  `{ chemin }`) → réduit par Jimp (≤ 2400 px, temporaire effacé) → reconnaissance de texte **intégrée à
+  Windows** (`Windows.Media.Ocr`, WinRT par PowerShell en `-EncodedCommand`, fr-FR si installé, hors
+  ligne, ~0,7 s) → blocs reconstitués par écarts verticaux / tailles (`blocs()`, Windows n'en donne
+  pas) → même `cartel-analyse.js` et même `BoiteCartel`. Test : `tests/cartel-pc.test.js` (vraie
+  lecture sur une image fabriquée).
 - `astral-regex` a dû être posé à la main dans `node_modules` (npm le croyait installé) : si
   `npx cap` échoue sur ce module, `npm pack astral-regex@2.0.0` et l'extraire.
 

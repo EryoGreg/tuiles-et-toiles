@@ -28,6 +28,7 @@ const rapport = require('./rapport');
 const appareil = require('./synchro/appareil');
 const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
+const cartelPc = require('./cartel-pc');
 const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
 const imagesDistantes = require('./images-distantes');
@@ -490,11 +491,24 @@ gerer('edition:importerImageUrl', async (_e, url) => {
   }
 });
 
-// Lecture de cartel (ML Kit) : appli Android seulement pour l'instant.
 // Mobile seulement (base en memoire) : sur PC, SQLite ecrit au fil de l'eau.
 gerer('app:persister', () => true);
-gerer('edition:lireCartel', () => ({ erreur: 'La lecture de cartel est disponible dans l’appli Android.' }));
-gerer('edition:cartelEtat', () => ({ disponible: false }));
+// Lecture de cartel : photo choisie (ou deposee : { chemin }) -> reconnaissance
+// de texte de Windows (cartel-pc.js) ; Android : ML Kit (mobile/cartel.js).
+gerer('edition:lireCartel', async (_e, source) => {
+  let chemin = source && typeof source === 'object' ? source.chemin : null;
+  if (!chemin) {
+    const r = await dialog.showOpenDialog(fenetre, {
+      title: 'Photo d’un cartel',
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tif', 'tiff'] }]
+    });
+    if (r.canceled || !r.filePaths[0]) return null;
+    chemin = r.filePaths[0];
+  }
+  return cartelPc.lire(chemin);
+});
+gerer('edition:cartelEtat', () => ({ disponible: process.platform === 'win32' }));
 gerer('edition:choisirImage', async () => {
   const r = await dialog.showOpenDialog(fenetre, {
     title: 'Choisir une image',
