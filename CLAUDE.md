@@ -3,6 +3,47 @@
 Application de bureau d'entraînement mémoriel en histoire de l'art.
 Electron + React + SQLite. Windows, mono-utilisateur.
 
+## Reprise de session — état au 04/10/2026
+
+**Versions** :
+- **Publiée** : 0.3.14 (Latest, GitHub) — lecture des cartels par Claude, corrections de la lecture locale,
+  appui long mobile.
+- **0.3.15 de TEST** construite dans `release-test/` (exe portable, Setup, APK), **pas publiée**. Elle
+  contient : découpe d'`App.jsx` (étape 1 de Bristol), **Mes notes**, **bilan de synchro qui compte les
+  rattrapages**, **contenus anormaux** (recherche multi-écritures, textes bien formés, limites de taille,
+  démarrage mobile sans `innerHTML`).
+- L'utilisateur teste et dit quand publier.
+
+**Publier** (sur feu vert seulement) : procédure de la section « Dépôt, releases… ». Si l'exe de `release/`
+est verrouillé par l'appli lancée, construire dans `release-test/`
+(`electron-builder --win portable nsis --config.directories.output=release-test`), puis publier ces
+fichiers-là (mêmes noms). Commit « Version x.y.z », tag, push `synchro-e2` **et** `HEAD:main`, `gh release
+create` avec les 3 fichiers, vérifier les empreintes (`gh release view --json assets`).
+
+**Branche** : on travaille sur `synchro-e2`, `main` = même commit (push des deux).
+
+**Suite prévue — Bristol refait depuis T&T** (décision du 03/10) :
+1. ✅ découper `App.jsx` ;
+2. ✅ Mes notes ;
+3. **gabarits par pack** (champs facultatifs, place prévue pour des « types de fiche ») : colonne
+   `donnees` JSON, moteur de masques `calculer(fiches, champs)` (régression : pack art 35 / 55 / 59,
+   0 bloquée), migration synchro des entités `locale` / `override`, rendu piloté par gabarit ;
+4. plusieurs decks ; import CSV, galerie multi-image, occlusion (repris de l'ancien Bristol) ;
+5. manques de Bristol : import Anki, texte à trous, LaTeX, tags hiérarchiques.
+Décisions à demander avant l'étape 3 : appli unique « Bristol » avec un deck T&T, ou deux applis ; dépôt
+T&T = dépôt commun (ancien Bristol archivé) ; version 0.4.0.
+
+**Autres pistes ouvertes** : catalogue de packs (et ses 4 points images, section « Après ») ; signature de
+l'exe ; sauvegarde de `debug.keystore` (à rappeler) ; projet GCP vide `tuiles-et-toiles` à supprimer.
+
+**Tests** : `npm test` (27 fichiers, ~5 min). Propriété : `tests/synchro-e2b|e2e|remplacement|bilan-proprietes
+.test.js [n] [graine]`. Banc des cartels : `tests/banc-cartels.js` (photos et clé hors dépôt). Vérifier
+l'interface dans le navigateur avec `node scripts/build-mobile.js` + la configuration « mobile-web »
+(`.claude/launch.json`), `window.api` réel en mémoire.
+
+**Écrire du code depuis un script** : outil Write pour les scripts Python (les heredocs Bash mangent `\`
+et transforment `\r\n` en vrais sauts de ligne — arrivé plusieurs fois).
+
 ## Où on en est
 
 **Fait** — l'app tourne et se distribue :
