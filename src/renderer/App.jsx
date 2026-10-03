@@ -1042,19 +1042,28 @@ function useMenuTuile({ onMaj, onAgrandir, onEtat }) {
   const [suppr, setSuppr] = useState(null);       // tuile a mettre a la corbeille
   const { modifierTuile } = useContext(NavContext);
   const fermer = () => setMenu(null);
+  // Appui long au doigt : le menu s'ouvre sous le doigt, puis Android envoie
+  // son propre « contextmenu », le clic du relachement et parfois un petit
+  // defilement — tous sur le fond du menu, qui le refermaient aussitot. Rien
+  // ne ferme le menu pendant 700 ms apres son ouverture.
+  const ouvertLe = useRef(0);
+  const fermerSiStable = () => { if (Date.now() - ouvertLe.current > 700) fermer(); };
   useEffect(() => {
     if (!menu) return undefined;
     const echap = (e) => { if (e.key === 'Escape') fermer(); };
     window.addEventListener('keydown', echap);
-    window.addEventListener('resize', fermer);
-    window.addEventListener('scroll', fermer, true);
+    window.addEventListener('resize', fermerSiStable);
+    window.addEventListener('scroll', fermerSiStable, true);
     return () => {
       window.removeEventListener('keydown', echap);
-      window.removeEventListener('resize', fermer);
-      window.removeEventListener('scroll', fermer, true);
+      window.removeEventListener('resize', fermerSiStable);
+      window.removeEventListener('scroll', fermerSiStable, true);
     };
   }, [menu]);
   const surMenu = (e, o) => {
+    // Deja ouvert pour cette tuile a l'instant (appui long puis contextmenu natif) : rien a refaire.
+    if (menu && menu.o.id === o.id && Date.now() - ouvertLe.current < 700) return;
+    ouvertLe.current = Date.now();
     // Garde le menu dans la fenetre (220 x ~260 px).
     const x = Math.min(e.clientX, window.innerWidth - 230);
     const y = Math.min(e.clientY, window.innerHeight - 280);
@@ -1074,7 +1083,7 @@ function useMenuTuile({ onMaj, onAgrandir, onEtat }) {
   const rendu = (
     <>
       {menu && (
-        <div className="menu-tuile-fond" onClick={fermer} onContextMenu={(e) => { e.preventDefault(); fermer(); }}>
+        <div className="menu-tuile-fond" onClick={fermerSiStable} onContextMenu={(e) => { e.preventDefault(); fermerSiStable(); }}>
           <div className="menu-tuile" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} role="menu">
             <div className="menu-tuile-tete">#{menu.o.ref} {menu.o.titre || ''}</div>
             {onAgrandir && (
