@@ -153,7 +153,14 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     `recu-detail`) : avant le 03/10/2026, la première synchro d'un appareil qui en découvrait un autre (cas
     courant : il le lit d'abord par son snapshot) annonçait « Tout était déjà à jour » alors que des données
     arrivaient. Les compteurs de vues sont comptés à part (`vues`, absent de la phrase) ; garde-fou
-    `bilan-incoherent` (WARN) si des données changent sans rien de compté. Test : `tests/synchro-bilan.test.js`. **Tuile supprimée
+    `bilan-incoherent` (WARN) si des données changent sans rien de compté. Tests : `tests/synchro-bilan.test.js`
+    (cas isolés) ; **`tests/synchro-bilan-proprietes.test.js [n] [graine]`** (propriété : 2 à 4 appareils, arrivées,
+    0 à 45 tuiles, toutes les actions, synchros manuelles / auto ; après **chaque** synchro, chaque différence
+    visible doit être comptée dans sa catégorie du « Reçu », un appareil qui avait à envoyer l'annonce, et
+    convergence finale ; `TT_TRACE=1` déroule actions et bilans) ; **`tests/synchro-bilan-volume.test.js`**
+    (comptes exacts : aucune tuile, puis `TT_VOLUME` tuiles, 2 000 par défaut — rejoindre sans tuile, rejoindre
+    avec la moitié créée hors ligne et renumérotée, modifications / suppressions en masse, arrivée après le ménage
+    du Drive ; 5 000 tuiles : 36 s). Le test de propriété a été validé en remettant le bug : il échoue aussitôt. **Tuile supprimée
     depuis 90 j** : contenu remis à vide **par des ops ordinaires** (un effacement local ne
     convergerait pas face à une restauration concurrente) ; la pierre tombale reste à vie ;
     pas d'oubli tant qu'un conflit de suppression est ouvert. Le conflit « supprimée ici,
