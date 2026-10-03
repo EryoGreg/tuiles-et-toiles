@@ -6,12 +6,16 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.14 (Latest, GitHub) — lecture des cartels par Claude, corrections de la lecture locale,
-  appui long mobile.
-- **0.3.15 de TEST** construite dans `release-test/` (exe portable, Setup, APK), **pas publiée**. Elle
-  contient : découpe d'`App.jsx` (étape 1 de Bristol), **Mes notes**, **bilan de synchro qui compte les
-  rattrapages**, **contenus anormaux** (recherche multi-écritures, textes bien formés, limites de taille,
-  démarrage mobile sans `innerHTML`).
+- **Publiée** : 0.3.15 (Latest, GitHub, 04/10/2026) — découpe d'`App.jsx` (étape 1 de Bristol), **Mes
+  notes**, **bilan de synchro qui compte les rattrapages**, **contenus anormaux** (recherche
+  multi-écritures, textes bien formés, limites de taille, démarrage mobile sans `innerHTML`), et
+  **durcissement sécurité** (session de tests avancés 04/10) : bombe de décompression bornée dans
+  `synchro/format.decoderSnapshot` (ISIZE vérifié avant allocation, cap compressé/décompressé,
+  `maxOutputLength` Node, repli fflate mobile) ; segments `.ndjson` plafonnés (octets + nb d'ops) ; import
+  zip filtré (`RE_IMAGE` sur les images, tailles plafonnées, `utilisateur.db` refusé > 512 Mo) ; Electron
+  `will-navigate` + `setWindowOpenHandler` (origine du rendu figée — une page étrangère n'hérite plus de
+  `window.api`), vérification de l'expéditeur IPC dans `gerer()`, CSP `object-src`/`base-uri`. Test :
+  `tests/securite.test.js`. Build dans `release-test/` (exe+Setup, lock de `release/`) + `release/` (apk).
 - L'utilisateur teste et dit quand publier.
 
 **Publier** (sur feu vert seulement) : procédure de la section « Dépôt, releases… ». Si l'exe de `release/`
