@@ -285,6 +285,16 @@ App : fetch du manifeste → choix → download du `.db` → swap atomique. Pack
 payants → endpoint de licence plus tard ; packs gratuits livrables dès le host
 statique. Téléchargement = action explicite, jamais bloquant, échec silencieux
 hors-ligne (règle 1).
+**Images à l'échelle d'un catalogue** (décidé le 03/10/2026, à faire avec le catalogue) : la qualité
+reste fixe **par image** (grande ≤ 1 400 px ~130 Ko, réduite 480 px ~33 Ko) — aucune enveloppe globale,
+le « plafond » du cache n'est que la somme des images existantes (1 000 tuiles ≈ 130 Mo). Le problème
+à venir est le **volume**, pas la qualité :
+1. **Versions réduites livrées avec chaque pack**, plus avec l'appli (aujourd'hui `data/vignettes/`,
+   14 Mo embarqués ; sinon exe et APK grossissent à chaque pack).
+2. **« Tout garder hors ligne » choisi pack par pack**, pas pour tout l'appareil (10 packs ≈ 1 Go).
+3. **Plafond facultatif du cache en « Grande à l'affichage »** (ex. 200 Mo sur téléphone) : au-delà,
+   les images vues le moins récemment sont effacées (re-téléchargées si besoin).
+4. **Taille affichée avant de télécharger un pack** dans le catalogue.
 
 ## Appli mobile (Android, Capacitor)
 
