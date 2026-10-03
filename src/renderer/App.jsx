@@ -2992,9 +2992,19 @@ function Options({ etat, onEtat, aller }) {
 
 // Grandes images du pack : telechargees a la demande (vignettes embarquees).
 // Hors ligne complet : tout telecharger d'un coup, ou en tache de fond.
+// Options → Images des œuvres : qualite (reduite / a l'affichage / tout hors
+// ligne, images-qualite.js) et « Liberer l'espace » (grandes images du cache).
+const QUALITES_IMAGES = [
+  ['reduite', 'Réduite', 'Aucun téléchargement : la version réduite livrée avec l’appli.'],
+  ['affichage', 'Grande à l’affichage', 'Chaque grande image est téléchargée quand tu la regardes, puis gardée.'],
+  ['tout', 'Tout garder hors ligne', 'Toutes les grandes images d’avance : tout marche sans connexion.']
+];
+
 function SectionImages() {
   const [e, setE] = useState(null);
   const [prog, setProg] = useState(null);
+  const [demande, setDemande] = useState(null);   // null | 'vider' | 'reduite'
+  const [msg, setMsg] = useState(null);
   const relire = () => window.api.images.etat().then(setE);
   useEffect(() => {
     relire();
@@ -3008,39 +3018,78 @@ function SectionImages() {
     setProg(r.restantes ? { fini: true, ...r } : null);
     relire();
   };
-  const basculer = async () => {
-    await window.api.reglages.definir('images_hors_ligne', e.horsLigne ? '0' : '1');
-    relire();
+  const choisir = async (q) => {
+    setMsg(null);
+    if (q === e.qualite) return;
+    setE(await window.api.images.qualite(q));
+    // Passer en reduite avec des grandes images deja la : proposer la place.
+    if (q === 'reduite' && e.octetsCache > 0) setDemande('reduite');
+  };
+  const vider = async () => {
+    setDemande(null);
+    const r = await window.api.images.vider();
+    setE(r.etat);
+    setProg(null);
+    setMsg(r.octets ? enMo(r.octets) + ' libérés : les versions réduites prennent le relais.' : 'Rien à libérer.');
   };
   const enCours = prog && !prog.fini;
+  const mobile = SUR_MOBILE;
   return (
     <section>
       <div className="etiquette">Images des œuvres</div>
+      <div className="options-note" style={{ marginBottom: 8 }}>Qualité des images</div>
       <div className="choix-raccourcis">
-        {!complet && (
+        {QUALITES_IMAGES.map(([q, nom]) => (
+          <button key={q} className={'raccourci-bouton' + (e.qualite === q ? ' pose' : '')} onClick={() => choisir(q)}>
+            {e.qualite === q && <I.Coche t={14} />} {nom}
+          </button>
+        ))}
+      </div>
+      <div className="options-note">
+        {(QUALITES_IMAGES.find(([q]) => q === e.qualite) || [])[2]}
+        {mobile && e.qualite !== 'reduite' ? ' En Wi-Fi seulement.' : ''}
+        {' '}Version réduite : 33 Ko par image en moyenne ; grande : 130 Ko (≈ 4 fois plus,
+        {' '}{enMo(e.octetsTotal)} pour les {e.nombre}).
+      </div>
+      <div className="choix-raccourcis" style={{ marginTop: 10 }}>
+        {!complet && e.qualite !== 'reduite' && (
           <button className="bouton-neutre" onClick={lancer} disabled={enCours}>
             <I.FlecheVert t={16} bas />
             {enCours ? 'Téléchargement… ' + prog.faites + '/' + prog.total
               : 'Tout télécharger maintenant (' + enMo(e.octetsTotal - e.octets) + ')'}
           </button>
         )}
-        <button className={'raccourci-bouton' + (e.horsLigne ? ' pose' : '')} onClick={basculer}>
-          {e.horsLigne ? <I.Coche t={14} /> : <span className="raccourci-plus">+</span>}
-          Tout garder pour le hors-ligne
-        </button>
+        {e.octetsCache > 0 && (
+          <button className="bouton-neutre" onClick={() => setDemande('vider')} disabled={enCours}>
+            <I.Corbeille t={15} /> Libérer l’espace ({enMo(e.octetsCache)})
+          </button>
+        )}
       </div>
       {prog && prog.fini && prog.restantes > 0 && (
         <div className="options-note" style={{ color: 'var(--revoir)' }}>
           {prog.restantes} image(s) n’ont pas pu être téléchargées (connexion ?). Nouvel essai plus tard.
         </div>
       )}
+      {msg && <div className="options-confirmation"><I.Coche t={14} /> {msg}</div>}
       <div className="options-note">
         {complet
-          ? 'Toutes les images (' + e.nombre + ', ' + enMo(e.octets) + ') sont sur cet appareil : tout marche hors ligne.'
-          : e.presentes + ' image(s) sur ' + e.nombre + ' en grand format sur cet appareil.'}
-        {' '}Les autres se téléchargent à l’affichage ; sans connexion, une version réduite les
-        remplace. « Tout garder » les récupère toutes en arrière-plan.
+          ? 'Les ' + e.nombre + ' grandes images (' + enMo(e.octets) + ' au total) sont sur cet appareil : tout marche hors ligne.'
+          : e.presentes + ' grande(s) image(s) sur ' + e.nombre + ' sur cet appareil. Sans connexion, la version réduite remplace les autres.'}
       </div>
+      {demande && (
+        <BoiteConfirmation
+          titre={demande === 'reduite' ? 'Supprimer aussi les grandes images déjà téléchargées ?' : 'Libérer ' + enMo(e.octetsCache) + ' ?'}
+          texteConfirmer={'Supprimer (' + enMo(e.octetsCache) + ')'}
+          onAnnuler={() => setDemande(null)}
+          onConfirmer={vider}
+        >
+          <p>
+            Les grandes images téléchargées sont effacées de cet appareil ; les versions réduites
+            (livrées avec l’appli) prennent le relais. Elles se re-téléchargent selon la qualité choisie.
+            {demande === 'reduite' ? ' « Annuler » les garde : elles restent affichées, gratuitement.' : ''}
+          </p>
+        </BoiteConfirmation>
+      )}
     </section>
   );
 }

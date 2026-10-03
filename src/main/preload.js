@@ -85,6 +85,10 @@ contextBridge.exposeInMainWorld('api', {
   images: {
     etat: () => ipcRenderer.invoke('images:etat'),
     toutTelecharger: () => ipcRenderer.invoke('images:toutTelecharger'),
+    // 'reduite' | 'affichage' | 'tout' (images-qualite.js)
+    qualite: (q) => ipcRenderer.invoke('images:qualite', q),
+    // Efface les grandes images du cache -> { fichiers, octets, etat }
+    vider: () => ipcRenderer.invoke('images:vider'),
     onProgression: (fn) => {
       const ecouteur = (_e, p) => fn(p);
       ipcRenderer.on('images:progression', ecouteur);

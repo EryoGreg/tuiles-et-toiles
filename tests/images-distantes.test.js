@@ -35,15 +35,16 @@ fs.writeFileSync(MANIF, JSON.stringify({ ref: 'images-1', images: {
   'b.jpg': { octets: GRAND.length, sha256: sha(GRAND) }
 } }));
 
-function monter(reponse) {
+function monter(reponse, { qualite = 'affichage' } = {}) {
   const appels = [];
   const cache = fs.mkdtempSync(path.join(TMP, 'cache-'));
+  const q = { v: qualite };
   images.configurer({
-    cache, vignettes: VIGN, embarquees: null, manifeste: MANIF,
+    cache, vignettes: VIGN, embarquees: null, manifeste: MANIF, qualite: () => q.v,
     fetch: async (url) => { appels.push(url); return reponse(url); },
     journal: { evt() {}, debug() {}, erreur() {} }
   });
-  return { appels, cache };
+  return { appels, cache, q };
 }
 const reponseOk = (corps) => ({ ok: true, status: 200, arrayBuffer: async () => corps });
 
@@ -95,6 +96,80 @@ const reponseOk = (corps) => ({ ok: true, status: 200, arrayBuffer: async () => 
     assert.equal(r2.faites, 0);
     assert.equal(r2.restantes, 2);
     assert.ok(m.appels.length <= 3);
+  });
+
+  console.log('qualite, cache perime, liberer l\'espace (0.3.13)');
+  const qualite = require(path.join(RACINE, 'src/main/images-qualite'));
+
+  await test('reglage : migration de l\'ancienne case, defauts PC / mobile', () => {
+    const r = (v) => (cle, defaut) => (cle in v ? v[cle] : defaut);
+    assert.equal(qualite.lire(r({})), 'tout', 'PC : comme avant');
+    assert.equal(qualite.lire(r({}), { mobile: true }), 'affichage', 'mobile : la case n\'y faisait rien');
+    assert.equal(qualite.lire(r({ images_hors_ligne: '1' }), { mobile: true }), 'tout');
+    assert.equal(qualite.lire(r({ images_hors_ligne: '0' })), 'affichage');
+    assert.equal(qualite.lire(r({ images_hors_ligne: '1', images_qualite: 'reduite' })), 'reduite', 'le nouveau reglage gagne');
+    assert.equal(qualite.lire(r({ images_qualite: 'nimporte' })), 'tout');
+  });
+
+  await test('qualite reduite : aucun telechargement, la vignette ; une grande image deja la sert quand meme', async () => {
+    const m = monter(() => reponseOk(GRAND), { qualite: 'reduite' });
+    assert.equal(await images.chemin('a.jpg'), path.join(VIGN, 'a.jpg'));
+    assert.equal(m.appels.length, 0);
+    fs.writeFileSync(path.join(m.cache, 'b.jpg'), GRAND);
+    assert.equal(await images.chemin('b.jpg'), path.join(m.cache, 'b.jpg'));
+  });
+
+  await test('image du pack changee depuis (taille differente) : copie effacee, re-telechargee', async () => {
+    const m = monter(() => reponseOk(GRAND));
+    fs.writeFileSync(path.join(m.cache, 'a.jpg'), 'ancienne version de l\'image');
+    assert.equal(images.etat().presentes, 0, 'copie perimee : pas comptee');
+    assert.equal(fs.existsSync(path.join(m.cache, 'a.jpg')), false, 'et effacee');
+    const p = await images.chemin('a.jpg');
+    assert.deepEqual(fs.readFileSync(p), GRAND);
+    assert.equal(m.appels.length, 1);
+  });
+
+  await test('liberer l\'espace : grandes images et .part effaces, LISEZMOI garde, vignettes ensuite', async () => {
+    const m = monter(() => reponseOk(GRAND));
+    await images.toutTelecharger();
+    fs.writeFileSync(path.join(m.cache, 'LISEZMOI.txt'), 'a quoi sert ce dossier');
+    fs.writeFileSync(path.join(m.cache, 'x.jpg.part'), 'morceau');
+    assert.equal(images.etat().octetsCache, GRAND.length * 2);
+    const r = await images.vider();
+    assert.equal(r.fichiers, 3);
+    assert.deepEqual(fs.readdirSync(m.cache), ['LISEZMOI.txt']);
+    assert.equal(images.etat().presentes, 0);
+    assert.equal(images.etat().octetsCache, 0);
+    m.q.v = 'reduite';
+    assert.equal(await images.chemin('a.jpg'), path.join(VIGN, 'a.jpg'));
+  });
+
+  await test('liberer pendant un telechargement complet : il s\'arrete', async () => {
+    const m = monter(() => new Promise((r) => setTimeout(() => r(reponseOk(GRAND)), 40)));
+    const enCours = images.toutTelecharger();
+    await new Promise((r) => setTimeout(r, 10));
+    const v = await images.vider();
+    await enCours;
+    assert.ok(images.etat().presentes <= 0, 'rien ne reste apres vider');
+    assert.ok(m.appels.length <= 1, 'arrete apres l\'image en cours');
+    void v;
+  });
+
+  await test('telechargement complet : s\'arrete si la qualite change entre-temps', async () => {
+    const m = monter(() => reponseOk(GRAND), { qualite: 'tout' });
+    let n = 0;
+    const r = await images.toutTelecharger(() => { n++; m.q.v = 'affichage'; }, { arreter: () => m.q.v !== 'tout' });
+    assert.equal(r.faites, 1);
+    assert.equal(r.restantes, 1);
+    assert.equal(n, 1);
+  });
+
+  await test('etat : qualite et octets du cache exposes', async () => {
+    monter(() => reponseOk(GRAND), { qualite: 'tout' });
+    const e = images.etat();
+    assert.equal(e.qualite, 'tout');
+    assert.equal(e.octetsCache, 0);
+    assert.equal(e.octetsTotal, GRAND.length * 2);
   });
 
   if (process.env.TT_RESEAU) {

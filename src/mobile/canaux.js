@@ -22,6 +22,7 @@ const reseau = require('./reseau');
 const maj = require('./maj');
 const cartel = require('./cartel');
 const revision = require('../main/revision');
+const imagesQualite = require('../main/images-qualite');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
   'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions',
@@ -147,8 +148,37 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   g('edition:oublierImage', (nom) => edition.oublierImage(nom));
 
   // --- images du pack ----------------------------------------------------------
-  g('images:etat', () => ({ ...imagesUrl.etat(), horsLigne: db.reglage('images_hors_ligne', '0') === '1' }));
-  g('images:toutTelecharger', () => imagesUrl.toutTelecharger((p) => require('electron').emettre('images:progression', p)));
+  // Qualite des images (images-qualite.js). « tout » : grandes images d'avance,
+  // en Wi-Fi seulement (lancement + 12 s, toutes les 30 min, retour du Wi-Fi,
+  // changement de reglage) ; s'arrete si le Wi-Fi tombe ou si le reglage change.
+  const qualiteImages = () => imagesQualite.lire(db.reglage, { mobile: true });
+  imagesUrl.qualitePermise(qualiteImages);
+  const progressionImages = (p) => require('electron').emettre('images:progression', p);
+  const imagesHorsLigne = () => {
+    if (qualiteImages() !== 'tout' || !reseau.wifi()) return;
+    const e = imagesUrl.etat();
+    if (!e.nombre || e.presentes >= e.nombre) return;
+    imagesUrl.toutTelecharger(progressionImages, { arreter: () => qualiteImages() !== 'tout' || !reseau.wifi() })
+      .then((r) => journal.evt('image', 'hors-ligne', r))
+      .catch((err) => journal.erreur('image', 'hors-ligne', err));
+  };
+  setTimeout(imagesHorsLigne, 12000);
+  setInterval(imagesHorsLigne, 30 * 60e3);
+  reseau.surChangement(() => imagesHorsLigne());
+  g('images:etat', () => imagesUrl.etat());
+  g('images:toutTelecharger', () => imagesUrl.toutTelecharger(progressionImages));
+  g('images:qualite', (q) => {
+    if (!imagesQualite.QUALITES.includes(q)) return { erreur: 'qualité inconnue' };
+    db.definirReglage('images_qualite', q);
+    journal.evt('image', 'qualite', { qualite: q });
+    imagesHorsLigne();
+    return imagesUrl.etat();
+  });
+  g('images:vider', async () => {
+    const r = await imagesUrl.vider();
+    journal.evt('image', 'cache-vide', r);
+    return { ...r, etat: imagesUrl.etat() };
+  });
 
   // --- rapport d'erreur (meme script de reception que le PC) -------------------
   const rapport = require('../main/rapport');

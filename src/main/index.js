@@ -30,6 +30,7 @@ const etat = require('./synchro/etat');
 const synchro = require('./synchro/service');
 const cartelPc = require('./cartel-pc');
 const revision = require('./revision');
+const imagesQualite = require('./images-qualite');
 const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
 const imagesDistantes = require('./images-distantes');
@@ -227,6 +228,7 @@ app.whenReady().then(() => {
     embarquees: process.env.TT_SANS_IMAGES ? null : DOSSIER_IMAGES,
     manifeste: MANIFESTE_IMAGES,
     fetch: (url, opts) => net.fetch(url, opts),
+    qualite: () => imagesQualite.lire(db.reglage),
     journal, lisezmoi
   });
   // tuile://<nom> : image entiere ; tuile://mini/<nom> : vignette (grilles).
@@ -270,14 +272,9 @@ app.whenReady().then(() => {
     aDesDonnees: () => db.instance().prepare('SELECT COUNT(*) n FROM etat').get().n > 0
   });
   const copier = () => { try { copieSecurite.siBesoin(); } catch (e) { journal.erreur('sauvegarde', 'copie-securite', e); } };
-  // Grandes images pour le hors-ligne (reglage images_hors_ligne, actif par
-  // defaut sur PC) : 90 s apres le lancement, puis toutes les 30 min tant
-  // qu'il en manque (hors ligne : on reessaie plus tard).
-  const imagesHorsLigne = () => {
-    if (db.reglage('images_hors_ligne', '1') !== '1') return;
-    if (!imagesDistantes.etat().nombre || imagesDistantes.etat().presentes >= imagesDistantes.etat().nombre) return;
-    imagesDistantes.toutTelecharger(diffuserImages).catch((e) => journal.erreur('image', 'hors-ligne', e));
-  };
+  // Qualite « tout » (defaut sur PC) : grandes images pour le hors-ligne,
+  // 90 s apres le lancement, puis toutes les 30 min tant qu'il en manque
+  // (hors ligne : on reessaie plus tard), et des que le reglage passe a « tout ».
   setTimeout(imagesHorsLigne, 90e3);
   setInterval(imagesHorsLigne, 30 * 60e3);
   setTimeout(copier, 60e3);
@@ -566,8 +563,23 @@ gerer('sauvegarde:importer', (_e, chemin) => {
 });
 
 gerer('copie:etat', () => copieSecurite.etat());
-gerer('images:etat', () => ({ ...imagesDistantes.etat(), horsLigne: db.reglage('images_hors_ligne', '1') === '1' }));
+function imagesHorsLigne() {
+  if (imagesQualite.lire(db.reglage) !== 'tout') return;
+  const e = imagesDistantes.etat();
+  if (!e.nombre || e.presentes >= e.nombre) return;
+  imagesDistantes.toutTelecharger(diffuserImages, { arreter: () => imagesQualite.lire(db.reglage) !== 'tout' })
+    .catch((err) => journal.erreur('image', 'hors-ligne', err));
+}
+gerer('images:etat', () => imagesDistantes.etat());
 gerer('images:toutTelecharger', async () => imagesDistantes.toutTelecharger(diffuserImages));
+gerer('images:qualite', (_e, q) => {
+  if (!imagesQualite.QUALITES.includes(q)) return { erreur: 'qualité inconnue' };
+  db.definirReglage('images_qualite', q);
+  journal.evt('image', 'qualite', { qualite: q });
+  if (q === 'tout') imagesHorsLigne();
+  return imagesDistantes.etat();
+});
+gerer('images:vider', async () => ({ ...(await imagesDistantes.vider()), etat: imagesDistantes.etat() }));
 gerer('copie:ouvrir', async () => {
   const { dossier } = copieSecurite.etat();
   if (!fs.existsSync(dossier)) return { erreur: 'Aucune copie pour l’instant.' };

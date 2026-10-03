@@ -12,8 +12,14 @@
  *               anciennes installations), il passe avant tout telechargement.
  *
  * Regle 1 : hors ligne, jamais d'erreur visible : la vignette tient lieu
- * d'image. Sur PC, toutTelecharger() remplit le cache en tache de fond pour
- * que tout marche ensuite hors ligne (reglage images_hors_ligne).
+ * d'image. Qualite (images-qualite.js) : « reduite » ne telecharge rien,
+ * « affichage » a la demande, « tout » : toutTelecharger() remplit le cache en
+ * tache de fond pour que tout marche ensuite hors ligne.
+ *
+ * Cache : une copie par image du pack au plus (plafond = taille du pack,
+ * ~56 Mo). Une image dont la taille ne correspond plus au manifeste (image du
+ * pack changee depuis, fichier abime) est effacee et re-telechargee : sinon
+ * l'ancienne version resterait servie pour toujours. vider() libere tout.
  */
 
 const fs = require('fs');
@@ -33,7 +39,7 @@ const enVol = new Map();   // nom -> promesse de telechargement
  *   manifeste : chemin de data/images-manifest.json
  */
 function configurer(c) {
-  cfg = c;
+  cfg = { qualite: () => 'affichage', ...c };
   try { manifeste = JSON.parse(fs.readFileSync(c.manifeste, 'utf8')); }
   catch (e) { manifeste = { ref: null, images: {} }; if (c.journal) c.journal.erreur('image', 'manifeste-illisible', e); }
 }
@@ -52,11 +58,28 @@ function cheminVignette(nom) {
   return existe(p) ? p : null;
 }
 
+/**
+ * Grande image en cache ET conforme au manifeste (taille), sinon null. Une
+ * copie perimee (image du pack changee depuis) est effacee.
+ */
+function cheminCache(nom) {
+  const c = path.join(cfg.cache, nom);
+  let st;
+  try { st = fs.statSync(c); } catch { return null; }
+  if (!st.isFile()) return null;
+  const info = manifeste.images[nom];
+  if (info && st.size !== info.octets) {
+    try { fs.rmSync(c, { force: true }); } catch { /* verrou : reessai au prochain affichage */ }
+    if (cfg.journal) cfg.journal.evt('image', 'cache-perime', { nom, octets: st.size, attendu: info.octets }, 'INFO');
+    return null;
+  }
+  return c;
+}
+
 /** Grande image deja sur le disque (embarquee ou en cache), sinon null. */
 function cheminGrand(nom) {
   if (cfg.embarquees) { const p = path.join(cfg.embarquees, nom); if (existe(p)) return p; }
-  const c = path.join(cfg.cache, nom);
-  return existe(c) ? c : null;
+  return cheminCache(nom);
 }
 
 /** Telecharge une grande image dans le cache. @returns {Promise<string|null>} */
@@ -104,31 +127,61 @@ async function chemin(nomBrut, { mini = false } = {}) {
   const nom = nomSur(nomBrut);
   if (!nom) return null;
   if (mini) return cheminVignette(nom) || cheminGrand(nom);
+  // Qualite reduite : jamais de telechargement (une grande image deja la sert quand meme).
+  if (cfg.qualite() === 'reduite') return cheminGrand(nom) || cheminVignette(nom);
   return cheminGrand(nom) || (await telecharger(nom)) || cheminVignette(nom);
 }
 
 /** Combien de grandes images sont disponibles hors ligne. */
 function etat() {
   const noms = Object.keys(manifeste.images);
-  let presentes = 0, octets = 0;
-  for (const n of noms) if (cheminGrand(n)) { presentes++; octets += manifeste.images[n].octets; }
+  let presentes = 0, octets = 0, octetsCache = 0;
+  for (const n of noms) {
+    if (!cheminGrand(n)) continue;
+    presentes++; octets += manifeste.images[n].octets;
+    if (cheminCache(n)) octetsCache += manifeste.images[n].octets;
+  }
   const total = noms.reduce((s, n) => s + manifeste.images[n].octets, 0);
-  return { presentes, nombre: noms.length, octets, octetsTotal: total, enCours: !!tout };
+  return { presentes, nombre: noms.length, octets, octetsCache, octetsTotal: total, enCours: !!tout, qualite: cfg.qualite() };
+}
+
+/**
+ * Efface toutes les grandes images du cache (« Liberer l'espace »). Les
+ * versions reduites embarquees prennent le relais ; un telechargement complet
+ * en cours s'arrete. LISEZMOI.txt reste (regle 5).
+ * @returns {Promise<{ fichiers, octets }>}
+ */
+async function vider() {
+  arret = true;
+  if (tout) { try { await tout; } catch { /* */ } }
+  arret = false;
+  let fichiers = 0, octets = 0;
+  let noms = [];
+  try { noms = fs.readdirSync(cfg.cache); } catch { return { fichiers, octets }; }
+  for (const n of noms) {
+    if (!RE_NOM.test(n) && !/\.part$/.test(n)) continue;
+    const p = path.join(cfg.cache, n);
+    try { octets += fs.statSync(p).size; fs.rmSync(p, { force: true }); fichiers++; } catch { /* verrou */ }
+  }
+  if (cfg.journal) cfg.journal.evt('image', 'cache-vide', { fichiers, octets });
+  return { fichiers, octets };
 }
 
 let tout = null;   // telechargement complet en cours
+let arret = false; // vider() : interrompre le telechargement complet
 /**
  * Telecharge toutes les grandes images manquantes, une par une (sans gener
  * l'affichage). Un seul a la fois ; arret au premier ecueil reseau repete.
  * @returns {Promise<{ faites, echecs, restantes }>}
  */
-function toutTelecharger(surProgression) {
+function toutTelecharger(surProgression, { arreter = () => false } = {}) {
   if (tout) return tout;
   tout = (async () => {
     const manquantes = Object.keys(manifeste.images).filter((n) => !cheminGrand(n));
     let faites = 0, echecs = 0, suite = 0;
     const t0 = Date.now();
     for (const nom of manquantes) {
+      if (arret || arreter()) break;   // cache vide ou qualite changee entre-temps
       const ok = await telecharger(nom);
       if (ok) { faites++; suite = 0; } else { echecs++; suite++; }
       if (surProgression) surProgression({ faites, echecs, total: manquantes.length });
@@ -141,4 +194,4 @@ function toutTelecharger(surProgression) {
   return tout.finally(() => { tout = null; });
 }
 
-module.exports = { configurer, chemin, etat, toutTelecharger, nomSur, _telecharger: telecharger };
+module.exports = { configurer, chemin, etat, toutTelecharger, vider, nomSur, _telecharger: telecharger };

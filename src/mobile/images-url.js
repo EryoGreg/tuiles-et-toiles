@@ -11,7 +11,11 @@
  *   - sinon, en ligne : l'adresse GitHub (fige par le tag du manifeste), et
  *     le telechargement verifie vers le cache demarre ; hors ligne : vignette
  *
- * Cache : IndexedDB « images » (nom -> Blob), liste des noms en memoire.
+ * Cache : IndexedDB « images » (nom -> Blob), liste des noms en memoire. Au
+ * demarrage, une copie dont la taille ne correspond plus au manifeste (image du
+ * pack changee depuis) ou absente du manifeste est effacee. vider() libere tout.
+ * Qualite (images-qualite.js) : « reduite » = jamais l'adresse GitHub ni de
+ * telechargement, la vignette (sauf grande image deja en cache).
  */
 
 const fs = require('fs');
@@ -27,6 +31,7 @@ const urls = new Map();       // cle -> URL blob
 const enVol = new Map();
 const ecouteurs = new Set();  // notifies quand une grande image arrive
 let cacheOk = () => true;     // mobile : faux en donnees mobiles
+let qualite = () => 'affichage';
 const pretes = new Map();     // nom -> URL blob d'une grande image en cache
 
 function ouvrirIdb() {
@@ -46,17 +51,27 @@ async function configurer(o) {
   // Grandes images en cache : adresses pretes des le demarrage (les Blob
   // d'IndexedDB sont des references, rien n'est lu en memoire).
   await new Promise((ok) => {
-    const req = idb.transaction('images', 'readonly').objectStore('images').openCursor();
+    const req = idb.transaction('images', 'readwrite').objectStore('images').openCursor();
+    let perimees = 0;
     req.onsuccess = () => {
       const c = req.result;
-      if (!c) { ok(); return; }
+      if (!c) {
+        if (perimees) console.info('[images] copies perimees effacees : ' + perimees);
+        ok(); return;
+      }
       const nom = String(c.key);
-      enCache.add(nom);
-      pretes.set(nom, URL.createObjectURL(c.value));
+      const info = manifeste.images[nom];
+      if (!info || !c.value || c.value.size !== info.octets) {
+        // Image du pack changee (ou retiree) depuis : sinon servie pour toujours.
+        try { c.delete(); perimees++; } catch { /* lecture seule : effacee au prochain vider */ }
+      } else {
+        enCache.add(nom);
+        pretes.set(nom, URL.createObjectURL(c.value));
+      }
       c.continue();
     };
     req.onerror = () => ok();
-  });
+  }).catch(() => {});
 }
 
 const vignette = (nom) => 'vignettes/' + nom.replace(/\.(png|jpe?g)$/i, '.jpg');
@@ -126,6 +141,7 @@ function traduire(url, { garder = false } = {}) {
   if (mini) return vignette(nom);
   if (pretes.get(nom)) return pretes.get(nom);
   if (enCache.has(nom)) { preparer(nom); return vignette(nom); }
+  if (qualite() === 'reduite') return vignette(nom);
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return vignette(nom);
   if (garder && cacheOk()) telecharger(nom).then((ok) => { if (ok) preparer(nom); });
   return distante(nom);
@@ -146,17 +162,47 @@ function traduireTout(v, o = {}) {
 function etat() {
   const noms = Object.keys(manifeste.images);
   const presentes = noms.filter((n) => enCache.has(n));
+  const octets = presentes.reduce((s, n) => s + manifeste.images[n].octets, 0);
   return {
     presentes: presentes.length, nombre: noms.length,
-    octets: presentes.reduce((s, n) => s + manifeste.images[n].octets, 0),
-    octetsTotal: noms.reduce((s, n) => s + manifeste.images[n].octets, 0)
+    octets, octetsCache: octets,   // mobile : tout est dans le cache (rien d'embarque en grand)
+    octetsTotal: noms.reduce((s, n) => s + manifeste.images[n].octets, 0),
+    enCours: !!tout, qualite: qualite()
   };
 }
 
-async function toutTelecharger(surProgression) {
+/** Efface toutes les grandes images du cache ; les vignettes prennent le relais. */
+async function vider() {
+  arret = true;
+  if (tout) { try { await tout; } catch { /* */ } }
+  arret = false;
+  const e = etat();
+  if (idb) {
+    await new Promise((ok) => {
+      const t = idb.transaction('images', 'readwrite');
+      t.objectStore('images').clear();
+      t.oncomplete = ok; t.onerror = ok;
+    });
+  }
+  for (const u of pretes.values()) if (u) { try { URL.revokeObjectURL(u); } catch { /* */ } }
+  pretes.clear();
+  enCache.clear();
+  return { fichiers: e.presentes, octets: e.octets };
+}
+
+let tout = null;
+let arret = false;
+function toutTelecharger(surProgression, { arreter = () => false } = {}) {
+  if (tout) return tout;
+  tout = toutTelecharger0(surProgression, arreter).finally(() => { tout = null; });
+  return tout;
+}
+
+async function toutTelecharger0(surProgression, arreter) {
   const manquantes = Object.keys(manifeste.images).filter((n) => !enCache.has(n));
   let faites = 0, echecs = 0, suite = 0;
   for (const nom of manquantes) {
+    if (arret || arreter()) break;
     if (await telecharger(nom)) { faites++; suite = 0; } else { echecs++; suite++; }
     if (surProgression) surProgression({ faites, echecs, total: manquantes.length });
     if (suite >= 3) break;
@@ -165,6 +211,6 @@ async function toutTelecharger(surProgression) {
 }
 
 module.exports = {
-  configurer, traduire, traduireTout, etat, toutTelecharger,
-  surArrivee: (f) => ecouteurs.add(f), cachePermis: (f) => { cacheOk = f; }
+  configurer, traduire, traduireTout, etat, toutTelecharger, vider,
+  surArrivee: (f) => ecouteurs.add(f), cachePermis: (f) => { cacheOk = f; }, qualitePermise: (f) => { qualite = f; }
 };

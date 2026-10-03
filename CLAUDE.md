@@ -585,8 +585,21 @@ correction).
   { octets, sha256 } } }`) le sont, générés par `node scripts/vignettes.js`. Les grandes images
   sont téléchargées à la demande (`src/main/images-distantes.js`) depuis
   `raw.githubusercontent.com/EryoGreg/tuiles-et-toiles/<ref>/data/images/`, vérifiées, mises en
-  cache dans `images-cache/` ; sans connexion, la vignette les remplace. PC : tout est récupéré en
-  tâche de fond (réglage `images_hors_ligne`). `tuile://<nom>` = grande image, `tuile://mini/<nom>`
+  cache dans `images-cache/` ; sans connexion, la vignette les remplace.
+  **Qualité des images** (0.3.13, `src/main/images-qualite.js`, réglage `images_qualite`, Options →
+  Images des œuvres) : `reduite` (aucun téléchargement ni adresse GitHub, vignette sauf grande image déjà
+  en cache), `affichage` (grande image téléchargée à l'affichage puis gardée ; mobile : en Wi-Fi et pour
+  les tuiles vues en grand), `tout` (tout d'avance, **dès le choix**, puis lancement + 90 s / 12 s mobile,
+  toutes les 30 min, retour du Wi-Fi ; mobile en Wi-Fi seulement ; s'arrête si le réglage change ou si le
+  Wi-Fi tombe). Défaut : `tout` sur PC, `affichage` sur mobile ; l'ancienne case `images_hors_ligne`
+  (qui ne faisait **rien** sur mobile) est migrée (1 → tout, 0 → affichage). **Cache conforme** : une copie
+  dont la taille ne correspond plus au manifeste (image du pack changée depuis) est effacée puis
+  re-téléchargée (avant : l'ancienne restait servie pour toujours) ; mobile : vérifié au démarrage, copies
+  hors manifeste effacées aussi. **« Libérer l'espace (X Mo) »** (`images:vider`, confirmation) : grandes
+  images du cache effacées (LISEZMOI gardé), téléchargement complet interrompu ; passer en `reduite`
+  avec un cache non vide le propose. Plafond du cache = une copie par image du pack (~54 Mo). Coût :
+  vignette 33 Ko en moyenne (14 Mo, embarquées), grande 130 Ko (56 Mo). Tests dans
+  `tests/images-distantes.test.js`. `tuile://<nom>` = grande image, `tuile://mini/<nom>`
   = vignette (grilles, Corbeille, journal). **Changer une image du pack** = relancer le script
   en montant `REF`, puis `git tag <REF> && git push origin <REF>` (jamais servir depuis `main` :
   l'empreinte ne correspondrait plus). En dev, `data/images/` sert de source locale
