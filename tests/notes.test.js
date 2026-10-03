@@ -134,15 +134,17 @@ const premiere = () => db.instance().prepare('SELECT id, ref, masques FROM oeuvr
     return { faux, A, B };
   }
 
-  await test('note ecrite sur le PC : arrive sur le telephone', async () => {
+  await test('note ecrite sur le PC : arrive sur le telephone, comptee au bilan « Recu »', async () => {
     const { faux, A, B } = await deux();
     ouvrir(A);
     const o = premiere();
     edition.ecrireNote(o.id, 'retenue sur le PC');
     await service.synchroniserDrive(null, faux);
     ouvrir(B);
-    await service.synchroniserDrive(null, faux);
+    const r = await service.synchroniserDrive(null, faux);
     assert.equal(edition.lireNote(o.id).texte, 'retenue sur le PC');
+    // Ici la note arrive par un rattrapage (premiere lecture du PC) : compte aussi.
+    assert.equal(r.recu.notes, 1, JSON.stringify(r.recu));
   });
 
   await test('meme note changee des deux cotes sans se voir : conflit « Ma note », trancher ferme partout', async () => {

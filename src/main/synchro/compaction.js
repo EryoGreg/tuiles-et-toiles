@@ -146,11 +146,21 @@ async function rattraper(ctx, t, fiches) {
   const bilan = {};
   const moi = ctx.appareil.id;
   let remplacees = 0;
+  // Ce que le snapshot apporte vraiment (ops « avance ») : compte dans le bilan
+  // « Recu » comme une reception ordinaire. Sans ca, la premiere synchro d'un
+  // appareil qui en decouvre un autre annoncait « Tout etait deja a jour »
+  // alors que des tuiles, marques ou notes venaient d'arriver.
+  const appliquees = [];
+  const existenceAvant = new Map();
   ctx.d.transaction(() => {
     const ops = [...(obj.ops || [])].sort((a, b) => (a.hlc < b.hlc ? -1 : 1));
     for (const op of ops) {
+      if (op.entite === 'locale' && op.champ === '_existe' && !existenceAvant.has(op.cle)) {
+        existenceAvant.set(op.cle, moteur.valeur(ctx, 'locale', op.cle, '_existe'));
+      }
       const r = moteur.appliquer(ctx, op);
       bilan[r] = (bilan[r] || 0) + 1;
+      if (r === 'avance') appliquees.push(op);
     }
     // Ops locales que l'auteur du snapshot avait forcement vues (couvertes par
     // son vecteur) mais qui n'en sont pas des tetes : elles ont ete remplacees,
@@ -175,7 +185,15 @@ async function rattraper(ctx, t, fiches) {
       if (app !== moi && (!cur[app] || cur[app] < nom)) poserSync(ctx, 'curseur:' + app, nom);
     }
   })();
-  return { snapshot: s.appareil + '/' + s.nom, ops: (obj.ops || []).length, bilan, remplacees, trous, premiere };
+  const { resumer } = require('./echange');   // (requis ici : echange ne depend pas de compaction, mais restons sans cycle)
+  const resume = resumer(appliquees, (op) => existenceAvant.get(op.cle));
+  return {
+    snapshot: s.appareil + '/' + s.nom, ops: (obj.ops || []).length, bilan, remplacees, trous, premiere,
+    appliquees: appliquees.length, resume,
+    // Pour le journal : pourquoi ce rattrapage, et parmi combien de snapshots.
+    raison: aTrous ? 'segments purges jamais lus' : 'premiere lecture des autres appareils',
+    candidats: candidats.length, vecteur: obj.vecteur || {}
+  };
 }
 
 /**

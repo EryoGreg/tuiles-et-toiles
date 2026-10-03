@@ -34,7 +34,7 @@ const COLONNES = 'hlc, appareil, entite, cle, champ, valeur, base, vus';
 function resumer(ops, existaitAvant) {
   const nouvelles = new Set(), modifiees = new Set(), supprimees = new Set(), restaurees = new Set();
   const corrections = new Set();
-  let marques = 0, archives = 0, revisions = 0;
+  let marques = 0, archives = 0, revisions = 0, vues = 0;
   const notes = new Set();
   for (const op of ops) {
     const v = op.valeur == null ? null : JSON.parse(op.valeur);
@@ -48,11 +48,12 @@ function resumer(ops, existaitAvant) {
     else if (op.entite === 'archive') archives++;
     else if (op.entite === 'revision' && v) revisions++;
     else if (op.entite === 'note') notes.add(op.cle);
+    else if (op.entite === 'stat') vues++;   // compteurs de vues : pas un changement pour l'utilisateur, compte a part (journal)
   }
   for (const c of [...nouvelles, ...supprimees, ...restaurees]) modifiees.delete(c);
   return {
     tuilesNouvelles: nouvelles.size, tuilesModifiees: modifiees.size, tuilesSupprimees: supprimees.size,
-    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives, revisions, notes: notes.size
+    tuilesRestaurees: restaurees.size, oeuvresCorrigees: corrections.size, marques, archives, revisions, notes: notes.size, vues
   };
 }
 

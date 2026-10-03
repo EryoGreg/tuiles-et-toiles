@@ -148,7 +148,12 @@ Electron + React + SQLite. Windows, mono-utilisateur.
     inactif) et couverts par un snapshot. **Rattrapage** : appareil nouveau, ou dont des
     segments non lus ont été purgés → repart du snapshot ; ses ops locales couvertes par le
     vecteur mais absentes des têtes sont marquées `changements.remplace = 1` (sinon un
-    ancêtre dont le maillon manque passerait pour une tête → faux conflit). **Tuile supprimée
+    ancêtre dont le maillon manque passerait pour une tête → faux conflit). **Le rattrapage compte dans le
+    bilan « Reçu »** (`rattraper` → `appliquees`, `resume` ; `service.additionnerResumes`, journal
+    `recu-detail`) : avant le 03/10/2026, la première synchro d'un appareil qui en découvrait un autre (cas
+    courant : il le lit d'abord par son snapshot) annonçait « Tout était déjà à jour » alors que des données
+    arrivaient. Les compteurs de vues sont comptés à part (`vues`, absent de la phrase) ; garde-fou
+    `bilan-incoherent` (WARN) si des données changent sans rien de compté. Test : `tests/synchro-bilan.test.js`. **Tuile supprimée
     depuis 90 j** : contenu remis à vide **par des ops ordinaires** (un effacement local ne
     convergerait pas face à une restauration concurrente) ; la pierre tombale reste à vie ;
     pas d'oubli tant qu'un conflit de suppression est ouvert. Le conflit « supprimée ici,

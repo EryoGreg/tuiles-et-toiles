@@ -299,10 +299,31 @@ async function coeur(t, sorte) {
         entite: x.entite, cle: x.cle, champ: x.champ, gagnant: x.hlc_gagnant, perdant: x.hlc_perdant
       })));
     }
+    // Recu = reception ordinaire + ce qu'un rattrapage depuis un snapshot a apporte.
+    const ratt = c.rattrapage && !c.rattrapage.manque ? c.rattrapage : null;
+    const recu = additionnerResumes(r.resume, ratt && ratt.resume);
+    const appliquees = (r.appliquees || 0) + ((ratt && ratt.appliquees) || 0);
+    if (ratt) {
+      journal.evt('synchro', 'recu-detail', {
+        reception: { appliquees: r.appliquees, resume: r.resume || null },
+        rattrapage: { snapshot: ratt.snapshot, appliquees: ratt.appliquees, resume: ratt.resume, premiere: ratt.premiere },
+        total: { appliquees, recu }
+      });
+    }
+    // Garde-fou : des donnees ont change (vue reconstruite) mais le bilan « Recu »
+    // est vide -> un chemin de reception n'est pas compte. A signaler.
+    const totalRecu = recu ? Object.entries(recu).filter(([k]) => k !== 'vues').reduce((x, [, y]) => x + (y || 0), 0) : 0;
+    const horsVues = appliquees - ((recu && recu.vues) || 0);
+    if (change && !totalRecu && !c.imagesRecues && !rj.renumerotees.length && !c.tombes.length && horsVues > 0) {
+      journal.avertir('synchro', 'bilan-incoherent', {
+        appliquees, horsVues, reception: r.bilan, rattrapage: ratt ? ratt.bilan : null,
+        note: 'ops appliquees sans changement visible compte (stats de vues seules ?)'
+      });
+    }
     const bilan = {
       le: new Date().toISOString(),
-      poussees: c.pousse.poussees, appliquees: r.appliquees, rejetees: r.rejetees, conflits: r.conflits,
-      envoye: c.pousse.resume || null, recu: r.resume || null,
+      poussees: c.pousse.poussees, appliquees, rejetees: r.rejetees, conflits: r.conflits,
+      envoye: c.pousse.resume || null, recu,
       imagesEnvoyees: c.imagesEnvoyees, imagesRecues: c.imagesRecues,
       prefixe: rj.prefixe, premiereFois: rj.premiereFois, renumerotees: rj.renumerotees,
       remplacement: rj.remplacement || null, supplante: rj.supplante || null, nom: a.nom,
@@ -504,6 +525,15 @@ async function essaiRapide(api, cle) {
   return bilan;
 }
 
+/** Somme champ a champ de deux resumes d'echange (echange.resumer) ; null si aucun. */
+function additionnerResumes(a, b) {
+  if (!a && !b) return null;
+  if (!a || !b) return { ...(a || b) };
+  const out = { ...a };
+  for (const [k, v] of Object.entries(b)) out[k] = (out[k] || 0) + (v || 0);
+  return out;
+}
+
 const LIBELLES = {
   titre: 'Titre', artiste: 'Artiste', date: 'Année / période', lieu: 'Conservation',
   description: 'Description', tags: 'Tags', image: 'Image', ref_local: 'Numéro', _existe: 'Existence'
@@ -655,5 +685,6 @@ function resoudre(id, choix) {
 module.exports = {
   configurer, etat: etatSynchro, definirDossier, oublierDossier,
   synchroniser, synchroniserDrive, resoudre, listeConflits, listeAppareils, retirerAppareil, SOUS_DOSSIER,
-  renommer, choisirRemplacement, decisionEnAttente, sessionExpiree, sessionRetablie, nombreConflits
+  renommer, choisirRemplacement, decisionEnAttente, sessionExpiree, sessionRetablie, nombreConflits,
+  additionnerResumes
 };
