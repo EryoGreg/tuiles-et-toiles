@@ -1,6 +1,6 @@
 {
   "name": "tuiles-et-toiles",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "Tuiles et Toiles",
   "main": "src/main/index.js",
   "private": true,
