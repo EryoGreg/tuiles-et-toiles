@@ -641,10 +641,16 @@ dans ce même moteur) :
 - **Artiste évocateur jusqu'à 6 œuvres** (`ARTISTE_EVOCATEUR_MAX`, avant : 1) : un
   artiste prolifique sur des sujets variés reste un indice ; la discriminance est
   vérifiée à part.
-- **Tuile « pauvre » (0 masque)** : autorisée (fiche volontaire), mais l'éditeur
-  prévient par un popup « tuile peu distinctive » (non bloquant). Pas de masque de
-  repli : elle n'apparaît simplement pas en jeu. Garde-fou éditeur : après une
-  création, les validations suivantes **modifient** la même tuile (pas de doublon).
+- **Tuile pauvre / incomplète** : autorisée (fiche volontaire), mais l'éditeur
+  prévient par un popup non bloquant (« Garder quand même »), à **deux niveaux** :
+  « Tuile injouable en l'état » (0 masque → n'apparaît pas en jeu) ou « Tuile
+  incomplète » (jouable mais apparaîtra peu), avec la **liste des champs
+  manquants** (`edition.manquesDe` : image/titre/artiste/date/lieu/description <
+  60 car./tags, renvoyé par `creer`/`modifier` à côté du compte de masques). Pas
+  de masque de repli : une tuile à 0 masque n'apparaît simplement pas en jeu.
+  Garde-fou éditeur : après une création, les validations suivantes **modifient**
+  la même tuile (pas de doublon). Vérifié en conditions réelles (build mobile-web,
+  origine vierge pour contourner le cache de `principal.js`, nom sans hash).
 
 Corollaire de méthode, appris à mes dépens : **apparier en souple** (valeurs
 normalisées) mais **comparer en strict** (valeurs brutes). Sert à détecter un
