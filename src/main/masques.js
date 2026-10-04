@@ -168,9 +168,12 @@ function calculer(oeuvres) {
 
       const voit = (c) => (m & BIT[c]) !== 0;
 
-      // Une tuile sans image ne montre jamais sa case image : un cadre vide
-      // n'est pas un indice (sinon le mode « normal » reintroduirait {image,…}).
-      if (voit('image') && !aImage(o)) continue;
+      // On ne revele jamais une case sans contenu reel : un champ vide, ou qui se
+      // reduit a de la ponctuation (« - », « ? », « N/A » reste du texte), a une
+      // valeur normalisee vide -> ce n'est pas un indice. Couvre aussi l'image
+      // absente (valeur('image') = '' alors). Court mais rempli (« Orphee »,
+      // « XV ») reste valide : c'est le contenu, pas la longueur, qui compte.
+      if (CHAMPS.some((c) => voit(c) && valeur(o, c) === '')) continue;
 
       // regle 2 : au moins un evocateur visible
       let evoc = EVOCATEURS.some((c) => {

@@ -11,7 +11,7 @@ const assert = require('assert/strict');
 const path = require('path');
 
 const RACINE = path.resolve(__dirname, '..');
-const { calculer, CHAMPS, BIT } = require(path.join(RACINE, 'src/main/masques.js'));
+const { calculer, CHAMPS, BIT, valeur } = require(path.join(RACINE, 'src/main/masques.js'));
 
 let nOk = 0, nKo = 0;
 function test(nom, fn) {
@@ -137,6 +137,39 @@ test('pack : 0 bloquee, difficile=1 champ et normal=2 champs pour toutes', () =>
   assert.equal(difficile1, oeuvres.length, 'difficile != 1 champ pour ' + (oeuvres.length - difficile1) + ' tuiles');
   assert.equal(normal2, oeuvres.length, 'normal != 2 champs pour ' + (oeuvres.length - normal2) + ' tuiles');
   assert.ok(maxChamps <= 2, 'max champs stockes = ' + maxChamps);
+});
+
+console.log('aucun champ vide / ponctuation revele');
+
+test('un champ vide ou « - » n\'est jamais revele ; « N/A » (texte) reste valide', () => {
+  // lieu « - » : ne doit jamais apparaitre dans un masque (valeur normalisee vide).
+  const oeuvres = [
+    oeuvre('a', { artiste: 'Picasso', titre: 'Guernica', lieu: '-', description: DESC, image: 'a.jpg' }),
+    oeuvre('b', { artiste: 'Dali', titre: 'Persistance', lieu: '?', description: DESC, image: 'b.jpg' })
+  ];
+  const m = calculer(oeuvres);
+  for (const mk of m.get('a')) assert.ok(!(mk & BIT.lieu), 'lieu « - » revele : ' + champsDe(mk).join('+'));
+
+  // « N/A » comme artiste : du texte reel -> peut etre revele.
+  const avecNA = [
+    oeuvre('x', { artiste: 'N/A', titre: 'Sans attribution', description: DESC, image: 'x.jpg' }),
+    oeuvre('y', { artiste: 'N/A', titre: 'Autre anonyme', description: DESC, image: 'y.jpg' })
+  ];
+  const mx = calculer(avecNA).get('x');
+  assert.ok(mx.some((mk) => mk & BIT.artiste), '« N/A » devrait pouvoir servir d\'indice');
+});
+
+test('pack : aucun masque ne revele un champ vide', () => {
+  const Database = require(path.join(RACINE, 'node_modules/better-sqlite3'));
+  const d = new Database(path.join(RACINE, 'data/pack.db'), { readonly: true });
+  const pack = d.prepare('SELECT * FROM oeuvres').all();
+  d.close();
+  const mp = calculer(pack);
+  let vides = 0;
+  for (const o of pack) for (const mk of mp.get(o.id) || []) {
+    for (const c of CHAMPS) if ((mk & BIT[c]) && valeur(o, c) === '') vides++;
+  }
+  assert.equal(vides, 0, vides + ' masque(s) revelent un champ vide');
 });
 
 console.log('difficile ne montre jamais lieu / tags / date seuls');
