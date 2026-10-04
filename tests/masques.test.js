@@ -139,6 +139,37 @@ test('pack : 0 bloquee, difficile=1 champ et normal=2 champs pour toutes', () =>
   assert.ok(maxChamps <= 2, 'max champs stockes = ' + maxChamps);
 });
 
+console.log('difficile ne montre jamais lieu / tags / date seuls');
+
+test('aucun masque 1-champ n\'est lieu, tags ou date (evocateur obligatoire)', () => {
+  // La date n'est meme pas un champ affichable (regle non negociable).
+  assert.ok(!CHAMPS.includes('date'), 'la date ne doit pas etre un champ de masque');
+  const EVOC1 = new Set([BIT.image, BIT.artiste, BIT.titre, BIT.description]);
+
+  // Synthetique : lieu et titre remplis -> difficile montre le titre, jamais le lieu.
+  const oeuvres = [
+    oeuvre('a', { titre: 'La Ronde de nuit', lieu: 'Rijksmuseum', image: 'a.jpg' }),
+    oeuvre('b', { titre: 'La Laitiere', lieu: 'Rijksmuseum', image: 'b.jpg' })
+  ];
+  for (const mk of calculer(oeuvres).get('a')) {
+    if (nb(mk) === 1) assert.ok(EVOC1.has(mk), 'masque 1-champ non evocateur : ' + champsDe(mk).join('+'));
+    assert.ok(mk !== BIT.lieu && mk !== BIT.tags, 'masque {lieu}/{tags} seul interdit');
+  }
+
+  // Pack entier : idem.
+  const Database = require(path.join(RACINE, 'node_modules/better-sqlite3'));
+  const d = new Database(path.join(RACINE, 'data/pack.db'), { readonly: true });
+  const pack = d.prepare('SELECT * FROM oeuvres').all();
+  d.close();
+  const mp = calculer(pack);
+  for (const o of pack) {
+    for (const mk of mp.get(o.id) || []) {
+      assert.ok(mk !== BIT.lieu && mk !== BIT.tags, '#' + o.ref + ' a un masque {lieu}/{tags} seul');
+      if (nb(mk) === 1) assert.ok(EVOC1.has(mk), '#' + o.ref + ' masque 1-champ non evocateur : ' + champsDe(mk).join('+'));
+    }
+  }
+});
+
 console.log('champs manquants (avertissement editeur)');
 
 test('manquesDe liste les champs vides / description trop courte', () => {
