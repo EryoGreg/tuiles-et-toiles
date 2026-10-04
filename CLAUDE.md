@@ -6,8 +6,12 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.15 (Latest, GitHub, 04/10/2026) — découpe d'`App.jsx` (étape 1 de Bristol), **Mes
-  notes**, **bilan de synchro qui compte les rattrapages**, **contenus anormaux** (recherche
+- **Publiée** : 0.3.16 (Latest, GitHub, 04/10/2026) — **moteur de masques revu** (paliers de difficulté
+  Normal/Difficile, image facultative, fuite élargie, artiste ≤6 œuvres évocateur, jamais de champ vide
+  révélé, jamais lieu/tags/date seuls, recalcul auto au 1er lancement via `masques.VERSION`), **choix de
+  difficulté** sur Nouvelle partie (`prefs_affichage`), **avertissement éditeur** injouable/incomplète
+  (`edition.manquesDe`). Voir « Le moteur de masques ».
+- **0.3.15** (04/10/2026) — découpe d'`App.jsx` (étape 1 de Bristol), **Mes notes**, **bilan de synchro qui compte les rattrapages**, **contenus anormaux** (recherche
   multi-écritures, textes bien formés, limites de taille, démarrage mobile sans `innerHTML`), et
   **durcissement sécurité** (session de tests avancés 04/10) : bombe de décompression bornée dans
   `synchro/format.decoderSnapshot` (ISIZE vérifié avant allocation, cap compressé/décompressé,
