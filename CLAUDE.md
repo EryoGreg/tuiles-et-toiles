@@ -612,15 +612,39 @@ plus récent n'est jamais écrasé), `utilisateur.db` (jamais écrasé). Images 
 ## Le moteur de masques
 
 `src/main/masques.js`. Un masque = l'ensemble des champs visibles ; retenu s'il
-est **discriminant** (ne désigne qu'une œuvre), **évocateur** (image, titre,
-description ≥ 60 car., ou artiste unique au corpus), **sans fuite** (21
-descriptions citent l'artiste ou le titre) et **incomplet**. La date n'en fait
-jamais partie.
+est **discriminant** (ne désigne qu'une œuvre), **évocateur** (image présente,
+titre, description ≥ 60 car., ou artiste ≤ 6 œuvres au corpus), **sans fuite** et
+**incomplet** ; puis on ne garde que les masques **minimaux** (voir ci-dessous).
+La date n'en fait jamais partie.
 
-Précalculé à la fabrication du pack. Sur les 431 œuvres : min 35, médiane 55,
-max 59 masques valides, aucune œuvre bloquée. Créer / modifier / supprimer une
-tuile locale change la discriminance de tout le corpus → recalcul complet à
-chaque écriture (S2+, ~100 ms).
+**Minimalité (04/10/2026, `tests/masques.test.js`).** Un masque **dominé** — un
+autre masque valide montre un sous-ensemble strict de ses champs visibles — est
+retiré. Sans ça le tirage (`jeu.js`, pioche à plat) pouvait révéler titre +
+artiste + description à la fois alors que titre seul suffisait : masque valide
+mais sans intérêt (bug observé sur une tuile locale). Résultat sur les 431 : **0
+bloquée, médiane 1 champ visible (max 2)**, ~3,8 masques/œuvre. Créer / modifier /
+supprimer une tuile change la discriminance de tout le corpus → recalcul complet
+à chaque écriture (S2+, ~100 ms).
+
+Quatre règles ajustées le 04/10 pour le **contenu utilisateur** (les constantes
+étaient calibrées sur les 431 du pack ; Bristol poussera du contenu arbitraire
+dans ce même moteur) :
+- **Image facultative** : `valeur('image')` renvoie `''` (pas l'id fantôme) quand
+  la tuile n'a pas d'image → l'image ne discrimine ni n'évoque alors ; la tuile
+  reste jouable par titre/description. Une tuile sans image est acceptée.
+- **Fuite généralisée** : aucun champ visible ne trahit la réponse d'un champ
+  caché (`CIBLES_FUITE` = artiste/titre/lieu ; sources = tous les champs texte
+  visibles). Avant : seule `description → artiste/titre`. Couvre p. ex. `lieu`
+  « Musée Picasso » visible pendant que l'artiste « Picasso » est caché. Un titre
+  ou un lieu cible exige ≥ 2 mots significatifs (> 3 lettres) ; l'artiste suffit
+  à 1 (nom propre = réponse franche).
+- **Artiste évocateur jusqu'à 6 œuvres** (`ARTISTE_EVOCATEUR_MAX`, avant : 1) : un
+  artiste prolifique sur des sujets variés reste un indice ; la discriminance est
+  vérifiée à part.
+- **Tuile « pauvre » (0 masque)** : autorisée (fiche volontaire), mais l'éditeur
+  prévient par un popup « tuile peu distinctive » (non bloquant). Pas de masque de
+  repli : elle n'apparaît simplement pas en jeu. Garde-fou éditeur : après une
+  création, les validations suivantes **modifient** la même tuile (pas de doublon).
 
 Corollaire de méthode, appris à mes dépens : **apparier en souple** (valeurs
 normalisées) mais **comparer en strict** (valeurs brutes). Sert à détecter un
