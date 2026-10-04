@@ -21,6 +21,18 @@ const journal = require('./journal');
 
 const CHAMPS = etat.CHAMPS_LOCALE;
 
+// Champs recommandes pour une tuile « complete ». Une description de moins de
+// 60 caracteres ne vaut pas indice (comme dans le moteur de masques). Sert a
+// prevenir l'utilisateur quand une tuile risque d'etre pauvre / peu jouable.
+const RECOMMANDES = ['image', 'titre', 'artiste', 'date', 'lieu', 'description', 'tags'];
+function manquesDe(o) {
+  if (!o) return [];
+  return RECOMMANDES.filter((c) => {
+    const v = String(o[c] == null ? '' : o[c]).trim();
+    return c === 'description' ? v.length < 60 : v === '';
+  });
+}
+
 let dossierImages = null;
 function configurer(dossierImagesLocales) { dossierImages = dossierImagesLocales; }
 
@@ -149,7 +161,7 @@ function creer(champs = {}) {
   const masques = journaliser('creer', id, {
     champs: decrireChamps(champs), image: etatImage(texte(champs, 'image')), ms: Date.now() - t0
   });
-  return { id, ref, masques };
+  return { id, ref, masques, manques: manquesDe(db.oeuvre(id)) };
 }
 
 /** Valeurs effectives d'une tuile, pretes pour l'editeur (image = nom brut). */
@@ -215,7 +227,7 @@ function modifier(id, champs = {}) {
     local: id.startsWith('local:'), changes, image: changes.image ? etatImage(texte(champs, 'image')) : undefined,
     ms: Date.now() - t0
   });
-  return { id, ref: o && o.ref, masques };
+  return { id, ref: o && o.ref, masques, manques: manquesDe(o) };
 }
 
 /**
@@ -531,5 +543,5 @@ module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
   conflitsPack, trancherPack, lireNote, ecrireNote, LIMITES, LIMITE_CHAMP,
   rafraichir: appliquer,
-  imagesReferencees
+  imagesReferencees, manquesDe
 };

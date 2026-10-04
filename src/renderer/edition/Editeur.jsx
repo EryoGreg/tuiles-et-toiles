@@ -217,9 +217,10 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
       }
       if (r && r.erreur) { setErreurValider(r.erreur); setEnCours(false); return; }
       if (noteChangee && r && r.id) await window.api.notes.ecrire(r.id, note);
-      // Aucun masque valide : la tuile n'apparaitra pas en jeu. On previent,
-      // sans l'empecher (une fiche pauvre peut etre voulue).
-      if (r && r.masques === 0) { setAvertirSansMasque(r); setEnCours(false); return; }
+      // Tuile injouable (0 masque) ou incomplete (champs importants vides) : on
+      // previent, sans empecher (une fiche pauvre peut etre voulue).
+      const manques = (r && r.manques) || [];
+      if (r && (r.masques === 0 || manques.length)) { setAvertirSansMasque(r); setEnCours(false); return; }
       onFini(r);
     } catch (e) {
       window.api.evt('edition', mode + '-exception', { id: tuile && tuile.id, message: String(e && e.message || e) }, 'ERREUR');
@@ -385,25 +386,44 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
           onReprendre={reprendre} onFermer={() => setHistorique(null)}
         />
       )}
-      {avertirSansMasque && (
-        <BoiteConfirmation
-          titre="Tuile peu distinctive"
-          texteConfirmer="Garder quand même"
-          confirmerVariante="valide"
-          onAnnuler={() => setAvertirSansMasque(null)}
-          onConfirmer={() => onFini(avertirSansMasque)}
-        >
-          <p>
-            Avec ces champs, aucun jeu d’indices ne la distingue des autres
-            tuiles : elle <strong>n’apparaîtra pas pendant les parties</strong>
-            {' '}(ni en révision espacée). Elle reste visible dans la Bibliothèque.
-          </p>
-          <p>
-            Tu peux la garder ainsi (une simple fiche, c’est voulu) ou revenir lui
-            donner un titre, une image ou une description plus précise.
-          </p>
-        </BoiteConfirmation>
-      )}
+      {avertirSansMasque && (() => {
+        const injouable = avertirSansMasque.masques === 0;
+        const manques = avertirSansMasque.manques || [];
+        return (
+          <BoiteConfirmation
+            titre={injouable ? 'Tuile injouable en l’état' : 'Tuile incomplète'}
+            texteConfirmer="Garder quand même"
+            confirmerVariante="valide"
+            onAnnuler={() => setAvertirSansMasque(null)}
+            onConfirmer={() => onFini(avertirSansMasque)}
+          >
+            {injouable ? (
+              <p>
+                Avec ces champs, aucun jeu d’indices ne la distingue des autres
+                tuiles : elle <strong>n’apparaîtra pas pendant les parties</strong>
+                {' '}(ni en révision espacée). Un seul champ rempli ne suffit pas —
+                s’il faut le montrer comme indice, il ne reste rien à deviner.
+              </p>
+            ) : (
+              <p>
+                Il manque des champs importants : la tuile sera jouable mais
+                <strong> apparaîtra peu</strong>, et certains tirages auront peu à
+                montrer. Plus elle est complète, plus elle est utile à mémoriser.
+              </p>
+            )}
+            {manques.length > 0 && (
+              <p>
+                Champs vides ou trop courts :{' '}
+                <strong>{manques.map((c) => (c === 'image' ? 'Image' : LIBELLES_CHAMPS[c]) || c).join(', ')}</strong>.
+              </p>
+            )}
+            <p>
+              Tu peux la garder ainsi (une simple fiche, c’est voulu) ou revenir la
+              compléter.
+            </p>
+          </BoiteConfirmation>
+        );
+      })()}
     </div>
   );
 }

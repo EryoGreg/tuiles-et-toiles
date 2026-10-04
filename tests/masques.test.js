@@ -128,5 +128,23 @@ test('pack : 0 oeuvre bloquee, antichaine partout, <= 2 champs visibles par masq
   assert.ok(maxChamps <= 2, 'un masque du pack montre ' + maxChamps + ' champs (trop)');
 });
 
+console.log('champs manquants (avertissement editeur)');
+
+test('manquesDe liste les champs vides / description trop courte', () => {
+  const { manquesDe } = require(path.join(RACINE, 'src/main/edition.js'));
+  // Tuile titre seul : tout le reste manque.
+  assert.deepEqual(
+    manquesDe({ titre: 'test', artiste: '', date: '', lieu: '', description: '', tags: '', image: '' }).sort(),
+    ['artiste', 'date', 'description', 'image', 'lieu', 'tags'].sort()
+  );
+  // Description < 60 car. compte comme manquante.
+  assert.ok(manquesDe({ titre: 't', description: 'court' }).includes('description'));
+  // Tuile complete : rien ne manque.
+  assert.deepEqual(manquesDe({
+    titre: 'La Joconde', artiste: 'De Vinci', date: '1503', lieu: 'Louvre',
+    description: DESC, tags: 'portrait, renaissance', image: 'x.jpg'
+  }), []);
+});
+
 console.log(`\n${nOk} ok, ${nKo} KO`);
 process.exit(nKo ? 1 : 0);
