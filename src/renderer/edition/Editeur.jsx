@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import * as I from '../icones.jsx';
 import { SUR_MOBILE, dateCourte, urlTuile } from '../commun/base.jsx';
 import { BoiteCartel } from './Cartel.jsx';
+import { BoiteConfirmation } from '../commun/boites.jsx';
 import { PastilleConflit } from '../tuile/Cartes.jsx';
 
 /* --------------------------------------------------------------- edition */
@@ -74,6 +75,8 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const [survol, setSurvol] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [erreurValider, setErreurValider] = useState(null);   // champ trop long…
+  const [avertirSansMasque, setAvertirSansMasque] = useState(null);   // tuile injouable (0 masque)
+  const [idCree, setIdCree] = useState(null);   // creation deja faite dans cette session -> on modifie ensuite (pas de doublon)
   const [historique, setHistorique] = useState(null);   // null | 'chargement' | [{ champ, versions }]
   const [aVersions, setAVersions] = useState(false);
   // Lecture du cartel (mobile : ML Kit ; PC : Windows) : null | 'lecture' | { lignes, proposition } | { erreur }
@@ -204,11 +207,19 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
         r = !memeChamps(champs, initial)
           ? await window.api.edition.modifier(tuile.id, champs)
           : { id: tuile.id, ref: tuile.ref };   // seule la note a change
+      } else if (idCree) {
+        // Deja cree ici (ex. apres l'avertissement « tuile peu distinctive ») :
+        // on modifie la meme tuile, jamais une 2e creation.
+        r = await window.api.edition.modifier(idCree, champs);
       } else {
         r = await window.api.edition.creer(champs);
+        if (r && r.id && !r.erreur) setIdCree(r.id);
       }
       if (r && r.erreur) { setErreurValider(r.erreur); setEnCours(false); return; }
       if (noteChangee && r && r.id) await window.api.notes.ecrire(r.id, note);
+      // Aucun masque valide : la tuile n'apparaitra pas en jeu. On previent,
+      // sans l'empecher (une fiche pauvre peut etre voulue).
+      if (r && r.masques === 0) { setAvertirSansMasque(r); setEnCours(false); return; }
       onFini(r);
     } catch (e) {
       window.api.evt('edition', mode + '-exception', { id: tuile && tuile.id, message: String(e && e.message || e) }, 'ERREUR');
@@ -373,6 +384,25 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
           historique={historique} actuels={champs}
           onReprendre={reprendre} onFermer={() => setHistorique(null)}
         />
+      )}
+      {avertirSansMasque && (
+        <BoiteConfirmation
+          titre="Tuile peu distinctive"
+          texteConfirmer="Garder quand même"
+          confirmerVariante="valide"
+          onAnnuler={() => setAvertirSansMasque(null)}
+          onConfirmer={() => onFini(avertirSansMasque)}
+        >
+          <p>
+            Avec ces champs, aucun jeu d’indices ne la distingue des autres
+            tuiles : elle <strong>n’apparaîtra pas pendant les parties</strong>
+            {' '}(ni en révision espacée). Elle reste visible dans la Bibliothèque.
+          </p>
+          <p>
+            Tu peux la garder ainsi (une simple fiche, c’est voulu) ou revenir lui
+            donner un titre, une image ou une description plus précise.
+          </p>
+        </BoiteConfirmation>
       )}
     </div>
   );
