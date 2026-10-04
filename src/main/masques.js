@@ -22,6 +22,12 @@
  * dans la liste des masques de l'oeuvre, filtree par difficulte.
  */
 
+// Version des REGLES de masques. A incrementer a chaque changement de logique
+// (evocateur, fuite, paliers, champ vide...) : db.reconstruireVue force alors un
+// recalcul unique a la prochaine ouverture, meme si la couche user est vide et
+// le pack inchange (sinon les tuiles du pack garderaient d'anciens masques).
+const VERSION = 2;
+
 const CHAMPS = ['image', 'artiste', 'titre', 'lieu', 'description', 'tags'];
 const BIT = {};
 CHAMPS.forEach((c, i) => { BIT[c] = 1 << i; });
@@ -224,4 +230,4 @@ function decrire(masque) {
   return out;
 }
 
-module.exports = { CHAMPS, BIT, TOUT, calculer, decrire, normaliser, normaliserRecherche, valeur, aImage, nbChamps };
+module.exports = { CHAMPS, BIT, TOUT, calculer, decrire, normaliser, normaliserRecherche, valeur, aImage, nbChamps, VERSION };

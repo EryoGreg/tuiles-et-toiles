@@ -290,7 +290,8 @@ function exporterVers(cible) {
  */
 function reconstruireVue({ force = false } = {}) {
   const d = instance();
-  const { normaliser, calculer } = require('./masques');
+  const moteurMasques = require('./masques');
+  const { normaliser, calculer } = moteurMasques;
 
   const hashPack = (d.prepare("SELECT valeur FROM pack.pack_meta WHERE cle = 'hash'").get() || {}).valeur || '';
 
@@ -300,8 +301,12 @@ function reconstruireVue({ force = false } = {}) {
       d.prepare('SELECT COUNT(*) n FROM user_overrides').get().n === 0 &&
       d.prepare('SELECT COUNT(*) n FROM oeuvres_locales').get().n === 0;
     const dejaPeuplee = d.prepare('SELECT COUNT(*) n FROM oeuvres_effectives').get().n > 0;
-    if (vide && dejaPeuplee && reglage('vue_pack_hash') === hashPack) {
-      journal.debug('db', 'vue-a-jour', { raison: 'couche user vide, pack inchange' });
+    // `vue_masques_version` force un recalcul unique apres une mise a jour qui
+    // change les REGLES de masques (sinon, couche user vide + pack inchange, les
+    // tuiles du pack garderaient les masques calcules par l'ancienne version).
+    const memeMoteur = reglage('vue_masques_version') === String(moteurMasques.VERSION);
+    if (vide && dejaPeuplee && reglage('vue_pack_hash') === hashPack && memeMoteur) {
+      journal.debug('db', 'vue-a-jour', { raison: 'couche user vide, pack inchange, moteur inchange' });
       return;
     }
   }
@@ -352,6 +357,7 @@ function reconstruireVue({ force = false } = {}) {
   })();
 
   definirReglage('vue_pack_hash', hashPack);
+  definirReglage('vue_masques_version', String(moteurMasques.VERSION));
   const sansMasque = effectives.filter((e) => !(masques.get(e.id) || []).length).map((e) => e.ref);
   journal.evt('db', 'vue-reconstruite', {
     force, oeuvres: effectives.length, archivees: archive.size, overrides: Object.keys(overrides).length,
