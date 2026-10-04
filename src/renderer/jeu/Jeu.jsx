@@ -19,6 +19,9 @@ export function NouvellePartie({ onLancer }) {
   //   additif (défaut) : l'œuvre porte AU MOINS UNE des catégories
   //   soustractif      : l'œuvre porte TOUTES les catégories
   const [soustractif, setSoustractif] = usePref('partie:soustractif', false);
+  // Difficulte (par appareil, persistee) : « difficile » (defaut) = 1 indice,
+  // « normal » = 2. Lue par le processus principal au tirage (jeu.tuile).
+  const [difficulte, setDifficulte] = usePref('difficulte', 'difficile');
   const [apercu, setApercu] = useState(null);     // { total, possibles }
   const [rev, setRev] = useState(null);           // compteurs de la revision espacee
   useEffect(() => { window.api.revision.etat().then(setRev).catch(() => {}); }, []);
@@ -116,6 +119,28 @@ export function NouvellePartie({ onLancer }) {
             </div>
           </span>
         </button>
+
+        <div className="np-difficulte">
+          <div className="np-diff-tete">Difficulté</div>
+          <div className="np-diff-choix">
+            <button
+              type="button"
+              className={'np-diff' + (difficulte === 'normal' ? ' actif' : '')}
+              onClick={() => setDifficulte('normal')}
+            >
+              <span className="np-diff-nom">Normal</span>
+              <span className="np-diff-desc">2 indices affichés</span>
+            </button>
+            <button
+              type="button"
+              className={'np-diff' + (difficulte === 'difficile' ? ' actif' : '')}
+              onClick={() => setDifficulte('difficile')}
+            >
+              <span className="np-diff-nom">Difficile</span>
+              <span className="np-diff-desc">1 seul indice</span>
+            </button>
+          </div>
+        </div>
 
         <button
           className={'np-lancer' + (peutLancer ? '' : ' off')}

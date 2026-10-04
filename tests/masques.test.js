@@ -94,38 +94,49 @@ test('artiste a 7 oeuvres : {artiste, tags} n\'est plus evocateur', () => {
   assert.ok(m.get('o0').some((mk) => mk & BIT.titre), 'la tuile reste jouable via le titre');
 });
 
-console.log('masques minimaux (antichaine)');
+console.log('paliers de difficulte (minC et minC+1)');
 
-function antichaine(masks) {
-  return !masks.some((a) => masks.some((b) => a !== b && (a & b) === b));
-}
+const nb = (m) => champsDe(m).length;
+const palier = (masks, mode) => {
+  const minC = Math.min(...masks.map(nb));
+  if (mode === 'normal') { const p = masks.filter((m) => nb(m) === minC + 1); if (p.length) return p; }
+  return masks.filter((m) => nb(m) === minC);
+};
 
-test('aucun masque n\'est domine par un autre (corpus synthetique)', () => {
+test('chaque masque stocke montre minC ou minC+1 champs (pas plus)', () => {
   const oeuvres = [
     oeuvre('a', { artiste: 'Repine', titre: 'Les bateliers de la Volga', lieu: 'Musee Russe', description: DESC, image: 'a.jpg' }),
     oeuvre('b', { artiste: 'Serov', titre: 'Jeune fille', lieu: 'Tretiakov', description: DESC, image: 'b.jpg' })
   ];
-  const m = calculer(oeuvres);
-  assert.ok(antichaine(m.get('a')), 'masques de a non minimaux : ' + m.get('a').map(champsDe).map((x) => x.join('+')));
+  const masks = calculer(oeuvres).get('a');
+  const minC = Math.min(...masks.map(nb));
+  assert.ok(masks.every((m) => nb(m) <= minC + 1), 'un masque depasse minC+1 : ' + masks.map(champsDe).map((x) => x.join('+')));
+  // difficile = 1 champ, normal = 2 champs (cette tuile a une image -> {image} seul possible)
+  assert.ok(palier(masks, 'difficile').every((m) => nb(m) === 1));
+  assert.ok(palier(masks, 'normal').every((m) => nb(m) === 2));
 });
 
 console.log('regression sur le vrai pack');
 
-test('pack : 0 oeuvre bloquee, antichaine partout, <= 2 champs visibles par masque', () => {
+test('pack : 0 bloquee, difficile=1 champ et normal=2 champs pour toutes', () => {
   const Database = require(path.join(RACINE, 'node_modules/better-sqlite3'));
   const d = new Database(path.join(RACINE, 'data/pack.db'), { readonly: true });
   const oeuvres = d.prepare('SELECT * FROM oeuvres').all();
   d.close();
   const m = calculer(oeuvres);
-  let bloquees = 0, maxChamps = 0;
+  let bloquees = 0, maxChamps = 0, difficile1 = 0, normal2 = 0;
   for (const o of oeuvres) {
     const masks = m.get(o.id) || [];
-    if (!masks.length) bloquees++;
-    assert.ok(antichaine(masks), 'masque domine pour #' + o.ref);
-    for (const mk of masks) maxChamps = Math.max(maxChamps, champsDe(mk).length);
+    if (!masks.length) { bloquees++; continue; }
+    const minC = Math.min(...masks.map(nb));
+    for (const mk of masks) { assert.ok(nb(mk) <= minC + 1); maxChamps = Math.max(maxChamps, nb(mk)); }
+    if (palier(masks, 'difficile').every((x) => nb(x) === 1)) difficile1++;
+    if (palier(masks, 'normal').every((x) => nb(x) === 2)) normal2++;
   }
-  assert.equal(bloquees, 0, bloquees + ' oeuvre(s) du pack bloquee(s)');
-  assert.ok(maxChamps <= 2, 'un masque du pack montre ' + maxChamps + ' champs (trop)');
+  assert.equal(bloquees, 0, bloquees + ' oeuvre(s) bloquee(s)');
+  assert.equal(difficile1, oeuvres.length, 'difficile != 1 champ pour ' + (oeuvres.length - difficile1) + ' tuiles');
+  assert.equal(normal2, oeuvres.length, 'normal != 2 champs pour ' + (oeuvres.length - normal2) + ' tuiles');
+  assert.ok(maxChamps <= 2, 'max champs stockes = ' + maxChamps);
 });
 
 console.log('champs manquants (avertissement editeur)');

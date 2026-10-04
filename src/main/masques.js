@@ -11,14 +11,15 @@
  *   2. evocateur     -- au moins un indice qu'un humain peut relier a l'oeuvre
  *   3. sans fuite    -- aucun champ visible ne contient la reponse d'un champ cache
  *   4. incomplet     -- au moins un champ cache
- * Puis on ne garde que les masques MINIMAUX : si un masque valide en montre
- * strictement moins qu'un autre (sous-ensemble de champs visibles), l'autre est
- * « domine » et retire. Sinon le tirage pouvait montrer titre + artiste +
- * description a la fois alors que titre seul suffisait : trop d'indices, aucun
- * interet pour l'entrainement.
+ * Puis on ne garde, par oeuvre, que les masques les plus serres : ceux qui
+ * montrent le MINIMUM de champs possible (minC) et ceux qui en montrent un de
+ * plus (minC+1). Les deux niveaux servent la difficulte choisie au tirage
+ * (`jeu.js`) : « difficile » pioche parmi minC (en general 1 seul champ visible),
+ * « normal » parmi minC+1 (2 champs). On jette les masques plus fournis : montrer
+ * titre + artiste + description a la fois n'a aucun interet pour l'entrainement.
  *
  * Tout est precalcule a l'import : le tirage en jeu se contente de piocher
- * dans la liste des masques valides de l'oeuvre.
+ * dans la liste des masques de l'oeuvre, filtree par difficulte.
  */
 
 const CHAMPS = ['image', 'artiste', 'titre', 'lieu', 'description', 'tags'];
@@ -167,6 +168,10 @@ function calculer(oeuvres) {
 
       const voit = (c) => (m & BIT[c]) !== 0;
 
+      // Une tuile sans image ne montre jamais sa case image : un cadre vide
+      // n'est pas un indice (sinon le mode « normal » reintroduirait {image,…}).
+      if (voit('image') && !aImage(o)) continue;
+
       // regle 2 : au moins un evocateur visible
       let evoc = EVOCATEURS.some((c) => {
         if (!voit(c) || !valeur(o, c)) return false;
@@ -189,15 +194,24 @@ function calculer(oeuvres) {
       valides.push(m);
     }
 
-    // On ne garde que les masques MINIMAUX : m est retire si un autre masque
-    // valide montre un sous-ensemble strict de ses champs (il est domine).
-    const minimaux = valides.filter(
-      (m) => !valides.some((m2) => m2 !== m && (m & m2) === m2)
-    );
-    resultat.set(o.id, minimaux);
+    // On garde les masques a minC et minC+1 champs visibles (voir en-tete) :
+    // deux niveaux de difficulte, sans les masques trop fournis.
+    if (valides.length) {
+      const minC = Math.min(...valides.map(nbChamps));
+      resultat.set(o.id, valides.filter((m) => nbChamps(m) <= minC + 1));
+    } else {
+      resultat.set(o.id, []);
+    }
   });
 
   return resultat;
+}
+
+/** Nombre de champs visibles dans un masque (popcount). */
+function nbChamps(m) {
+  let n = 0;
+  for (let x = m; x; x >>= 1) n += x & 1;
+  return n;
 }
 
 /** Traduit un bitmask en objet { champ: visible } pour l'affichage. */
@@ -207,4 +221,4 @@ function decrire(masque) {
   return out;
 }
 
-module.exports = { CHAMPS, BIT, TOUT, calculer, decrire, normaliser, normaliserRecherche, valeur, aImage };
+module.exports = { CHAMPS, BIT, TOUT, calculer, decrire, normaliser, normaliserRecherche, valeur, aImage, nbChamps };

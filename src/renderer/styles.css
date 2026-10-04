@@ -1033,6 +1033,26 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .np-mode-nom { font-size: clamp(14px, 1.1vw, 16px); font-weight: 600; color: var(--encre-vive); margin-bottom: 5px; }
 .np-mode-desc { font-size: clamp(11.5px, 0.9vw, 13px); color: var(--attenue); line-height: 1.5; }
 
+/* Difficulte : pleine largeur, entre les modes et Lancer. */
+.np-difficulte { grid-column: 1 / -1; display: flex; align-items: center; gap: clamp(10px, 1.4vw, 20px); flex-wrap: wrap; }
+.np-diff-tete {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--attenue);
+}
+.np-diff-choix { display: flex; gap: clamp(8px, 1vw, 12px); flex: 1 1 auto; }
+.np-diff {
+  flex: 1 1 0; display: flex; flex-direction: column; gap: 3px; text-align: left;
+  padding: clamp(9px, 1vw, 13px) clamp(12px, 1.2vw, 16px); border-radius: 11px;
+  border: 1px solid var(--trait); background: var(--surface);
+}
+.np-diff:hover { border-color: var(--trait-fort); }
+.np-diff.actif {
+  border-color: var(--laiton);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--laiton) 12%, var(--surface)) 0%, var(--surface) 100%);
+}
+.np-diff-nom { font-size: clamp(13px, 1vw, 15px); font-weight: 600; color: var(--encre-vive); }
+.np-diff-desc { font-size: clamp(11px, 0.85vw, 12.5px); color: var(--attenue); }
+
 /* Lancer : meme case qu'une carte de mode, toujours vert. */
 .np-lancer {
   border-radius: 13px; border: none;

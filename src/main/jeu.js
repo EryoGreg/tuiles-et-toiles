@@ -9,7 +9,13 @@
 
 const db = require('./db');
 const etat = require('./synchro/etat');
-const { decrire, TOUT, normaliser } = require('./masques');
+const { decrire, TOUT, normaliser, nbChamps, BIT } = require('./masques');
+
+/** Difficulte courante (reglage par appareil, range dans prefs_affichage). */
+function difficulte() {
+  try { return JSON.parse(db.reglage('prefs_affichage', '{}') || '{}').difficulte || 'difficile'; }
+  catch { return 'difficile'; }
+}
 
 let sac = [];
 let filtreCourant = null;   // cle stable du filtre courant, null = aleatoire
@@ -81,7 +87,20 @@ function tuile(id, f = null) {
 
   const masques = JSON.parse(o.masques || '[]');
   if (!masques.length) return null;
-  const masque = masques[Math.floor(Math.random() * masques.length)];
+  // Difficulte (reglage par appareil, dans prefs_affichage) : « difficile » ne
+  // montre que le minimum de champs (minC), « normal » un de plus (minC+1).
+  const minC = Math.min(...masques.map(nbChamps));
+  let pool = masques.filter((m) => nbChamps(m) === minC);
+  if (difficulte() === 'normal') {
+    const plus = masques.filter((m) => nbChamps(m) === minC + 1);
+    // En aleatoire le tag de jeu est censure : un masque {champ, tags} n'affiche
+    // alors qu'un indice. On prefere donc, pour « normal », un 2e champ qui n'est
+    // pas le tag ; a defaut on prend ce qu'il y a.
+    const plusVrais = plus.filter((m) => (m & BIT.tags) === 0);
+    const cible = plusVrais.length ? plusVrais : plus;
+    if (cible.length) pool = cible;
+  }
+  const masque = pool[Math.floor(Math.random() * pool.length)];
   const visible = decrire(masque);
 
   // Champ `tags` (le « tag de jeu ») :
