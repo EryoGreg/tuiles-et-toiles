@@ -617,14 +617,19 @@ titre, description ≥ 60 car., ou artiste ≤ 6 œuvres au corpus), **sans fuit
 **incomplet** ; puis on ne garde que les masques **minimaux** (voir ci-dessous).
 La date n'en fait jamais partie.
 
-**Minimalité (04/10/2026, `tests/masques.test.js`).** Un masque **dominé** — un
-autre masque valide montre un sous-ensemble strict de ses champs visibles — est
-retiré. Sans ça le tirage (`jeu.js`, pioche à plat) pouvait révéler titre +
-artiste + description à la fois alors que titre seul suffisait : masque valide
-mais sans intérêt (bug observé sur une tuile locale). Résultat sur les 431 : **0
-bloquée, médiane 1 champ visible (max 2)**, ~3,8 masques/œuvre. Créer / modifier /
-supprimer une tuile change la discriminance de tout le corpus → recalcul complet
-à chaque écriture (S2+, ~100 ms).
+**Paliers de difficulté (04/10/2026, `tests/masques.test.js`).** On ne garde, par
+œuvre, que les masques à **minC** et **minC+1** champs visibles (minC = minimum
+possible). Les masques plus fournis sont jetés (montrer titre + artiste +
+description à la fois n'a aucun intérêt — bug observé sur une tuile locale qui
+révélait tout). Les deux paliers servent la **difficulté** choisie au tirage
+(écran Nouvelle partie, réglage `difficulte` par appareil dans `prefs_affichage`,
+défaut `difficile`) : **Difficile** = minC (1 indice), **Normal** = minC+1 (2).
+`jeu.tuile` filtre selon la difficulté ; pour Normal en aléatoire il préfère un 2e
+champ **hors tag** (le tag y est toujours censuré). Une tuile sans image ne
+propose jamais sa case image (même en Normal). S'applique aussi à la révision
+(même `jeu.tuile`). Sur les 431 : **0 bloquée**, difficile 1 champ / normal 2
+champs pour toutes. Créer / modifier / supprimer une tuile change la discriminance
+de tout le corpus → recalcul complet à chaque écriture (S2+, ~100 ms).
 
 Quatre règles ajustées le 04/10 pour le **contenu utilisateur** (les constantes
 étaient calibrées sur les 431 du pack ; Bristol poussera du contenu arbitraire
