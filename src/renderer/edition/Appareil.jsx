@@ -13,9 +13,15 @@ import * as I from '../icones.jsx';
 export const APPAREIL_INTEGRE = typeof navigator !== 'undefined'
   && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
-// Photo du flux : ImageCapture a la resolution maximale du capteur (sans
-// reglage, certains appareils rendent la plus petite : 240x320 vu sur
-// l'emulateur), sinon -- ou si elle est plus petite -- l'image de l'apercu.
+// Photo du flux. L'image de l'apercu d'abord : instantanee et fiable, et assez
+// grande des 1 400 px (taille finale de l'import). ImageCapture seulement si
+// l'apercu est plus petit (emulateur : 960x1280), plafonne a 2 560 px et borne
+// dans le temps : sur de vrais telephones, takePhoto a la resolution du capteur
+// (12 a 50 Mpx) peut ne jamais repondre -- le declencheur semblait mort -- et
+// une telle photo decodee pese des centaines de Mo.
+const COTE_SUFFISANT = 1400;
+const COTE_MAX_CAPTURE = 2560;
+
 function depuisApercu(video) {
   const c = document.createElement('canvas');
   c.width = video.videoWidth;
@@ -24,23 +30,34 @@ function depuisApercu(video) {
   return new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.92));
 }
 
+const avecDelai = (p, ms, quoi) => Promise.race([
+  p, new Promise((_, ko) => setTimeout(() => ko(new Error(quoi + ' : pas de reponse en ' + ms + ' ms')), ms))
+]);
+
 async function capturer(video, piste) {
-  if (typeof window.ImageCapture === 'function' && piste) {
-    try {
-      const ic = new window.ImageCapture(piste);
-      const cap = await ic.getPhotoCapabilities().catch(() => null);
-      const reglages = cap && cap.imageWidth && cap.imageWidth.max
-        ? { imageWidth: cap.imageWidth.max, imageHeight: cap.imageHeight.max } : undefined;
-      const blob = await ic.takePhoto(reglages);
-      const bmp = await createImageBitmap(blob);
-      const grande = bmp.width * bmp.height >= video.videoWidth * video.videoHeight;
-      window.api.evt('image', 'appareil-integre-capture', {
-        photo: bmp.width + 'x' + bmp.height, apercu: video.videoWidth + 'x' + video.videoHeight, retenue: grande ? 'photo' : 'apercu'
-      });
-      bmp.close();
-      if (grande) return blob;
-    } catch (e) { window.api.evt('image', 'appareil-integre-imagecapture', { message: String(e && e.message || e) }, 'WARN'); }
+  const apercu = video.videoWidth + 'x' + video.videoHeight;
+  const cote = Math.max(video.videoWidth, video.videoHeight);
+  if (cote >= COTE_SUFFISANT || typeof window.ImageCapture !== 'function' || !piste) {
+    window.api.evt('image', 'appareil-integre-capture', { apercu, retenue: 'apercu' });
+    return depuisApercu(video);
   }
+  try {
+    const ic = new window.ImageCapture(piste);
+    const cap = await avecDelai(ic.getPhotoCapabilities(), 1500, 'getPhotoCapabilities').catch(() => null);
+    let reglages;
+    if (cap && cap.imageWidth && cap.imageWidth.max && cap.imageHeight && cap.imageHeight.max) {
+      const k = Math.min(1, COTE_MAX_CAPTURE / Math.max(cap.imageWidth.max, cap.imageHeight.max));
+      reglages = { imageWidth: Math.round(cap.imageWidth.max * k), imageHeight: Math.round(cap.imageHeight.max * k) };
+    }
+    const blob = await avecDelai(ic.takePhoto(reglages), 4000, 'takePhoto');
+    const bmp = await createImageBitmap(blob);
+    const grande = bmp.width * bmp.height >= video.videoWidth * video.videoHeight;
+    window.api.evt('image', 'appareil-integre-capture', {
+      photo: bmp.width + 'x' + bmp.height, apercu, retenue: grande ? 'photo' : 'apercu'
+    });
+    bmp.close();
+    if (grande) return blob;
+  } catch (e) { window.api.evt('image', 'appareil-integre-imagecapture', { apercu, message: String(e && e.message || e) }, 'WARN'); }
   return depuisApercu(video);
 }
 
@@ -84,6 +101,10 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
   }, [onFermer]);
 
   const declencher = async () => {
+    window.api.evt('image', 'appareil-integre-declencher', {
+      etat: typeof etat === 'string' ? etat : 'refus',
+      apercu: video.current ? video.current.videoWidth + 'x' + video.current.videoHeight : null
+    });
     if (etat !== 'pret') return;
     setEtat('capture');
     const piste = flux.current && flux.current.getVideoTracks()[0];
