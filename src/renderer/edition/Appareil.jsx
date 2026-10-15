@@ -22,12 +22,30 @@ export const APPAREIL_INTEGRE = typeof navigator !== 'undefined'
 const COTE_SUFFISANT = 1400;
 const COTE_MAX_CAPTURE = 2560;
 
-function depuisApercu(video) {
+const versJpeg = (source, l, h) => {
   const c = document.createElement('canvas');
-  c.width = video.videoWidth;
-  c.height = video.videoHeight;
-  c.getContext('2d').drawImage(video, 0, 0);
+  c.width = l;
+  c.height = h;
+  c.getContext('2d').drawImage(source, 0, 0);
   return new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.92));
+};
+
+// Image de l'apercu. Apercu encore vide (aucune image recue : largeur 0) : on
+// attend un peu, puis ImageCapture.grabFrame ; null si rien ne vient (le
+// declencheur le dit au lieu de ne rien faire -- vu sur un Honor, 0.3.18).
+async function depuisApercu(video, piste) {
+  for (let i = 0; i < 15 && !video.videoWidth; i++) await new Promise((ok) => setTimeout(ok, 100));
+  if (video.videoWidth) return versJpeg(video, video.videoWidth, video.videoHeight);
+  if (typeof window.ImageCapture === 'function' && piste) {
+    try {
+      const bmp = await avecDelai(new window.ImageCapture(piste).grabFrame(), 2000, 'grabFrame');
+      const blob = await versJpeg(bmp, bmp.width, bmp.height);
+      window.api.evt('image', 'appareil-integre-capture', { retenue: 'grabFrame', image: bmp.width + 'x' + bmp.height });
+      bmp.close();
+      return blob;
+    } catch (e) { window.api.evt('image', 'appareil-integre-grabframe', { message: String(e && e.message || e) }, 'WARN'); }
+  }
+  return null;
 }
 
 const avecDelai = (p, ms, quoi) => Promise.race([
@@ -39,7 +57,7 @@ async function capturer(video, piste) {
   const cote = Math.max(video.videoWidth, video.videoHeight);
   if (cote >= COTE_SUFFISANT || typeof window.ImageCapture !== 'function' || !piste) {
     window.api.evt('image', 'appareil-integre-capture', { apercu, retenue: 'apercu' });
-    return depuisApercu(video);
+    return depuisApercu(video, piste);
   }
   try {
     const ic = new window.ImageCapture(piste);
@@ -58,14 +76,14 @@ async function capturer(video, piste) {
     bmp.close();
     if (grande) return blob;
   } catch (e) { window.api.evt('image', 'appareil-integre-imagecapture', { apercu, message: String(e && e.message || e) }, 'WARN'); }
-  return depuisApercu(video);
+  return depuisApercu(video, piste);
 }
 
 // onPhoto(blob) ; onSecours(raison) : passer a l'appareil photo du telephone.
 export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
   const video = useRef(null);
   const flux = useRef(null);
-  const [etat, setEtat] = useState('ouverture');   // ouverture | pret | capture | { refus }
+  const [etat, setEtat] = useState('ouverture');   // ouverture | pret | capture | { refus } | { echec }
   useEffect(() => {
     let fini = false;
     const t0 = Date.now();
@@ -101,17 +119,25 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
   }, [onFermer]);
 
   const declencher = async () => {
-    window.api.evt('image', 'appareil-integre-declencher', {
-      etat: typeof etat === 'string' ? etat : 'refus',
-      apercu: video.current ? video.current.videoWidth + 'x' + video.current.videoHeight : null
-    });
-    if (etat !== 'pret') return;
-    setEtat('capture');
     const piste = flux.current && flux.current.getVideoTracks()[0];
+    window.api.evt('image', 'appareil-integre-declencher', {
+      etat: typeof etat === 'string' ? etat : Object.keys(etat || {})[0],
+      apercu: video.current ? video.current.videoWidth + 'x' + video.current.videoHeight : null,
+      video: video.current && video.current.readyState,
+      piste: piste ? { etat: piste.readyState, muette: piste.muted, active: piste.enabled } : null
+    });
+    if (etat !== 'pret' && !(etat && etat.echec)) return;
+    setEtat('capture');
     let blob = null;
     try { blob = await capturer(video.current, piste); }
     catch (e) { window.api.evt('image', 'appareil-integre-capture', { message: String(e && e.message || e) }, 'ERREUR'); }
-    if (!blob) { setEtat('pret'); return; }
+    if (!blob) {
+      window.api.evt('image', 'appareil-integre-sans-image', {
+        piste: piste ? { etat: piste.readyState, muette: piste.muted } : null
+      }, 'WARN');
+      setEtat({ echec: true });
+      return;
+    }
     window.api.evt('image', 'appareil-integre-photo', { octets: blob.size, type: blob.type });
     onPhoto(blob);
   };
@@ -122,6 +148,12 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
       <video ref={video} className="appareil-video" autoPlay playsInline muted />
       <div className="appareil-titre">{titre}</div>
       {etat === 'ouverture' && <div className="appareil-message">Ouverture de l’appareil photo…</div>}
+      {etat && etat.echec && (
+        <div className="appareil-message">
+          La photo n’a pas pu être prise ici.
+          <button className="bouton-neutre" onClick={() => onSecours('sans-image')}>Utiliser l’appareil photo du téléphone</button>
+        </div>
+      )}
       {etat && etat.refus && (
         <div className="appareil-message">
           L’appli n’a pas accès à l’appareil photo.
@@ -130,7 +162,7 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
       )}
       <div className="appareil-barre">
         <button className="appareil-annuler" onClick={onFermer} aria-label="Annuler"><I.Croix t={22} /></button>
-        <button className="appareil-declencheur" onClick={declencher} disabled={etat !== 'pret'}
+        <button className="appareil-declencheur" onClick={declencher} disabled={etat !== 'pret' && !(etat && etat.echec)}
           aria-label="Prendre la photo">{etat === 'capture' ? '…' : ''}</button>
         <button className="appareil-secours" onClick={() => onSecours('choix')} title="Appareil photo du téléphone">
           <I.Appareil t={20} />
