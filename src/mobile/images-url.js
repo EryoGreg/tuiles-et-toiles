@@ -6,7 +6,8 @@
  * « tuile://<nom> » (grande image) et « tuile://mini/<nom> » (vignette), le
  * pont mobile les traduit ici, de facon synchrone :
  *   - image d'une tuile creee (vfs /data/images-locales) -> URL blob
- *   - vignette du pack -> fichier livre avec l'appli (vignettes/<nom>)
+ *   - vignette du pack -> fichier livre avec l'appli (vignettes/<nom>), ou sa
+ *     copie dans les donnees de l'appli (contenu.js)
  *   - grande image du pack en cache (IndexedDB) -> URL blob
  *   - sinon, en ligne : l'adresse GitHub (fige par le tag du manifeste), et
  *     le telechargement verifie vers le cache demarre ; hors ligne : vignette
@@ -26,6 +27,7 @@ const BASE_IDB = 'tuiles-et-toiles-images';
 let idb = null;
 let manifeste = { ref: null, images: {} };
 let dossierLocales = '/data/images-locales';
+let baseVignettes = 'vignettes/';   // ou adresse fichier de la copie (contenu.js)
 const enCache = new Set();
 const urls = new Map();       // cle -> URL blob (ordre = du moins au plus recemment servi)
 const revoquees = new Map();  // URL blob liberee -> cle (pour la recreer si un <img> la cite encore)
@@ -53,6 +55,7 @@ function ouvrirIdb() {
 async function configurer(o) {
   manifeste = o.manifeste || manifeste;
   if (o.locales) dossierLocales = o.locales;
+  if (o.vignettes) baseVignettes = o.vignettes;
   idb = await ouvrirIdb();
   // Grandes images en cache : adresses pretes des le demarrage (les Blob
   // d'IndexedDB sont des references, rien n'est lu en memoire).
@@ -80,7 +83,7 @@ async function configurer(o) {
   }).catch(() => {});
 }
 
-const vignette = (nom) => 'vignettes/' + nom.replace(/\.(png|jpe?g)$/i, '.jpg');
+const vignette = (nom) => baseVignettes + nom.replace(/\.(png|jpe?g)$/i, '.jpg');
 const distante = (nom) => 'https://raw.githubusercontent.com/' + DEPOT + '/' + manifeste.ref + '/data/images/' + encodeURIComponent(nom);
 
 function urlBlob(cle, lire, type = 'image/jpeg') {

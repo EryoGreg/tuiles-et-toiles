@@ -77,6 +77,29 @@ const version = require(path.join(RACINE, 'package.json')).version;
   copier('data/vignettes', 'vignettes');
   copier('node_modules/sql.js/dist/sql-wasm-browser.wasm', 'sql-wasm-browser.wasm');
 
+  // Contenu (pack, manifeste des images, vignettes) : recopie une fois dans les
+  // donnees de l'appli (src/mobile/contenu.js), pour qu'un paquet web mis a jour
+  // seul (PLAN-maj-partielle.md) n'ait pas a le transporter. id = empreinte de
+  // l'ensemble : il change des que le contenu livre change.
+  {
+    const crypto = require('crypto');
+    const empreinte = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+    const fichiers = { 'pack.db': null, 'images-manifest.json': null };
+    for (const f of Object.keys(fichiers)) {
+      const p = path.join(SORTIE, f);
+      fichiers[f] = { octets: fs.statSync(p).size, sha256: empreinte(p) };
+    }
+    const vignettes = {};
+    const h = crypto.createHash('sha256').update(JSON.stringify(fichiers));
+    for (const f of fs.readdirSync(path.join(SORTIE, 'vignettes')).sort()) {
+      const p = path.join(SORTIE, 'vignettes', f);
+      vignettes[f] = fs.statSync(p).size;
+      h.update(f).update(fs.readFileSync(p));   // une vignette refaite change l'id, meme a taille egale
+    }
+    const id = h.digest('hex').slice(0, 16);
+    fs.writeFileSync(path.join(SORTIE, 'contenu.json'), JSON.stringify({ id, fichiers, vignettes }));
+  }
+
   // Le pont doit exister avant l'interface : script classique en tete.
   const index = path.join(SORTIE, 'index.html');
   let html = fs.readFileSync(index, 'utf8');

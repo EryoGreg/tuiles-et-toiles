@@ -1,6 +1,7 @@
 # Plan — mise à jour partielle (Android d'abord)
 
-État : **plan, en attente du feu vert**. Rédigé le 15/10/2026 après la 0.3.17.
+État : **plan, en attente du feu vert**. Rédigé le 15/10/2026 après la 0.3.17 ; décisions prises le
+15/10/2026 (voir « Décisions »).
 
 ## Idée
 
@@ -54,8 +55,11 @@ par `Capacitor.convertFileSrc` quand ce dossier existe. Même chose pour `pack.d
    release `latest` → manifeste `web-*.json` + signature. Retenu si
    `version > version web en cours` et `natifMin ≤ versionCode installé`. Sinon, la
    section Options propose l'APK complet comme aujourd'hui.
-2. **Télécharger** (Wi-Fi seulement en automatique, comme les images ; un clic passe
-   partout) : zip vérifié (taille + SHA-256), puis chaque fichier contre le manifeste,
+2. **Proposer, puis télécharger** : une version trouvée est **proposée** (boîte « Nouvelle
+   version 0.3.N — environ 1 Mo — Mettre à jour / Plus tard »), jamais téléchargée sans
+   accord. Hors Wi-Fi, la boîte le dit (« Tu n'es pas en Wi-Fi : le téléchargement
+   utilisera tes données mobiles, environ 1 Mo ») ; l'accord vaut quel que soit le
+   réseau. Zip vérifié (taille + SHA-256), puis chaque fichier contre le manifeste,
    extrait avec `fflate` dans `Data/web/<version>/` (fichiers temporaires puis renommage
    du dossier : jamais de paquet à moitié écrit).
 3. **Appliquer au lancement suivant** : marqueur `web_en_attente = <version>`. Au
@@ -70,9 +74,9 @@ par `Capacitor.convertFileSrc` quand ce dossier existe. Même chose pour `pack.d
    bloquer l'appli.
 5. **Ménage** : on garde le paquet en cours + le précédent, le reste est effacé ;
    tout est effacé quand un APK plus récent tourne (`isNewBinary`).
-6. **Option « appliquer maintenant »** dans Options (bouton « Redémarrer pour mettre à
-   jour ») : même étape 3, sans attendre le prochain lancement. Les données sont
-   écrites avant (`persister()`, comme `recharger()`).
+6. **« Redémarrer maintenant »** : une fois le paquet prêt, la boîte (et Options) propose
+   « Redémarrer maintenant » ou « Au prochain lancement ». Redémarrer = même étape 3 tout
+   de suite. Les données sont écrites avant (`persister()`, comme `recharger()`).
 
 Versions affichées : « 0.3.19 (appli 0.3.17) » dans Options, le rapport d'erreur et
 l'en-tête de session du journal.
@@ -112,27 +116,48 @@ procédure de publication.
 
 ## Découpage
 
-1. Vignettes et pack servis hors du dossier web (`Data/vignettes/`), sans encore rien
-   télécharger. Publiable seul.
+1. ✅ (15/10/2026) Vignettes et pack servis hors du dossier web (`Data/contenu/`,
+   `src/mobile/contenu.js`), sans encore rien télécharger. Publiable seul.
 2. Script de paquet + signature + `natifMin` automatique ; assets publiés (l'appli ne
    s'en sert pas encore).
 3. `maj-web.js` : vérifier / télécharger / appliquer / valider / revenir en arrière,
    tests.
-4. Options + rapport + journal ; essai réel sur émulateur puis chez toi, puis chez ton
-   ami.
+4. Boîte de proposition (Wi-Fi signalé), « Redémarrer maintenant », Options + rapport +
+   journal ; essai réel sur émulateur puis chez toi, puis chez ton ami.
+5. PC : lanceur minimal + paquet de code signé (voir « PC »), même signature et même
+   `natifMin` ; essai installée puis portable.
 
-## Décisions à prendre avant de commencer
+## Décisions (15/10/2026)
 
-- **Clé de signature** : d'accord pour une clé Ed25519 hors dépôt, à sauvegarder avec
-  `debug.keystore` ?
-- **Application** : au prochain lancement seulement, ou aussi le bouton « Redémarrer
-  maintenant » ?
-- **Wi-Fi** : téléchargement automatique en Wi-Fi seulement (comme les images) ?
+- **Clé de signature** : Ed25519 hors dépôt, sauvegardée avec `debug.keystore`.
+- **Application** : au prochain lancement **et** bouton « Redémarrer maintenant ».
+- **Réseau** : nouvelle version **proposée** par une boîte ; si l'utilisateur accepte, le
+  téléchargement part même hors Wi-Fi, mais la boîte signale qu'il n'est pas en Wi-Fi.
 
-## Et le PC (plus tard)
+## PC (après Android)
 
-- Installée (NSIS) : `release/*.blockmap` est déjà produit → téléchargement
-  différentiel par blocs possible (ce que fait `electron-updater`) ; notre `maj.js`
-  retélécharge aujourd'hui les 95 Mo.
-- Ou même principe que le mobile : remplacer seulement `app.asar` (le code), signé.
-- Portable : un seul exe compressé, pas de différentiel possible.
+Mesuré sur la 0.3.18 : l'exe fait 95 Mo, dont **Electron ~280 Mo décompressés qui ne
+changent presque jamais** ; `app.asar` = 25 Mo, dont l'essentiel en `node_modules`
+(Jimp, adm-zip, SDK…) ; **notre code** (`src/` + `dist/`) ≈ 2 à 3 Mo.
+
+Retenu : **même mécanisme que le mobile**, pour la version installée (et, sans travail
+en plus, pour la portable) :
+- l'`app.asar` livré devient un **lanceur minimal** : au démarrage, il cherche dans
+  `%APPDATA%\Tuiles et Toiles\code\` le paquet de code le plus récent **signé et
+  validé**, le charge (`require` dans un `.asar` téléchargé : Electron sait faire), et
+  les `node_modules` restent ceux de l'exe (`Module.globalPaths`) ;
+- même manifeste signé Ed25519, même `natifMin` (ici : version d'Electron, modules
+  natifs comme better-sqlite3, dépendances de `package.json` ; s'ils changent →
+  installateur complet, comme aujourd'hui) ;
+- même retour arrière : paquet validé seulement après un démarrage complet ; à la
+  moindre erreur du lanceur, il démarre le code livré dans l'exe ;
+- téléchargement ≈ **2 à 3 Mo** au lieu de 95 Mo.
+
+Écarté : le différentiel par blocs (`.blockmap` de NSIS). Il ne demande pas de clé et
+reconstitue l'installateur exact, mais le code est compressé dans l'installateur : une
+petite modification en touche une grande partie (souvent 10 à 30 Mo téléchargés), et
+l'installateur se relance quand même. Moins bon gain, pas de « au prochain lancement ».
+
+Pas de raison de ne pas le faire, seulement un point de vigilance : le **lanceur** est la
+seule pièce qui ne se met jamais à jour à chaud ; il doit rester minuscule, testé, et
+toujours retomber sur le code livré en cas de doute.

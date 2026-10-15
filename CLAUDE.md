@@ -439,6 +439,13 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   fichier illisible est ignoré (`fs.illisibles()`, journalisé) au lieu de bloquer ; ancien
   format relu puis réécrit. `fs.promises` existe (le transport Drive range les images reçues
   par `transport-dossier.ecrireAtomique`, asynchrone).
+- **Contenu recopié dans les données** (étape 1 de `PLAN-maj-partielle.md`, `src/mobile/contenu.js`) : `pack.db`,
+  `images-manifest.json` et les 431 vignettes sont recopiés une fois dans `Directory.Data/contenu/` (20 s après le
+  démarrage, ~3,5 s sur l'émulateur, 14,7 Mo), puis lus par leur adresse fichier (`convertFileSrc`). `contenu.json`
+  (build-mobile : id = empreinte de tout le contenu livré) ; copie prête = `contenu/etat.json` de même id, écrit en
+  **dernier** ; copie interrompue reprise (`copie.json`, vignettes de bonne taille gardées) ; id changé = recopie
+  complète, fichiers livrés en attendant. Sans contenu livré (futur paquet web) : copie obligatoire (`pret()` =
+  condition d'une MAJ web). Navigateur : fichiers livrés. `contenu` dans le rapport et `demarrage-mobile`.
 - **Rechargement de page = `recharger()`** (App.jsx), jamais `location.reload()` nu : il attend
   `window.api.persister()` (mobile : `sauverTout()`, base écrite dans IndexedDB ; PC : rien). Sans
   ça, la page repart de la dernière sauvegarde (différée de 1,5 s) — 02/10/2026 : chaque synchro

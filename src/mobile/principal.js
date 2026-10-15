@@ -29,6 +29,7 @@ const drive = require('./drive');
 const { App: AppNative } = require('@capacitor/app');
 const reseau = require('./reseau');
 const identite = require('./identite');
+const contenu = require('./contenu');
 
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
 const DATA = '/data';
@@ -57,10 +58,9 @@ async function demarrer() {
     fs.charger()
   ]);
   Database.initialiser(SQL);
-  const [pack, manifeste] = await Promise.all([
-    fetch('pack.db').then((r) => r.arrayBuffer()),
-    fetch('images-manifest.json').then((r) => r.json()).catch(() => ({ ref: null, images: {} }))
-  ]);
+  // Pack, manifeste et vignettes : copie dans les donnees de l'appli si elle est
+  // a jour, sinon fichiers livres (contenu.js, mise a jour partielle).
+  const { pack, manifeste, vignettes, source: sourceContenu } = await contenu.preparer();
   fs.writeFileSync(PACK, new Uint8Array(pack));
   // Journal garde d'une session a l'autre (avant 0.3.10 : en memoire seulement,
   // l'historique d'un bug disparaissait au redemarrage), en plus petit qu'au PC.
@@ -85,14 +85,14 @@ async function demarrer() {
   etat.configurer({ appareil: moi });
   db.ouvrir(USER, PACK);
   edition.configurer(IMAGES_LOCALES);
-  await imagesUrl.configurer({ manifeste, locales: IMAGES_LOCALES });
+  await imagesUrl.configurer({ manifeste, locales: IMAGES_LOCALES, vignettes });
   imagesUrl.surArrivee(() => {});
   require('../main/rapport').configurer({
     dossier: DATA + '/rapports', version: VERSION, fetch: (u, o) => fetch(u, o),
     infos: () => ({
       appareil: { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref }, mobile: true, agent: navigator.userAgent,
       ecran: window.innerWidth + 'x' + window.innerHeight, oeuvres: db.compterOeuvres(), tags: db.comptesTags(),
-      images: imagesUrl.etat(), memoire: memoire()
+      images: imagesUrl.etat(), memoire: memoire(), contenu: contenu.etat()
     })
   });
   setTimeout(() => {
@@ -100,7 +100,12 @@ async function demarrer() {
     if (rapport.listerAttente().length) rapport.renvoyerEnAttente().catch(() => {});
   }, 8000);
   planifierSauvegarde();
-  journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres(), memoire: memoire() });
+  journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres(), memoire: memoire(), contenu: contenu.etat() });
+  // Copie du contenu livre (une fois par contenu, ~15 Mo de vignettes) : apres
+  // le demarrage, sans le ralentir.
+  if (sourceContenu === 'livre') {
+    setTimeout(() => contenu.copier().catch((e) => journal.erreur('app', 'contenu-copie', e)), 20000);
+  }
 }
 
 // Occupation memoire (rapport d'erreur, journal au demarrage) : de quoi savoir
