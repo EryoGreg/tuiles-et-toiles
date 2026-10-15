@@ -68,7 +68,9 @@ export function ActionsMaj({ maj }) {
       <button className="bouton-valide" onClick={maj.installer}>
         <I.Rafraichir t={14} /> {maj.versInstallee
           ? 'Installer et redémarrer'
-          : SUR_MOBILE
+          : maj.info.type === 'web'
+            ? 'Redémarrer maintenant'
+            : SUR_MOBILE
             ? 'Installer la version ' + maj.info.version
             : 'Redémarrer sur la version ' + maj.info.version}
       </button>
@@ -116,17 +118,28 @@ export function BandeauMaj() {
           : 'Version ' + maj.info.version + ' disponible'}
       </div>
       <div className="options-note">
-        {maj.phase === 'pret'
-          ? (SUR_MOBILE
-            ? 'Android va te demander de confirmer l’installation. Tes données sont conservées.'
-            : 'L’application va se fermer et se relancer. Tes données sont conservées.')
-          : 'Tu utilises la version ' + maj.info.actuelle + '. Tes données sont conservées.'}
+        {maj.info.type === 'web'
+          ? (maj.phase === 'pret'
+            ? 'Elle s’appliquera au prochain lancement de l’appli, ou tout de suite si tu redémarres maintenant. Tes données sont conservées.'
+            : 'Mise à jour légère (' + enMo(maj.info.taille) + ') : seul le code de l’appli change. Tu utilises la version ' + maj.info.actuelle + '. Tes données sont conservées.')
+          : maj.phase === 'pret'
+            ? (SUR_MOBILE
+              ? 'Android va te demander de confirmer l’installation. Tes données sont conservées.'
+              : 'L’application va se fermer et se relancer. Tes données sont conservées.')
+            : 'Tu utilises la version ' + maj.info.actuelle + '. Tes données sont conservées.'}
       </div>
+      {maj.info.type === 'web' && maj.phase === 'dispo' && maj.info.wifi === false && (
+        <div className="options-note maj-wifi">
+          Tu n’es pas connecté en Wi-Fi : le téléchargement utilisera tes données mobiles ({enMo(maj.info.taille)}).
+        </div>
+      )}
       {maj.erreur && <div className="options-note" style={{ color: 'var(--revoir)' }}>{maj.erreur}</div>}
       <div className="maj-bandeau-actions">
         <ActionsMaj maj={maj} />
         {maj.phase !== 'telechargement' && (
-          <button className="bouton-neutre" onClick={() => setMasque(true)}>Plus tard</button>
+          <button className="bouton-neutre" onClick={() => setMasque(true)}>
+            {maj.info.type === 'web' && maj.phase === 'pret' ? 'Au prochain lancement' : 'Plus tard'}
+          </button>
         )}
       </div>
     </div>

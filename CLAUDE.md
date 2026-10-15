@@ -41,8 +41,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 **Publier** (sur feu vert seulement) : procédure de la section « Dépôt, releases… ». Si l'exe de `release/`
 est verrouillé par l'appli lancée, construire dans `release-test/`
 (`electron-builder --win portable nsis --config.directories.output=release-test`), puis publier ces
-fichiers-là (mêmes noms). Commit « Version x.y.z », tag, push `synchro-e2` **et** `HEAD:main`, `gh release
-create` avec les 3 fichiers, vérifier les empreintes (`gh release view --json assets`).
+fichiers-là (mêmes noms). Commit « Version x.y.z » (avec `data/natif.json` si `paquet-web` l'a changé), tag,
+push `synchro-e2` **et** `HEAD:main`, `gh release create` avec les **6 fichiers** (exe, Setup, apk + paquet web :
+zip, json, json.sig), vérifier les empreintes (`gh release view --json assets`).
 
 **Branche** : on travaille sur `synchro-e2`, `main` = même commit (push des deux).
 
@@ -450,8 +451,28 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   démarrage, ~3,5 s sur l'émulateur, 14,7 Mo), puis lus par leur adresse fichier (`convertFileSrc`). `contenu.json`
   (build-mobile : id = empreinte de tout le contenu livré) ; copie prête = `contenu/etat.json` de même id, écrit en
   **dernier** ; copie interrompue reprise (`copie.json`, vignettes de bonne taille gardées) ; id changé = recopie
-  complète, fichiers livrés en attendant. Sans contenu livré (futur paquet web) : copie obligatoire (`pret()` =
+  complète, fichiers livrés en attendant. Sans contenu livré (paquet web) : la copie fait foi (`pret()` =
   condition d'une MAJ web). Navigateur : fichiers livrés. `contenu` dans le rapport et `demarrage-mobile`.
+  `contenu.json` = `scripts/contenu-livre.js` (`{ id, fichiers: { chemin: octets } }`, racines au choix : T&T
+  `pack.db`, `images-manifest.json`, `vignettes` ; Bristol `decks`) — **même fichier dans les deux projets**.
+- **Mise à jour partielle** (Android, `PLAN-maj-partielle.md` étapes 2-4, `src/mobile/maj-web.js`) : la release
+  porte, en plus de l'APK, `Tuiles-et-Toiles-web-x.y.z-n<natifMin>.zip` (code web sans contenu, ~800 Ko),
+  `…-web-x.y.z.json` (manifeste : version, natifMin, zip, sha256 de chaque fichier) et `….json.sig` (Ed25519).
+  `scripts/paquet-web.js` (lancé par `dist:android`) ; **natifMin automatique** : empreinte de la partie native
+  (`android/app/src` hors `assets/public`, gradle, config Capacitor, versions des modules `@capacitor/*` /
+  `@capgo/*`) comparée à `data/natif.json` (versionné) ; changée → natifMin = cette version (APK obligatoire).
+  **Clé** : privée `%USERPROFILE%\.cles-maj\maj-web-ed25519.pem` (`scripts/cle-maj-web.js`, **à sauvegarder avec
+  debug.keystore**, même clé pour Bristol), publique dans `src/mobile/cle-maj-web.js`. Appli : `maj.verifier` propose
+  le paquet web si natifMin ≤ versionCode installé (sinon l'APK) ; téléchargement par le module natif `MiseAJour`
+  (GitHub n'envoie pas d'en-tête CORS ; filtre de noms élargi), signature vérifiée (WebCrypto Ed25519) avant le zip,
+  chaque fichier contre le manifeste, chemins `..` refusés, écriture dans `Data/web/<v>.tmp` renommé. Bandeau :
+  « Mise à jour légère (803 Ko) », avertissement si pas en Wi-Fi, puis « Redémarrer maintenant » / « Au prochain
+  lancement ». Application : `majWeb.demarrage(VERSION)` tout au début de `principal.js` → `WebView.setServerBasePath`
+  ; le nouveau code est **validé** 10 s après un démarrage complet (`persistServerBasePath`) ; **2 essais sans
+  validation → version refusée** (jamais reproposée), l'ancien code reste. Un APK neuf reprend toujours la main
+  (`Bridge.isNewBinary`), `demarrage` fait le ménage. État : `Data/web/etat.json` `{ attente, ok, refusees }` (rapport
+  `majWeb`). Tests : `tests/maj-web.test.js` (10 cas) ; émulateur : paquet 0.3.99 déposé dans `cache/maj` (adb, tube
+  `run-as`), appliqué, validé, relance à froid sur 0.3.99, 432 œuvres, contenu depuis la copie.
 - **Rechargement de page = `recharger()`** (App.jsx), jamais `location.reload()` nu : il attend
   `window.api.persister()` (mobile : `sauverTout()`, base écrite dans IndexedDB ; PC : rien). Sans
   ça, la page repart de la dernière sauvegarde (différée de 1,5 s) — 02/10/2026 : chaque synchro
@@ -540,10 +561,11 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   `git cherry-pick` (remote `tuiles-et-toiles`). `oauth-client.json` n'est jamais versionné.
 - Publier une version : `npm version x.y.z --no-git-tag-version` (le numéro nomme les exe et le
   dossier d'extraction portable), `npm run dist` (portable **et** NSIS), commit + tag `vx.y.z`,
-  push, `npm run dist:android` (→ `release/Tuiles-et-Toiles-x.y.z.apk`), puis `gh release create
+  push, `npm run dist:android` (→ `release/Tuiles-et-Toiles-x.y.z.apk` + paquet web), puis `gh release create
   vx.y.z release/Tuiles-et-Toiles-x.y.z.exe release/Tuiles-et-Toiles-Setup-x.y.z.exe
-  release/Tuiles-et-Toiles-x.y.z.apk` — **les trois fichiers**, chaque forme se met à jour avec le
-  sien. Les exe et l'APK ne vont jamais dans git.
+  release/Tuiles-et-Toiles-x.y.z.apk release/Tuiles-et-Toiles-web-x.y.z*` — **les six fichiers**, chaque forme
+  se met à jour avec le sien (Android : paquet web si possible, sinon APK). Les exe, l'APK et le paquet web ne
+  vont jamais dans git (`data/natif.json`, lui, oui).
 - **Installateur NSIS** : `oneClick`, par utilisateur (`%LOCALAPPDATA%\Programs\Tuiles et
   Toiles\`, sans droits admin, LISEZMOI `installation` déposé par l'app), relance l'app à la
   fin, ne crée **aucun raccourci** (ceux de l'app, `raccourcis.js`, nom « Tuiles & Toiles »,

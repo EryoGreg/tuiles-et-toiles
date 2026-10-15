@@ -25,7 +25,8 @@ import java.security.MessageDigest;
 /**
  * Mise a jour de l'appli depuis les Releases GitHub (src/mobile/maj.js) :
  *   infos()       version installee, droit d'installer des applis
- *   telecharger() APK dans le cache (maj/), taille + SHA-256 verifies,
+ *   telecharger() APK (ou fichier d'un paquet web : src/mobile/maj-web.js)
+ *                 dans le cache (maj/), taille + SHA-256 verifies,
  *                 evenement « progression » { recu, total }
  *   installer()   ouvre l'installateur d'Android sur l'APK ; sans le droit
  *                 « Installer des applis inconnues », ouvre d'abord le reglage
@@ -79,7 +80,8 @@ public class MiseAJourPlugin extends Plugin {
         final String nom = call.getString("nom", "");
         final long taille = call.getLong("taille", -1L);
         final String sha256 = call.getString("sha256", null);
-        if (!url.startsWith(PREFIXE) || !nom.matches("^Tuiles-et-Toiles-\\d+\\.\\d+\\.\\d+\\.apk$")) {
+        // APK complet, ou paquet web d'une mise a jour partielle (zip, manifeste, signature).
+        if (!url.startsWith(PREFIXE) || !nom.matches("^Tuiles-et-Toiles-(web-)?\\d+\\.\\d+\\.\\d+(-n\\d+)?\\.(apk|zip|json|json\\.sig)$")) {
             call.reject("Adresse de mise à jour refusée.");
             return;
         }

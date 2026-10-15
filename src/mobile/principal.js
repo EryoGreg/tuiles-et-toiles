@@ -30,6 +30,8 @@ const { App: AppNative } = require('@capacitor/app');
 const reseau = require('./reseau');
 const identite = require('./identite');
 const contenu = require('./contenu');
+const majWeb = require('./maj-web');
+const natif = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
 const DATA = '/data';
@@ -60,7 +62,12 @@ async function demarrer() {
   Database.initialiser(SQL);
   // Pack, manifeste et vignettes : copie dans les donnees de l'appli si elle est
   // a jour, sinon fichiers livres (contenu.js, mise a jour partielle).
-  const { pack, manifeste, vignettes, source: sourceContenu } = await contenu.preparer();
+  const { base, source: sourceContenu } = await contenu.preparer();
+  const [pack, manifeste] = await Promise.all([
+    fetch(base + 'pack.db').then((r) => { if (!r.ok) throw new Error('pack.db : ' + r.status); return r.arrayBuffer(); }),
+    fetch(base + 'images-manifest.json').then((r) => r.json()).catch(() => ({ ref: null, images: {} }))
+  ]);
+  const vignettes = base + 'vignettes/';
   fs.writeFileSync(PACK, new Uint8Array(pack));
   // Journal garde d'une session a l'autre (avant 0.3.10 : en memoire seulement,
   // l'historique d'un bug disparaissait au redemarrage), en plus petit qu'au PC.
@@ -69,6 +76,14 @@ async function demarrer() {
   // Fichier illisible dans le stockage (appli tuee en pleine ecriture) : ignore
   // plutot que de bloquer le demarrage ; la synchro retablit les donnees.
   if (fs.illisibles().length) journal.avertir('app', 'fichiers-illisibles', { fichiers: fs.illisibles() });
+
+  // Mise a jour partielle (maj-web.js) : paquet en attente -> la page repart sur
+  // le nouveau code (rien n'a encore ete ecrit) ; nouveau code -> a valider.
+  if (natif()) {
+    let r = 'normal';
+    try { r = await majWeb.demarrage(VERSION); } catch (e) { journal.erreur('maj', 'web-demarrage', e); }
+    if (r === 'recharge') return new Promise(() => {});
+  }
 
   // Identite : copie de secours tenue a jour, remise en place si le stockage
   // de la page a ete perdu sur ce meme telephone (identite.js).
@@ -92,7 +107,7 @@ async function demarrer() {
     infos: () => ({
       appareil: { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref }, mobile: true, agent: navigator.userAgent,
       ecran: window.innerWidth + 'x' + window.innerHeight, oeuvres: db.compterOeuvres(), tags: db.comptesTags(),
-      images: imagesUrl.etat(), memoire: memoire(), contenu: contenu.etat()
+      images: imagesUrl.etat(), memoire: memoire(), contenu: contenu.etat(), majWeb: etatMajWeb
     })
   });
   setTimeout(() => {
@@ -103,6 +118,8 @@ async function demarrer() {
   journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres(), memoire: memoire(), contenu: contenu.etat() });
   // Copie du contenu livre (une fois par contenu, ~15 Mo de vignettes) : apres
   // le demarrage, sans le ralentir.
+  // Nouveau code (mise a jour partielle) qui a demarre sans encombre : retenu.
+  if (natif()) setTimeout(() => majWeb.valider().catch((e) => journal.erreur('maj', 'web-validation', e)), 10000);
   if (sourceContenu === 'livre') {
     setTimeout(() => contenu.copier().catch((e) => journal.erreur('app', 'contenu-copie', e)), 20000);
   }
@@ -123,7 +140,9 @@ function memoire() {
   return r;
 }
 
+let etatMajWeb = null;   // rapport : rempli au demarrage (lecture asynchrone)
 const pret = demarrer();
+pret.then(() => majWeb.etat()).then((e) => { etatMajWeb = e; }).catch(() => {});
 pret.catch((e) => {
   console.error(e);
   // textContent, pas innerHTML : le message peut citer des donnees (JSON abime…).
@@ -152,7 +171,7 @@ electron.configurer({ attendre: pret, transformer: (canal, r) => imagesUrl.tradu
 require('../main/preload');
 window.api.urlTuile = (nom) => imagesUrl.traduire('tuile://' + nom);
 // Poignee de diagnostic (console, tests) : jamais utilisee par l'interface.
-window.__tt = { db, synchro: require('../main/synchro/service'), fs, pret };
+window.__tt = { db, synchro: require('../main/synchro/service'), fs, pret, majWeb, contenu };
 
 // Bouton retour d'Android : d'abord fermer ce qui est ouvert par-dessus
 // (boite, apercu, formulaire : ils se ferment sur Echap), sinon page

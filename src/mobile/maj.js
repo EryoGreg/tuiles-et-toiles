@@ -12,6 +12,10 @@
  *                 demande d'autoriser l'appli a installer des applis
  *                 ({ permission: false }) ; l'utilisateur revient et relance.
  *
+ * Mise a jour PARTIELLE (maj-web.js) : si la release contient un paquet web
+ * utilisable par cet APK (natifMin), c'est lui qui est propose (~1 Mo, ni
+ * installateur ni reglage Android) ; « installer » = redemarrer dessus.
+ *
  * L'APK doit etre signe par la MEME cle que l'appli installee, sinon Android
  * refuse la mise a jour (voir CLAUDE.md, « Appli mobile »).
  * Regle 1 : rien de bloquant ; hors ligne -> { erreur } ; rien n'est
@@ -20,13 +24,17 @@
 
 const journal = require('../main/journal');
 const { versionSuperieure, decrireAsset, derniereRelease } = require('../main/maj-github');
+const majWeb = require('./maj-web');
+const contenu = require('./contenu');
+const reseau = require('./reseau');
 
 // Nom d'asset attendu : le changer casse la mise a jour des installations existantes.
 const MOTIF_APK = /^Tuiles-et-Toiles-\d+\.\d+\.\d+\.apk$/;
 
-let trouvee = null;   // { version, page, apk }
-let pret = null;      // { chemin, version }
+let trouvee = null;   // { version, page, apk, web }
+let pret = null;      // { chemin, version } | { web: true, version }
 let actuelle = '0.0.0';
+let versionCode = 0;  // de l'APK installe (natifMin d'un paquet web)
 
 function natif() {
   const C = typeof window !== 'undefined' && window.Capacitor;
@@ -41,8 +49,10 @@ async function configurer({ version }) {
   if (!M) return;
   try {
     const i = await M.infos();
+    versionCode = Number(i.versionCode) || 0;
+    // Code web plus recent que l'APK : mise a jour partielle appliquee (normal).
     if (i.versionName && i.versionName !== version) {
-      journal.avertir('maj', 'versions-differentes', { web: version, apk: i.versionName });
+      journal.evt('maj', 'versions', { web: version, apk: i.versionName, versionCode });
     }
     // APK d'une mise a jour precedente (installee ou abandonnee) : inutile.
     const n = await M.nettoyer();
@@ -59,6 +69,17 @@ async function verifier() {
     apk: decrireAsset((r.assets || []).find((a) => MOTIF_APK.test(a.name)))
   };
   if (!versionSuperieure(d.version, actuelle)) return { aJour: true, actuelle };
+  // Paquet web utilisable par cet APK : propose a la place de l'APK.
+  if (natif()) {
+    const e = await majWeb.lireEtat().catch(() => ({ refusees: [] }));
+    trouvee.web = majWeb.trouver(r, { actuelle, versionCode, refusees: e.refusees });
+    if (trouvee.web) {
+      return {
+        disponible: true, actuelle, version: d.version, notes: r.body || '', type: 'web',
+        taille: trouvee.web.zip.taille, wifi: reseau.wifi(), installable: true
+      };
+    }
+  }
   if (!trouvee.apk) {
     journal.avertir('maj', 'apk-absent', { version: d.version });
     return { erreur: 'La version ' + d.version + ' n’existe pas encore pour Android.', actuelle };
@@ -71,6 +92,15 @@ async function verifier() {
 }
 
 async function telecharger(surProgression) {
+  if (trouvee && trouvee.web) {
+    // Le nouveau code lit le contenu (pack, vignettes) dans la copie des donnees.
+    try { await contenu.copier(); } catch (e) { journal.erreur('maj', 'web-contenu', e); }
+    if (!contenu.pret()) return { erreur: 'Préparation du contenu impossible : réessaie dans un instant.' };
+    journal.evt('maj', 'web-telechargement:debut', { version: trouvee.version, octets: trouvee.web.zip.taille, wifi: reseau.wifi() });
+    const r = await majWeb.telecharger(trouvee.web, surProgression);
+    if (r.ok) pret = { web: true, version: trouvee.version };
+    return r;
+  }
   if (!trouvee || !trouvee.apk) return { erreur: 'Aucune mise à jour trouvée.' };
   const M = natif();
   if (!M) {
@@ -96,6 +126,7 @@ async function telecharger(surProgression) {
 }
 
 async function installer() {
+  if (pret && pret.web) return majWeb.appliquerMaintenant();
   const M = natif();
   if (!M || !pret) return { erreur: 'Mise à jour non téléchargée.' };
   try {
@@ -115,4 +146,6 @@ async function installer() {
   }
 }
 
-module.exports = { configurer, verifier, telecharger, installer };
+const webPret = () => !!(pret && pret.web);
+
+module.exports = { configurer, verifier, telecharger, installer, webPret };

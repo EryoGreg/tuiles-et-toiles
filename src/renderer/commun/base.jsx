@@ -133,7 +133,7 @@ export const dateCourte = (iso) => new Date(iso).toLocaleString('fr-FR', { dateS
 
 export const texteValeur = (v, champ) => (v == null || v === '' ? '(vide)' : champ === 'image' ? 'une image' : String(v));
 
-export const enMo = (octets) => Math.round(octets / 1048576) + ' Mo';
+export const enMo = (octets) => (octets < 1048576 ? Math.max(1, Math.round(octets / 1024)) + ' Ko' : Math.round(octets / 1048576) + ' Mo');
 
 export function pourcent(p) {
   return p && p.total ? Math.floor((p.recu / p.total) * 100) : 0;

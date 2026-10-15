@@ -234,6 +234,8 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
     // Dernieres modifications envoyees et base ecrite avant de ceder la place.
     try { await auto.avantFermeture(); } catch (e) { journal.erreur('synchro', 'auto-avant-maj', e); }
     surEcriture();
+    // Mise a jour partielle : la page repart sur le nouveau code -> tout ecrire avant.
+    if (maj.webPret()) await sauverTout();
     return maj.installer();
   });
 

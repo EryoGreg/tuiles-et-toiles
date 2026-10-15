@@ -8,6 +8,7 @@
  *      celle des APK deja installes, et Android refuse une mise a jour signee
  *      par une autre cle — voir CLAUDE.md, « Appli mobile »)
  *   4. copie sous le nom attendu par la mise a jour integree (MOTIF_APK)
+ *   5. paquet web de la mise a jour partielle (scripts/paquet-web.js)
  *
  *     npm run dist:android
  */
@@ -31,3 +32,6 @@ const cible = path.join(RACINE, 'release', 'Tuiles-et-Toiles-' + version + '.apk
 fs.mkdirSync(path.dirname(cible), { recursive: true });
 fs.copyFileSync(apk, cible);
 console.log('\n' + path.relative(RACINE, cible) + ' (' + Math.round(fs.statSync(cible).size / 1048576) + ' Mo)');
+
+// Paquet web de la meme version (mise a jour partielle) : zip, manifeste, signature.
+lancer('node scripts/paquet-web.js');

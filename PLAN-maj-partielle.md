@@ -118,12 +118,12 @@ procédure de publication.
 
 1. ✅ (15/10/2026) Vignettes et pack servis hors du dossier web (`Data/contenu/`,
    `src/mobile/contenu.js`), sans encore rien télécharger. Publiable seul.
-2. Script de paquet + signature + `natifMin` automatique ; assets publiés (l'appli ne
-   s'en sert pas encore).
-3. `maj-web.js` : vérifier / télécharger / appliquer / valider / revenir en arrière,
-   tests.
-4. Boîte de proposition (Wi-Fi signalé), « Redémarrer maintenant », Options + rapport +
-   journal ; essai réel sur émulateur puis chez toi, puis chez ton ami.
+2. ✅ (15/10/2026) Script de paquet + signature + `natifMin` automatique.
+3. ✅ (15/10/2026) `maj-web.js` : vérifier / télécharger / appliquer / valider / revenir en
+   arrière, tests (10 cas) et essai complet sur émulateur.
+4. ✅ (15/10/2026) Bandeau (Wi-Fi signalé), « Redémarrer maintenant » / « Au prochain
+   lancement », rapport + journal. Reste : premier essai réel (0.3.20 en APK, puis 0.3.21 en
+   paquet web), chez toi puis chez ton ami.
 5. PC : lanceur minimal + paquet de code signé (voir « PC »), même signature et même
    `natifMin` ; essai installée puis portable.
 
