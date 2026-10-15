@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('api', {
     choisirImage: () => ipcRenderer.invoke('edition:choisirImage'),
     // Mobile seulement : photo prise avec l'appareil photo du telephone.
     prendrePhoto: () => ipcRenderer.invoke('edition:prendrePhoto'),
+    photoReprise: () => ipcRenderer.invoke('edition:photoReprise'),
     // Photo d'un cartel -> lignes de texte. Mobile (ML Kit) : source 'camera' | 'galerie' ;
     // PC (reconnaissance de Windows) : 'fichier' (choix du fichier) | { chemin }
     lireCartel: (source) => ipcRenderer.invoke('edition:lireCartel', source),

@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react';
 import * as I from '../icones.jsx';
 import { SUR_MOBILE, dateCourte, urlTuile } from '../commun/base.jsx';
 import { BoiteCartel } from './Cartel.jsx';
+import { APPAREIL_INTEGRE, BoiteAppareil } from './Appareil.jsx';
 import { BoiteConfirmation } from '../commun/boites.jsx';
 import { PastilleConflit } from '../tuile/Cartes.jsx';
+import { rangerBrouillon, effacerBrouillon } from '../commun/brouillon.js';
 
 /* --------------------------------------------------------------- edition */
 
@@ -55,19 +57,21 @@ export function urlDepuisDrop(dt) {
 //   mode 'creer'    : champs vides, bouton « Valider la création »
 //   mode 'modifier' : champs pre-remplis, « Valider les changements » (grise
 //                     tant que rien n'a change), + « Supprimer la tuile »
-export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
+export function EditeurTuile({ mode, tuile, brouillon, onFini, onAnnuler, onSupprimer }) {
   const initial = mode === 'modifier'
     ? Object.fromEntries(Object.keys(CHAMPS_VIDES).map((c) => [c, tuile[c] || '']))
     : CHAMPS_VIDES;
   const imageInitiale = initial.image;
 
-  const [champs, setChamps] = useState(initial);
+  // brouillon : editeur rouvert apres une prise de vue qui a tue l'appli (mobile).
+  const [champs, setChamps] = useState(brouillon ? { ...CHAMPS_VIDES, ...brouillon.champs } : initial);
   // Mes notes : a part des champs de la tuile (jamais au tirage, hors masques).
   const [note, setNote] = useState('');
   const [noteInitiale, setNoteInitiale] = useState('');
   useEffect(() => {
+    if (brouillon && brouillon.note) setNote(brouillon.note);
     if (mode !== 'modifier') return;
-    window.api.notes.lire(tuile.id).then((r) => { setNote(r.texte || ''); setNoteInitiale(r.texte || ''); });
+    window.api.notes.lire(tuile.id).then((r) => { if (!(brouillon && brouillon.note)) setNote(r.texte || ''); setNoteInitiale(r.texte || ''); });
   }, [mode, tuile && tuile.id]);
   const [imgInfo, setImgInfo] = useState(null);
   const [imgErreur, setImgErreur] = useState(null);
@@ -76,16 +80,32 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
   const [enCours, setEnCours] = useState(false);
   const [erreurValider, setErreurValider] = useState(null);   // champ trop long…
   const [avertirSansMasque, setAvertirSansMasque] = useState(null);   // tuile injouable (0 masque)
-  const [idCree, setIdCree] = useState(null);   // creation deja faite dans cette session -> on modifie ensuite (pas de doublon)
+  const [idCree, setIdCree] = useState((brouillon && brouillon.idCree) || null);   // creation deja faite dans cette session -> on modifie ensuite (pas de doublon)
   const [historique, setHistorique] = useState(null);   // null | 'chargement' | [{ champ, versions }]
   const [aVersions, setAVersions] = useState(false);
+  // Android peut tuer l'appli pendant la prise de vue (memoire courte) : la
+  // saisie est rangee avant, et reprise au redemarrage (commun/brouillon.js).
+  const garderBrouillon = (attente) => rangerBrouillon({
+    mode, tuileId: tuile && tuile.id, champs, note, idCree, attente
+  });
   // Lecture du cartel (mobile : ML Kit ; PC : Windows) : null | 'lecture' | { lignes, proposition } | { erreur }
   const [cartel, setCartel] = useState(null);
-  const lireCartel = async (source) => {
+  // Appareil photo integre (mobile) : null | 'photo' | 'cartel'. L'appli reste
+  // au premier plan pendant la prise de vue (Android ne la ferme pas).
+  const [appareil, setAppareil] = useState(null);
+  const integre = SUR_MOBILE && APPAREIL_INTEGRE;
+  const lireCartel = (source) => {
+    if (source === 'camera' && integre) { setAppareil('cartel'); return; }
+    lancerCartel(source);
+  };
+  // source : 'camera' (appareil du telephone) | 'galerie' | 'fichier' | 'reprise' | { octets }
+  const lancerCartel = async (source) => {
     setCartel('lecture');
+    if (source === 'camera') garderBrouillon('cartel');
     let r;
     try { r = await window.api.edition.lireCartel(source); }
     catch (err) { r = { erreur: String(err && err.message || err) }; }
+    finally { if (source === 'camera') effacerBrouillon(); }
     setCartel(r && (r.erreur || (r.lignes && r.lignes.length)) ? r
       : r ? { erreur: 'Aucun texte trouvé sur la photo. Rapproche-toi du cartel, sans reflet.' } : null);
   };
@@ -164,13 +184,48 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
     finally { setImgEnCours(false); }
   };
   // Mobile : photo prise sur le moment (au musee), sans passer par la galerie.
-  const photographier = async () => {
+  const photographier = () => {
     if (imgEnCours || champs.image) return;
+    if (integre) { setAppareil('photo'); return; }
+    photographierTelephone();
+  };
+  // Photo prise dans l'appli : meme import qu'une image deposee.
+  const photoIntegree = async (blob) => {
+    const pour = appareil;
+    setAppareil(null);
+    const octets = await blob.arrayBuffer();
+    if (pour === 'cartel') { lancerCartel({ octets }); return; }
     setImgEnCours(true);
-    try { poser(await window.api.edition.prendrePhoto()); }
-    catch (err) { echecImage('appareil-photo', err); }
+    try { poser(await window.api.edition.importerImage(octets, { origine: 'appareil-integre', nom: 'photo.jpg', type: blob.type, octets: blob.size })); }
+    catch (err) { echecImage('appareil-integre', err); }
     finally { setImgEnCours(false); }
   };
+  // Secours : appareil photo du telephone (autre appli ; brouillon range avant).
+  const secoursAppareil = (raison) => {
+    const pour = appareil;
+    setAppareil(null);
+    window.api.evt('image', 'appareil-secours', { pour, raison });
+    if (pour === 'cartel') lancerCartel('camera'); else photographierTelephone();
+  };
+  const photographierTelephone = async () => {
+    setImgEnCours(true);
+    garderBrouillon('photo');
+    try { poser(await window.api.edition.prendrePhoto()); }
+    catch (err) { echecImage('appareil-photo', err); }
+    finally { setImgEnCours(false); effacerBrouillon(); }
+  };
+  // Editeur rouvert apres une prise de vue qui a tue l'appli : la photo (ou le
+  // cartel) arrive maintenant, livree par Android au redemarrage.
+  useEffect(() => {
+    if (!brouillon) return;
+    if (brouillon.attente === 'cartel') { lancerCartel('reprise'); return; }
+    if (brouillon.attente !== 'photo') return;
+    setImgEnCours(true);
+    window.api.edition.photoReprise()
+      .then(poser)
+      .catch((err) => echecImage('appareil-photo-reprise', err))
+      .finally(() => setImgEnCours(false));
+  }, []);
   const deposer = async (e) => {
     e.preventDefault();
     setSurvol(false);
@@ -217,10 +272,9 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
       }
       if (r && r.erreur) { setErreurValider(r.erreur); setEnCours(false); return; }
       if (noteChangee && r && r.id) await window.api.notes.ecrire(r.id, note);
-      // Tuile injouable (0 masque) ou incomplete (champs importants vides) : on
-      // previent, sans empecher (une fiche pauvre peut etre voulue).
-      const manques = (r && r.manques) || [];
-      if (r && (r.masques === 0 || manques.length)) { setAvertirSansMasque(r); setEnCours(false); return; }
+      // Tuile injouable (0 masque) : on previent, sans empecher (une fiche
+      // pauvre peut etre voulue). Plus d'avertissement « incomplete » (0.3.17).
+      if (r && r.masques === 0) { setAvertirSansMasque(r); setEnCours(false); return; }
       onFini(r);
     } catch (e) {
       window.api.evt('edition', mode + '-exception', { id: tuile && tuile.id, message: String(e && e.message || e) }, 'ERREUR');
@@ -375,6 +429,10 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
         </div>
       </div>
 
+      {appareil && (
+        <BoiteAppareil titre={appareil === 'cartel' ? 'Cartel' : 'Image de la tuile'}
+          onPhoto={photoIntegree} onSecours={secoursAppareil} onFermer={() => setAppareil(null)} />
+      )}
       {cartel && cartel !== 'lecture' && (
         <BoiteCartel key={cartel.cle || (cartel.ia ? 'ia' : 'local')} lecture={cartel} actuels={champs} onRemplir={remplirDepuisCartel}
           onRelire={() => lireCartel(SUR_MOBILE ? 'camera' : 'fichier')} onFermer={() => setCartel(null)}
@@ -387,30 +445,21 @@ export function EditeurTuile({ mode, tuile, onFini, onAnnuler, onSupprimer }) {
         />
       )}
       {avertirSansMasque && (() => {
-        const injouable = avertirSansMasque.masques === 0;
         const manques = avertirSansMasque.manques || [];
         return (
           <BoiteConfirmation
-            titre={injouable ? 'Tuile injouable en l’état' : 'Tuile incomplète'}
+            titre="Tuile injouable en l’état"
             texteConfirmer="Garder quand même"
             confirmerVariante="valide"
             onAnnuler={() => setAvertirSansMasque(null)}
             onConfirmer={() => onFini(avertirSansMasque)}
           >
-            {injouable ? (
-              <p>
-                Avec ces champs, aucun jeu d’indices ne la distingue des autres
-                tuiles : elle <strong>n’apparaîtra pas pendant les parties</strong>
-                {' '}(ni en révision espacée). Un seul champ rempli ne suffit pas —
-                s’il faut le montrer comme indice, il ne reste rien à deviner.
-              </p>
-            ) : (
-              <p>
-                Il manque des champs importants : la tuile sera jouable mais
-                <strong> apparaîtra peu</strong>, et certains tirages auront peu à
-                montrer. Plus elle est complète, plus elle est utile à mémoriser.
-              </p>
-            )}
+            <p>
+              Avec ces champs, aucun jeu d’indices ne la distingue des autres
+              tuiles : elle <strong>n’apparaîtra pas pendant les parties</strong>
+              {' '}(ni en révision espacée). Un seul champ rempli ne suffit pas —
+              s’il faut le montrer comme indice, il ne reste rien à deviner.
+            </p>
             {manques.length > 0 && (
               <p>
                 Champs vides ou trop courts :{' '}

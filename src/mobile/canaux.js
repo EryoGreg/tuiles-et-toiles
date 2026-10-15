@@ -21,6 +21,7 @@ const { creerAuto } = require('../main/synchro/auto');
 const reseau = require('./reseau');
 const maj = require('./maj');
 const cartel = require('./cartel');
+const photoReprise = require('./photo-reprise');
 const revision = require('../main/revision');
 const cartelIa = require('../main/cartel-ia');
 const iaCle = require('../main/ia-cle');
@@ -127,23 +128,28 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
     input.oncancel = () => ok(null);
     input.click();
   }));
-  // Appareil photo (@capacitor/camera) : la photo prise est lue puis passe par
-  // le meme import (redimensionnee, <= 500 Ko) qu'une image choisie.
+  // Appareil photo : la photo prise est lue puis passe par le meme import
+  // (redimensionnee, <= 500 Ko) qu'une image choisie. photo-reprise : la photo
+  // survit a la mort de l'appli pendant la prise (telephone a court de memoire).
+  const importerPhoto = async (m, origine) => {
+    const chemin = photoReprise.adresse(m);
+    if (!chemin) return null;
+    const octets = new Uint8Array(await (await fetch(chemin)).arrayBuffer());
+    return images.importer(octets, dossierImagesLocales, { origine, octets: octets.length });
+  };
   g('edition:prendrePhoto', async () => {
-    let r;
-    try { r = await require('@capacitor/camera').Camera.takePhoto({ quality: 90, correctOrientation: true }); }
+    let m;
+    try { m = await photoReprise.prendre(); }
     catch (e) {
-      if (/cancel|annul/i.test(String(e && e.message))) return null;   // l'utilisateur a renonce
       journal.erreur('image', 'appareil-photo', e);
       return { erreur: 'Appareil photo indisponible : ' + (e && e.message || e) };
     }
-    const chemin = r && (r.webPath || r.uri);
-    if (!chemin) return null;
-    const octets = new Uint8Array(await (await fetch(chemin)).arrayBuffer());
-    return images.importer(octets, dossierImagesLocales, { origine: 'appareil-photo', octets: octets.length });
+    return importerPhoto(m, 'appareil-photo');
   });
+  // Photo prise juste avant que l'appli ne soit tuee : l'editeur rouvert la reprend.
+  g('edition:photoReprise', () => importerPhoto(photoReprise.reprise(), 'appareil-photo-reprise'));
   // Cartel du musee : photo -> lignes de texte, que l'editeur range dans les champs.
-  g('edition:lireCartel', (source) => cartel.lire(source === 'galerie' ? 'galerie' : 'camera'));
+  g('edition:lireCartel', (source) => cartel.lire(source && source.octets ? source : ['galerie', 'reprise'].includes(source) ? source : 'camera'));
   g('edition:cartelEtat', () => cartel.etat());
   // Lecture amelioree par Claude : meme logique que le PC (index.js).
   const etatIA = () => ({

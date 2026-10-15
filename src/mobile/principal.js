@@ -138,6 +138,9 @@ window.__tt = { db, synchro: require('../main/synchro/service'), fs, pret };
 // (boite, apercu, formulaire : ils se ferment sur Echap), sinon page
 // precedente (meme chemin que les boutons lateraux de la souris sur PC) ;
 // depuis la premiere page, le rendu appelle app:quitter -> arriere-plan.
+// Photo prise pendant que l'appli etait tuee : livree au redemarrage.
+require('./photo-reprise').ecouter();
+
 if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
   AppNative.addListener('backButton', () => {
     if (document.querySelector('.recouvrement, .recouvrement-apercu, .recouvrement-image')) {

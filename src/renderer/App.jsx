@@ -3,6 +3,7 @@ import * as I from './icones.jsx';
 import { DENSITES, GrilleContext, NavContext, SUR_MOBILE, chargerPrefs, densiteValide, editionEnAttente } from './commun/base.jsx';
 import { BoiteConfirmation, EnChantier } from './commun/boites.jsx';
 import { PageEdition } from './edition/PageEdition.jsx';
+import { prendreBrouillon } from './commun/brouillon.js';
 import { PageBibliotheque, PageEtoile, PageLivre, PageRevoir } from './galeries/Galeries.jsx';
 import { Jeu } from './jeu/Jeu.jsx';
 import { BandeauMaj, MajContext, useMaj } from './options/Maj.jsx';
@@ -343,6 +344,17 @@ export default function App() {
     setRetour,
     modifierTuile: (id) => { editionEnAttente.id = id; naviguer('edition'); }
   }), [setRetour, naviguer]);
+
+  // Appli tuee pendant une prise de vue (mobile, memoire courte) : on rouvre
+  // l'editeur tel qu'il etait, il reprend la photo (commun/brouillon.js).
+  useEffect(() => {
+    if (!SUR_MOBILE) return;
+    const b = prendreBrouillon();
+    if (!b) return;
+    window.api.evt('edition', 'brouillon-repris', { mode: b.mode, attente: b.attente, ageS: Math.round((Date.now() - b.le) / 1000) });
+    editionEnAttente.brouillon = b;
+    naviguer('edition');
+  }, []);
 
   const reculer = useCallback(() => {
     // D'abord fermer l'état interne de la page (aperçu, éditeur…) s'il y en a.

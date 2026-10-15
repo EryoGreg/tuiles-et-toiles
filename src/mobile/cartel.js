@@ -17,6 +17,7 @@
 
 const journal = require('../main/journal');
 const { analyser } = require('../main/cartel-analyse');
+const photoReprise = require('./photo-reprise');
 
 let etat = { disponible: null, erreur: null };   // null = pas encore su
 
@@ -53,16 +54,33 @@ let derniere = null;   // adresse lisible par la page de la derniere photo (« R
 async function prendre(source) {
   const { Camera } = require('@capacitor/camera');
   let m;
+  if (source && source.octets) return ecrirePhoto(source.octets);   // appareil integre
   if (source === 'galerie') {
     const r = await Camera.chooseFromGallery({ limit: 1, correctOrientation: true });
     m = r && r.results && r.results[0];
+    if (m) m = { path: m.uri, webPath: m.webPath };
+  } else if (source === 'reprise') {
+    m = photoReprise.reprise();   // photo prise avant que l'appli ne soit tuee
   } else {
-    m = await Camera.takePhoto({ quality: 90, correctOrientation: true });
+    m = await photoReprise.prendre();
   }
   if (!m) return null;
-  const C = window.Capacitor;
-  derniere = m.webPath || (m.uri && C && C.convertFileSrc ? C.convertFileSrc(m.uri) : null);
-  return m.uri || m.webPath;
+  derniere = photoReprise.adresse(m);
+  return m.path || m.webPath;
+}
+
+// Photo de l'appareil integre (octets JPEG) : ML Kit lit un fichier -> cache de l'appli.
+let urlBlob = null;
+async function ecrirePhoto(octets) {
+  const { Filesystem, Directory } = require('@capacitor/filesystem');
+  const { Buffer } = require('buffer');
+  const r = await Filesystem.writeFile({
+    path: 'cartel.jpg', directory: Directory.Cache, data: Buffer.from(octets).toString('base64')
+  });
+  if (urlBlob) URL.revokeObjectURL(urlBlob);
+  urlBlob = URL.createObjectURL(new Blob([octets], { type: 'image/jpeg' }));
+  derniere = urlBlob;
+  return r.uri;
 }
 
 /**
@@ -83,11 +101,12 @@ async function imageIA() {
   return { data: Buffer.from(await blob.arrayBuffer()).toString('base64'), media_type: 'image/jpeg' };
 }
 
-async function lire(source) {
+async function lire(entree) {
+  const source = entree && entree.octets ? 'integre' : entree;   // nom pour le journal
   const L = natif();
   if (!L) return { erreur: 'La lecture de cartel est disponible dans l’appli Android.' };
   let uri;
-  try { uri = await prendre(source); }
+  try { uri = await prendre(entree); }
   catch (e) {
     if (/cancel|annul/i.test(String(e && e.message))) return null;   // l'utilisateur a renonce
     journal.erreur('cartel', 'photo', e, { source });

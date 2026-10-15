@@ -1,5 +1,5 @@
 // Decoupe d'App.jsx (etape 1 de Bristol) : code inchange, voir scripts/decouper-app.js.
-import { useEffect, useState, useContext, Fragment } from 'react';
+import { useEffect, useState, useContext, useRef, Fragment } from 'react';
 import * as I from '../icones.jsx';
 import { NavContext, SUR_MOBILE, coupe, editionEnAttente, useSession } from '../commun/base.jsx';
 import { BoiteConfirmation } from '../commun/boites.jsx';
@@ -44,12 +44,32 @@ export function PageEdition({ onEtat }) {
     if (t) setMode({ tuile: t });
   };
   // Arrivee depuis le menu contextuel d'une carte : editeur de cette tuile.
+  // Brouillon repris apres une prise de vue qui a tue l'appli (mobile).
+  const [brouillon, setBrouillon] = useState(null);
+  useEffect(() => {
+    const b = editionEnAttente.brouillon;
+    if (!b) return;
+    editionEnAttente.brouillon = null;
+    if (b.mode === 'modifier' && b.tuileId) {
+      window.api.edition.tuile(b.tuileId).then((t) => { if (t) { setBrouillon(b); setMode({ tuile: t }); } });
+    } else {
+      setBrouillon(b);
+      setMode('creer');
+    }
+  }, []);
   useEffect(() => {
     if (!editionEnAttente.id) return;
     const id = editionEnAttente.id;
     editionEnAttente.id = null;
     ouvrir({ id });
   }, []);
+  // Servi une fois : quitter l'editeur l'oublie (sinon « Créer » le rejouerait).
+  const modeAvant = useRef(mode);
+  useEffect(() => {
+    if (modeAvant.current === mode) return;   // montage : le brouillon arrive a peine
+    modeAvant.current = mode;
+    if (mode !== 'creer' && !(mode && mode.tuile)) setBrouillon(null);
+  }, [mode]);
   const confirmerSuppr = async () => {
     const t = demandeSuppr;
     setDemandeSuppr(null);
@@ -60,7 +80,7 @@ export function PageEdition({ onEtat }) {
   };
 
   if (mode === 'creer') {
-    return <EditeurTuile mode="creer" onFini={finiCreation} onAnnuler={() => setMode(null)} />;
+    return <EditeurTuile mode="creer" brouillon={brouillon} onFini={finiCreation} onAnnuler={() => setMode(null)} />;
   }
   if (mode === 'journal') {
     return (
@@ -89,6 +109,7 @@ export function PageEdition({ onEtat }) {
         <EditeurTuile
           mode="modifier"
           tuile={mode.tuile}
+          brouillon={brouillon && brouillon.tuileId === mode.tuile.id ? brouillon : null}
           onFini={finiModif}
           onAnnuler={() => setMode('liste')}
           onSupprimer={setDemandeSuppr}

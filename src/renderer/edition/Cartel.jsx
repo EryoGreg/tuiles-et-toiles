@@ -49,7 +49,7 @@ export function BoiteCartel({ lecture, actuels, onRemplir, onRelire, onFermer, o
   // a reconnu ; chaque ligne n'appartient qu'a un champ.
   const [affect, setAffect] = useState(() => {
     const a = Object.fromEntries(CHAMPS_CARTEL.map((c) => [c, []]));
-    lecture.lignes.forEach((l, i) => { const c = ROLE_CHAMP[l.role]; if (c) a[c].push(i); });
+    (lecture.lignes || []).forEach((l, i) => { const c = ROLE_CHAMP[l.role]; if (c) a[c].push(i); });   // erreur : pas de lignes
     return a;
   });
   useEffect(() => {

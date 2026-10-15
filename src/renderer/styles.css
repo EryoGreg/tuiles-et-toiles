@@ -1567,3 +1567,38 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .carte-note { display: inline-flex; margin-left: 6px; vertical-align: -1px; color: var(--laiton); }
 .champ-note .etiquette { display: inline-flex; align-items: center; gap: 5px; }
 .champ-note textarea { min-height: 70px; }
+
+/* --- appareil photo integre (mobile, edition/Appareil.jsx) ------------------ */
+
+.recouvrement.appareil {
+  display: flex; background: #000; z-index: 80;
+  flex-direction: column; justify-content: stretch; align-items: stretch;
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+}
+.appareil-video { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #000; }
+.appareil-titre {
+  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 0; right: 0;
+  text-align: center; color: #fff; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); pointer-events: none;
+}
+.appareil-message {
+  position: absolute; top: 40%; left: 16px; right: 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  color: #fff; text-align: center; font-size: 14px;
+}
+.appareil-barre {
+  display: flex; align-items: center; justify-content: space-around;
+  padding: 18px 16px 22px; background: #000;
+}
+.appareil-annuler, .appareil-secours {
+  width: 52px; height: 52px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.12); color: #fff; border: none;
+}
+.appareil-declencheur {
+  width: 74px; height: 74px; border-radius: 50%;
+  background: #fff; border: 5px solid rgba(255, 255, 255, 0.35); background-clip: padding-box;
+  color: #000; font-size: 20px;
+}
+.appareil-declencheur:disabled { opacity: 0.4; }
+.appareil-declencheur:active { transform: scale(0.93); }

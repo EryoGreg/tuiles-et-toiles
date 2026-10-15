@@ -21,7 +21,7 @@ export const NavContext = createContext({ setRetour: () => {} });
 
 // Tuile a ouvrir dans l'editeur a l'arrivee sur Edition (menu contextuel).
 // Un objet : un import ES ne se reassigne pas depuis un autre module.
-export const editionEnAttente = { id: null };
+export const editionEnAttente = { id: null, brouillon: null };   // brouillon : commun/brouillon.js
 
 /* ---------------------------------------------------- preferences d'affichage */
 

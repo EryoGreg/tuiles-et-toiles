@@ -6,10 +6,15 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.16 (Latest, GitHub, 04/10/2026) — **moteur de masques revu** (paliers de difficulté
+- **Publiée** : 0.3.17 (Latest, GitHub, 15/10/2026) — **appareil photo intégré** (mobile : l'appli reste au premier
+  plan, Android ne la ferme plus pendant la photo — rapport R261015122225-c91b), secours `getPhoto` + **reprise du
+  brouillon** si l'appli est tuée, avertissement « Tuile incomplète » retiré, plantage de la boîte du cartel quand
+  aucun texte n'est lu (page blanche) corrigé. Voir « Appli mobile » → Photo.
+- **0.3.16** (04/10/2026) — **moteur de masques revu** (paliers de difficulté
   Normal/Difficile, image facultative, fuite élargie, artiste ≤6 œuvres évocateur, jamais de champ vide
   révélé, jamais lieu/tags/date seuls, recalcul auto au 1er lancement via `masques.VERSION`), **choix de
-  difficulté** sur Nouvelle partie (`prefs_affichage`), **avertissement éditeur** injouable/incomplète
+  difficulté** sur Nouvelle partie (`prefs_affichage`), **avertissement éditeur** injouable (« incomplète »
+  retiré en 0.3.17)
   (`edition.manquesDe`). Voir « Le moteur de masques ».
 - **0.3.15** (04/10/2026) — découpe d'`App.jsx` (étape 1 de Bristol), **Mes notes**, **bilan de synchro qui compte les rattrapages**, **contenus anormaux** (recherche
   multi-écritures, textes bien formés, limites de taille, démarrage mobile sans `innerHTML`), et
@@ -440,7 +445,18 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   hors Wi-Fi, un geste explicite passe. Pas de synchro au retour au premier plan (la
   surveillance la lance si la dernière a plus de 15 min). Hors Wi-Fi, une grande image affichée
   n'est pas re-téléchargée pour le cache.
-- **Photo** : `edition:prendrePhoto` (mobile) → `@capacitor/camera` `takePhoto`, puis même import ;
+- **Photo** (0.3.17) : **appareil photo intégré** (`edition/Appareil.jsx`, `BoiteAppareil` : aperçu `getUserMedia`
+  en portail sur `body`, déclencheur, `ImageCapture.takePhoto` à la résolution max — sans réglage l'émulateur
+  rendait 240×320 —, sinon image de l'aperçu ; photo → `edition:importerImage` origine `appareil-integre` ; cartel
+  → `lireCartel({ octets })`, écrit dans le cache par `@capacitor/filesystem` pour ML Kit). L'appli reste au
+  premier plan : Android ne la ferme plus. **Secours** (permission refusée, panne, bouton appareil en bas à
+  droite) : `edition:prendrePhoto` → `@capacitor/camera` **`getPhoto`** (pas `takePhoto` : ce flux
+  récent garde l'appel en mémoire seulement), puis même import. **Appli tuée pendant la prise de vue**
+  (téléphone à court de mémoire — rapport R261015122225-c91b, Honor RKY-LX1 : nouvelle session à chaque photo,
+  éditeur fermé) : l'éditeur range son brouillon (`commun/brouillon.js`, localStorage) avant la photo et le cartel ;
+  au redémarrage App.jsx rouvre l'éditeur tel quel, la photo arrive par `appRestoredResult`
+  (`src/mobile/photo-reprise.js`, `edition:photoReprise`, `lireCartel('reprise')`). Testé sur émulateur :
+  `adb shell am kill fr.tuilesettoiles.app` pendant que l'appareil photo est ouvert ;
   boutons « Prendre une photo » / « Galerie » dans l'éditeur. Retour Android (`@capacitor/app`
   `backButton`) : Échap si une boîte est ouverte, sinon `app:nav` « reculer » ; à la racine,
   `app:quitter` = `minimizeApp`. Icônes : `node scripts/icones-android.js`.
@@ -651,9 +667,10 @@ dans ce même moteur) :
   artiste prolifique sur des sujets variés reste un indice ; la discriminance est
   vérifiée à part.
 - **Tuile pauvre / incomplète** : autorisée (fiche volontaire), mais l'éditeur
-  prévient par un popup non bloquant (« Garder quand même »), à **deux niveaux** :
-  « Tuile injouable en l'état » (0 masque → n'apparaît pas en jeu) ou « Tuile
-  incomplète » (jouable mais apparaîtra peu), avec la **liste des champs
+  prévient par un popup non bloquant (« Garder quand même ») si elle est
+  « injouable en l'état » (0 masque → n'apparaît pas en jeu). L'avertissement « Tuile
+  incomplète » (jouable mais apparaîtra peu) est **retiré** depuis 0.3.17 (demande de
+  l'utilisateur). Le popup donne la **liste des champs
   manquants** (`edition.manquesDe` : image/titre/artiste/date/lieu/description <
   60 car./tags, renvoyé par `creer`/`modifier` à côté du compte de masques). Pas
   de masque de repli : une tuile à 0 masque n'apparaît simplement pas en jeu.
