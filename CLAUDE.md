@@ -6,7 +6,12 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.17 (Latest, GitHub, 15/10/2026) — **appareil photo intégré** (mobile : l'appli reste au premier
+- **Publiée** : 0.3.18 (Latest, GitHub, 15/10/2026) — mobile : **copies d'affichage des photos locales plafonnées**
+  (`images-url.js`, 40 URL blob, libérées en différé si plus affichées, recréées à l'erreur ; test
+  `images-url-memoire`) et **occupation mémoire** dans le rapport d'erreur et le journal `demarrage-mobile`
+  (`memoire` : vfs par dossier, copies, tas JS, RAM). Plan de MAJ web seule : `PLAN-maj-partielle.md` (attend
+  le feu vert, 3 décisions en fin de fichier).
+- **0.3.17** (15/10/2026) — **appareil photo intégré** (mobile : l'appli reste au premier
   plan, Android ne la ferme plus pendant la photo — rapport R261015122225-c91b), secours `getPhoto` + **reprise du
   brouillon** si l'appli est tuée, avertissement « Tuile incomplète » retiré, plantage de la boîte du cartel quand
   aucun texte n'est lu (page blanche) corrigé. Voir « Appli mobile » → Photo.
