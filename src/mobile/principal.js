@@ -92,7 +92,7 @@ async function demarrer() {
     infos: () => ({
       appareil: { id: moi.id, nom: moi.nom, prefixe: moi.prefixe_ref }, mobile: true, agent: navigator.userAgent,
       ecran: window.innerWidth + 'x' + window.innerHeight, oeuvres: db.compterOeuvres(), tags: db.comptesTags(),
-      images: imagesUrl.etat()
+      images: imagesUrl.etat(), memoire: memoire()
     })
   });
   setTimeout(() => {
@@ -100,7 +100,22 @@ async function demarrer() {
     if (rapport.listerAttente().length) rapport.renvoyerEnAttente().catch(() => {});
   }, 8000);
   planifierSauvegarde();
-  journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres() });
+  journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres(), memoire: memoire() });
+}
+
+// Occupation memoire (rapport d'erreur, journal au demarrage) : de quoi savoir
+// ce qui pese sur un telephone qu'Android ferme faute de memoire.
+function memoire() {
+  const mo = (o) => Math.round(o / 1e5) / 10;
+  const r = { fichiersMo: {} };
+  try {
+    for (const [d, e] of Object.entries(fs.occupation())) r.fichiersMo[d] = { n: e.fichiers, mo: mo(e.octets) };
+  } catch (e) { r.erreurFichiers = e.message; }
+  try { Object.assign(r, imagesUrl.memoire()); } catch { /* */ }
+  const pm = typeof performance !== 'undefined' && performance.memory;
+  if (pm) { r.tasJsMo = mo(pm.usedJSHeapSize); r.tasJsMaxMo = mo(pm.jsHeapSizeLimit); }
+  if (typeof navigator !== 'undefined' && navigator.deviceMemory) r.ramAppareilGo = navigator.deviceMemory;
+  return r;
 }
 
 const pret = demarrer();

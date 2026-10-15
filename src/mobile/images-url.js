@@ -27,7 +27,13 @@ let idb = null;
 let manifeste = { ref: null, images: {} };
 let dossierLocales = '/data/images-locales';
 const enCache = new Set();
-const urls = new Map();       // cle -> URL blob
+const urls = new Map();       // cle -> URL blob (ordre = du moins au plus recemment servi)
+const revoquees = new Map();  // URL blob liberee -> cle (pour la recreer si un <img> la cite encore)
+// Copies d'affichage des photos locales : chaque URL blob garde une COPIE de la
+// photo (en plus de celle du vfs). Au-dela de MAX_URLS, les plus anciennes que
+// plus aucune image de la page n'affiche sont liberees.
+const MAX_URLS = 40;
+const MAX_REVOQUEES = 2000;
 const enVol = new Map();
 const ecouteurs = new Set();  // notifies quand une grande image arrive
 let cacheOk = () => true;     // mobile : faux en donnees mobiles
@@ -77,9 +83,50 @@ async function configurer(o) {
 const vignette = (nom) => 'vignettes/' + nom.replace(/\.(png|jpe?g)$/i, '.jpg');
 const distante = (nom) => 'https://raw.githubusercontent.com/' + DEPOT + '/' + manifeste.ref + '/data/images/' + encodeURIComponent(nom);
 
-function urlBlob(cle, octets, type = 'image/jpeg') {
-  if (!urls.has(cle)) urls.set(cle, URL.createObjectURL(new Blob([octets], { type })));
-  return urls.get(cle);
+function urlBlob(cle, lire, type = 'image/jpeg') {
+  let u = urls.get(cle);
+  if (u) { urls.delete(cle); urls.set(cle, u); return u; }   // remise en tete (plus recente)
+  u = URL.createObjectURL(new Blob([lire()], { type }));
+  urls.set(cle, u);
+  if (urls.size > MAX_URLS && !minuteurLiberer) minuteurLiberer = setTimeout(liberer, 2000);
+  return u;
+}
+
+// Libere les copies les plus anciennes qu'aucun <img> de la page n'affiche.
+// Differe : une liste est traduite d'un coup AVANT d'etre affichee ; liberer
+// tout de suite viserait les images de la page qui arrive.
+let minuteurLiberer = null;
+function liberer() {
+  minuteurLiberer = null;
+  const affichees = new Set();
+  if (typeof document !== 'undefined') for (const img of document.images) affichees.add(img.getAttribute('src'));
+  for (const [cle, u] of urls) {
+    if (urls.size <= MAX_URLS) break;
+    if (affichees.has(u)) continue;
+    urls.delete(cle);
+    try { URL.revokeObjectURL(u); } catch { /* */ }
+    revoquees.set(u, cle);
+    if (revoquees.size > MAX_REVOQUEES) revoquees.delete(revoquees.keys().next().value);
+  }
+}
+
+// Une page peut garder dans son etat une adresse liberee depuis (carte masquee
+// par un filtre puis reaffichee) : l'image echoue, on recree son adresse.
+if (typeof document !== 'undefined') {
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const cle = revoquees.get(img.getAttribute('src'));
+    if (!cle) return;
+    const chemin = dossierLocales + '/' + cle.slice(2);
+    if (!fs.existsSync(chemin)) return;
+    img.src = urlBlob(cle, () => fs.readFileSync(chemin));
+  }, true);
+}
+
+/** Copies d'affichage en memoire (rapport d'erreur). */
+function memoire() {
+  return { copiesAffichage: urls.size, maxCopies: MAX_URLS, liberees: revoquees.size, grandesEnCache: pretes.size };
 }
 
 function lireCache(nom) {
@@ -134,7 +181,7 @@ function traduire(url, { garder = false } = {}) {
   const mini = brut.startsWith('mini/');
   const nom = brut.replace(/^mini\//, '').split('/').pop();
   const locale = dossierLocales + '/' + nom;
-  if (fs.existsSync(locale)) return urlBlob('l:' + nom, fs.readFileSync(locale));
+  if (fs.existsSync(locale)) return urlBlob('l:' + nom, () => fs.readFileSync(locale));
   // Photo d'une tuile creee ailleurs, pas encore recue : rien plutot qu'une
   // image cassee (la carte montre alors sa zone vide).
   if (!manifeste.images[nom]) return '';
@@ -211,6 +258,6 @@ async function toutTelecharger0(surProgression, arreter) {
 }
 
 module.exports = {
-  configurer, traduire, traduireTout, etat, toutTelecharger, vider,
+  configurer, traduire, traduireTout, etat, toutTelecharger, vider, memoire,
   surArrivee: (f) => ecouteurs.add(f), cachePermis: (f) => { cacheOk = f; }, qualitePermise: (f) => { qualite = f; }
 };

@@ -159,6 +159,18 @@ function ecrireMemoire(p, octets, mtime = Date.now()) {
   fichiers.set(p, { octets, mtime });
 }
 
+/** Octets en memoire par dossier (rapport d'erreur) : { '/data/images-locales': { fichiers, octets } … }. */
+function occupation() {
+  const r = {};
+  for (const [p, f] of fichiers) {
+    const d = p.startsWith('/data/') ? p.split('/').slice(0, 3).join('/') : p.split('/').slice(0, 2).join('/');
+    const e = r[d] || (r[d] = { fichiers: 0, octets: 0 });
+    e.fichiers++;
+    e.octets += f.octets.length;
+  }
+  return r;
+}
+
 function existsSync(p) { p = norm(p); return fichiers.has(p) || dossiers.has(p); }
 
 function statSync(p) {
@@ -254,5 +266,5 @@ module.exports = {
     copyFile: async (a, b) => copyFileSync(a, b)
   },
   // propres au mobile
-  charger, sauver, _fichiers: fichiers, illisibles: () => illisibles.slice()
+  charger, sauver, _fichiers: fichiers, illisibles: () => illisibles.slice(), occupation
 };
