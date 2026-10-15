@@ -6,7 +6,13 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.18 (Latest, GitHub, 15/10/2026) — mobile : **copies d'affichage des photos locales plafonnées**
+- **Publiée** : 0.3.19 (Latest, GitHub, 15/10/2026) — **déclencheur de l'appareil intégré** réparé (rapport
+  R261015151602-3b51, Honor : `takePhoto` refusé « Track is in an invalid state » à chaque appui, repli muet) :
+  image de l'aperçu dès 1 400 px, sinon ImageCapture plafonné 2 560 px et borné 1,5 s / 4 s, puis grabFrame,
+  sinon message + appareil du téléphone ; état de la piste journalisé. **Étape 1 de la MAJ partielle** (contenu
+  recopié dans `Data/contenu/`). Premiers chiffres mémoire de l'ami : 4 Go de RAM, photos locales 27,9 Mo (173),
+  tas JS 44,7 Mo.
+- **0.3.18** (15/10/2026) — mobile : **copies d'affichage des photos locales plafonnées**
   (`images-url.js`, 40 URL blob, libérées en différé si plus affichées, recréées à l'erreur ; test
   `images-url-memoire`) et **occupation mémoire** dans le rapport d'erreur et le journal `demarrage-mobile`
   (`memoire` : vfs par dossier, copies, tas JS, RAM). Plan de MAJ web seule : `PLAN-maj-partielle.md` (attend
