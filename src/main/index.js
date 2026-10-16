@@ -43,6 +43,9 @@ const annuler = require('./annuler');
 app.setName('Tuiles et Toiles');
 
 const DEV = !app.isPackaged;
+// Lanceur (lanceur.js) : version de l'exe, paquet de code charge. Absent si
+// index.js est lance directement (tests, anciens scripts).
+const lanceur = () => global.__ttLanceur || { versionExe: app.getVersion(), paquet: false, essai: false, evenements: [], valider: () => false };
 
 // Contenu livre avec l'application (extraResources), lecture seule.
 const DATA_LIVRE = DEV
@@ -162,6 +165,14 @@ function creerFenetre() {
   fenetre.once('ready-to-show', () => {
     fenetre.show();
     journal.evt('app', 'fenetre-affichee', { depuisLancementMs: Math.round(process.uptime() * 1000) });
+    // Paquet de code (mise a jour partielle) qui demarre sans encombre : retenu
+    // pour les lancements suivants (lanceur.js, lanceur-etat.js).
+    if (lanceur().essai) {
+      setTimeout(() => {
+        try { if (lanceur().valider()) journal.evt('maj', 'code-valide', { version: app.getVersion() }); }
+        catch (e) { journal.erreur('maj', 'code-validation', e); }
+      }, 10000);
+    }
   });
 
   // Erreurs et console du rendu -> journal.
@@ -228,8 +239,13 @@ app.whenReady().then(() => {
     memoireGo: Math.round(os.totalmem() / 1e8) / 10, libreGo: Math.round(os.freemem() / 1e8) / 10,
     cpus: os.cpus().length + ' x ' + ((os.cpus()[0] || {}).model || '?'),
     exe: process.execPath, portable: process.env.PORTABLE_EXECUTABLE_FILE || null,
-    donnees: DOSSIER_USER, demarrageMs: Math.round(process.uptime() * 1000)
+    donnees: DOSSIER_USER, demarrageMs: Math.round(process.uptime() * 1000),
+    versionExe: lanceur().versionExe, paquetCode: lanceur().paquet
   });
+  // Choix du lanceur (mise a jour partielle) : essai d'un paquet, refus, menage.
+  for (const ev of lanceur().evenements || []) {
+    journal.evt('maj', 'lanceur-' + ev.quoi, ev, ev.quoi === 'refuse' || ev.quoi === 'paquet-incomplet' ? 'WARN' : 'INFO');
+  }
   journal.armerErreurs(app);
   journal.evt('app', 'demarrage', { pack: lireVersionPack(PACK_LIVRE), packInstalle: lireVersionPack(PACK) });
   preparerDonnees();
@@ -372,7 +388,8 @@ function infosRapport() {
   const dv = drive.etat();
   const pack = db.packMeta();
   return {
-    version: app.getVersion(), dev: DEV, os: `${os.platform()} ${os.release()} ${os.arch()}`,
+    version: app.getVersion(), versionExe: lanceur().versionExe, paquetCode: lanceur().paquet,
+    dev: DEV, os: `${os.platform()} ${os.release()} ${os.arch()}`,
     electron: process.versions.electron, locale: app.getLocale(),
     memoireGo: Math.round(os.totalmem() / 1e8) / 10, libreGo: Math.round(os.freemem() / 1e8) / 10,
     ecrans: screen.getAllDisplays().map((x) => x.size.width + 'x' + x.size.height + '@' + x.scaleFactor),

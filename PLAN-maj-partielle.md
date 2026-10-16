@@ -124,8 +124,9 @@ procédure de publication.
 4. ✅ (15/10/2026) Bandeau (Wi-Fi signalé), « Redémarrer maintenant » / « Au prochain
    lancement », rapport + journal. Reste : premier essai réel (0.3.20 en APK, puis 0.3.21 en
    paquet web), chez toi puis chez ton ami.
-5. PC : lanceur minimal + paquet de code signé (voir « PC »), même signature et même
-   `natifMin` ; essai installée puis portable.
+5. ✅ (16/10/2026) PC : lanceur minimal (`src/main/lanceur.js`) + paquet de code signé
+   (`scripts/paquet-code.js`, ~440 Ko), `exeMin` automatique ; essai réel sur un exe non
+   installé (`--user-data-dir` jetable). Reste : premier essai via une vraie release.
 
 ## Décisions (15/10/2026)
 

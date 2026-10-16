@@ -36,18 +36,27 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { app, net, shell } = require('electron');
 const { versionSuperieure, decrireAsset, derniereRelease } = require('./maj-github');
+const majCode = require('./maj-code');
 
 // Noms d'assets attendus : les changer casse la mise a jour des installations existantes.
 const MOTIF_EXE = /^Tuiles-et-Toiles-\d+\.\d+\.\d+\.exe$/;
 const MOTIF_SETUP = /^Tuiles-et-Toiles-Setup-\d+\.\d+\.\d+\.exe$/;
 
-let trouvee = null;   // derniere release : { version, page, portable, setup }
-let pret = null;      // { chemin, setup, version } telecharge et verifie
+let trouvee = null;   // derniere release : { version, page, portable, setup, code }
+let pret = null;      // { chemin, setup, version } | { code: true, version } telecharge et verifie
 let marqueur = null;  // %APPDATA%\...\maj-en-cours.json
 
 function configurer({ dossierUser }) {
   marqueur = path.join(dossierUser, 'maj-en-cours.json');
+  // Mise a jour partielle (maj-code.js) : paquets dans <userData>/code, charges par le lanceur.
+  majCode.configurer({
+    racine: path.join(dossierUser, 'code'), fetch: net.fetch,
+    relancer: () => app.relaunch(process.env.PORTABLE_EXECUTABLE_FILE ? { execPath: process.env.PORTABLE_EXECUTABLE_FILE } : undefined)
+  });
 }
+
+// Version de l'exe (le code charge peut venir d'un paquet plus recent : lanceur.js).
+const versionExe = () => (global.__ttLanceur && global.__ttLanceur.versionExe) || app.getVersion();
 
 /** 'dev' | 'portable' | 'installee' */
 function mode() {
@@ -91,6 +100,20 @@ async function verifier() {
 
   if (!versionSuperieure(version, actuelle)) return { aJour: true, actuelle, migration };
 
+  // Paquet de code utilisable par cet exe : propose a la place de l'exe complet
+  // (~400 Ko au lieu de ~95 Mo, applique au redemarrage).
+  if (m !== 'dev') {
+    let refusees = [];
+    try { refusees = majCode.lireEtat().refusees; } catch { /* pas d'etat */ }
+    trouvee.code = majCode.trouver(r, { actuelle, versionExe: versionExe(), refusees });
+    if (trouvee.code) {
+      return {
+        disponible: true, actuelle, version, notes: r.body || '', type: 'web',
+        taille: trouvee.code.zip.taille, installable: true, migration
+      };
+    }
+  }
+
   const asset = m === 'installee' ? trouvee.setup : trouvee.portable;
   if (!asset && m !== 'dev') {
     journal.avertir('maj', 'exe-absent', { version, mode: m });
@@ -124,6 +147,12 @@ async function telecharger(surProgression, { versInstallee = false } = {}) {
   if (!trouvee) return { erreur: 'Aucune mise à jour trouvée.' };
   const m = mode();
   if (m === 'dev') { shell.openExternal(trouvee.page); return { pageOuverte: true }; }
+  if (trouvee.code && !versInstallee) {
+    journal.evt('maj', 'code-telechargement:debut', { version: trouvee.version, octets: trouvee.code.zip.taille });
+    const r = await majCode.telecharger(trouvee.code, surProgression);
+    if (r.ok) pret = { code: true, version: trouvee.version };
+    return r;
+  }
   const setup = m === 'installee' || versInstallee;
   const asset = setup ? trouvee.setup : trouvee.portable;
   if (!asset) return { erreur: 'Fichier absent de la version ' + trouvee.version + '.' };
@@ -181,6 +210,7 @@ async function telecharger(surProgression, { versInstallee = false } = {}) {
  * portable (il relance l'appli a la fin).
  */
 function installer() {
+  if (pret && pret.code) return majCode.redemarrer();
   if (!pret || !fs.existsSync(pret.chemin)) return { erreur: 'Mise à jour non téléchargée.' };
   const m = mode();
   const args = pret.setup && m === 'installee' ? ['/S', '--updated', '--force-run'] : [];

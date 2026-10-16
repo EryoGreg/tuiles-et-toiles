@@ -10,7 +10,7 @@
  *
  * natifMin = versionCode minimal de l'APK capable de faire tourner ce code :
  * empreinte de la partie native (sources Android hors web, gradle, config
- * Capacitor, versions installees des modules natifs) comparee a celle retenue
+ * Capacitor, versions installees des modules natifs, contenu livre) comparee a celle retenue
  * dans data/natif.json ; si elle change, natifMin = cette version (APK
  * obligatoire). Jamais laisse a la memoire de celui qui publie.
  *
@@ -62,6 +62,10 @@ function empreinteNative() {
     const v = require(path.join(RACINE, 'node_modules', d, 'package.json')).version;
     h.update(d + '@' + v + '\n');
   }
+  // Contenu livre (pack / decks) : un paquet web ne le transporte pas ; s'il
+  // change, le nouveau code ne doit pas tourner sur l'ancienne copie -> APK.
+  const contenu = path.join(SORTIE, 'contenu.json');
+  if (fs.existsSync(contenu)) h.update('contenu:' + JSON.parse(fs.readFileSync(contenu, 'utf8')).id);
   return h.digest('hex').slice(0, 16);
 }
 

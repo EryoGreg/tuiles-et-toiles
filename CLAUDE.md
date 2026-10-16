@@ -42,8 +42,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 est verrouillé par l'appli lancée, construire dans `release-test/`
 (`electron-builder --win portable nsis --config.directories.output=release-test`), puis publier ces
 fichiers-là (mêmes noms). Commit « Version x.y.z » (avec `data/natif.json` si `paquet-web` l'a changé), tag,
-push `synchro-e2` **et** `HEAD:main`, `gh release create` avec les **6 fichiers** (exe, Setup, apk + paquet web :
-zip, json, json.sig), vérifier les empreintes (`gh release view --json assets`).
+push `synchro-e2` **et** `HEAD:main`, `gh release create` avec les **9 fichiers** (exe, Setup, apk + paquet web
+mobile : zip, json, json.sig + paquet de code PC : zip, json, json.sig), vérifier les empreintes (`gh release view
+--json assets`). Commiter aussi `data/natif-pc.json` si `paquet-code` l'a changé.
 
 **Branche** : on travaille sur `synchro-e2`, `main` = même commit (push des deux).
 
@@ -570,6 +571,24 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   Toiles\`, sans droits admin, LISEZMOI `installation` déposé par l'app), relance l'app à la
   fin, ne crée **aucun raccourci** (ceux de l'app, `raccourcis.js`, nom « Tuiles & Toiles »,
   suffisent ; les créer aussi ferait des doublons), garde les données à la désinstallation.
+- **Mise à jour partielle PC** (`PLAN-maj-partielle.md` étape 5) : l'entrée de l'exe est **`src/main/lanceur.js`**
+  (package.json `main`), minuscule, seule pièce jamais mise à jour à chaud. Il choisit le code
+  (`lanceur-etat.js`, pur Node) : paquet `<userData>/code/<version>/` (`src/main/**`, `dist/**`, package.json) s'il
+  est plus récent que l'exe, sinon `./index.js`. Le code d'un paquet voit les `node_modules` de l'exe
+  (`NODE_PATH` + `Module._initPaths`) et sa propre version (`app.getVersion` remplacé ; version de l'exe :
+  `global.__ttLanceur.versionExe`). Mêmes règles que le mobile : essai, **validation 10 s après `ready-to-show`**,
+  2 essais sans validation → refusé ; échec au `require` → refusé tout de suite, `app.relaunch` (portable : l'exe
+  portable) et sortie ; le refus est journalisé au lancement suivant (`etat.echec`). Exe plus récent → paquet
+  oublié. Release : `Tuiles-et-Toiles-code-x.y.z-n<exeMin>.zip` (~440 Ko) + `.json` + `.json.sig` (même clé
+  Ed25519), `scripts/paquet-code.js` lancé par `npm run dist` ; **exeMin** = empreinte de ce qui ne voyage pas
+  (Electron, versions des `dependencies`, config `build`, lanceur, `extraResources` : pack, vignettes…) comparée à
+  `data/natif-pc.json`. `src/main/maj-code.js` (trouver, télécharger par `net.fetch`, signature `crypto.verify`,
+  fichiers vérifiés, `code/<v>.tmp` renommé) ; `maj.verifier` le propose (type `web`, même bandeau que le mobile :
+  « Mise à jour légère », « Redémarrer maintenant » = `app.relaunch` + quitter). `paquet-web` inclut désormais l'id
+  du contenu livré dans l'empreinte native (pack changé → APK). Tests : `tests/maj-code.test.js` (8 cas). Essai réel
+  (15-16/10) : exe 0.3.19 `--dir` lancé avec `--user-data-dir=<dossier jetable>` (**jamais sur les vraies
+  données**) + paquet 0.3.99 posé (scratchpad `poser-code.js`) → session 0.3.99, validée, relance sans essai ;
+  `index.js` cassé → refusé, relance en 0.3.19.
 - **Mise à jour intégrée** (`src/main/maj.js`), à la main (`electron-updater` ne gère pas le
   portable). `maj.mode()` = `dev` | `portable` | `installee`. `releases/latest` via l'API GitHub
   (anonyme, dépôt public), taille + SHA-256 vérifiés contre le `digest` publié par GitHub.
