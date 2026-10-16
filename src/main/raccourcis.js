@@ -9,7 +9,7 @@
  * L'installateur n'en cree aucun lui-meme (nsis.create*Shortcut = false) :
  * ceux de l'appli, proposes au premier lancement, suffisent.
  *
- * Icone : lue dans un fichier STABLE (%APPDATA%\Tuiles et Toiles\icone.ico), pas
+ * Icone : lue dans un fichier STABLE (%APPDATA%\Tuiles et Toiles\icone-<empreinte>.ico), pas
  * dans l'exe. La mise a jour de la version installee retire l'exe quelques
  * secondes : si Windows relit l'icone a ce moment, il met en cache une icone
  * vide, qui survit aux relances. Au demarrage, reparerIcones() repointe vers
@@ -39,12 +39,21 @@ let iconeStable = null;
 /**
  * Copie l'icone de l'appli (resources/icone.ico) dans le dossier de donnees,
  * que ni les mises a jour ni la desinstallation ne touchent.
+ *
+ * Nom lie au CONTENU (icone-<empreinte>.ico) : Windows garde l'icone d'un
+ * raccourci en cache tant que son chemin ne change pas. Avec un nom fixe, une
+ * nouvelle icone (grenouille de Bristol, 16/10/2026) apparaissait dans l'appli
+ * mais pas dans la barre des taches ni dans son menu. Nouvelle icone = nouveau
+ * chemin -> reparerIcones() repointe les raccourcis, Windows relit l'image.
+ * Les anciens fichiers restent (un raccourci vers une autre copie de l'exe
+ * peut encore les citer).
  */
 function preparerIcone(dossierUser, source) {
   if (!WIN || !source || !fs.existsSync(source)) return null;
-  const dest = path.join(dossierUser, 'icone.ico');
   try {
     const neuf = fs.readFileSync(source);
+    const empreinte = require('crypto').createHash('sha256').update(neuf).digest('hex').slice(0, 8);
+    const dest = path.join(dossierUser, 'icone-' + empreinte + '.ico');
     if (!fs.existsSync(dest) || !fs.readFileSync(dest).equals(neuf)) fs.writeFileSync(dest, neuf);
     iconeStable = dest;
   } catch { iconeStable = null; }

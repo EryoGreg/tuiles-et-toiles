@@ -621,7 +621,9 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   Raccourcis visant l'ancien exe : détection de raccourcis périmés.
 - **Icône des raccourcis** : jamais lue dans l'exe (la MAJ silencieuse le retire quelques
   secondes → Windows cache une icône vide, persistante). `resources/icone.ico` copiée dans
-  `%APPDATA%\Tuiles et Toiles\icone.ico` ; au démarrage, `raccourcis.reparerIcones` repointe
+  `%APPDATA%\Tuiles et Toiles\icone-<empreinte>.ico` (nom lié au contenu depuis le 16/10 : Windows garde l'icône d'un
+  raccourci en cache par chemin — la grenouille de Bristol n'apparaissait pas dans la barre) ; au démarrage,
+  `raccourcis.reparerIcones` repointe
   tout .lnk visant l'exe (bureau, menu, barre — y compris les épinglages faits par Windows,
   nommés d'après la description de l'exe) puis `ie4uinit.exe -show`.
 - Noms d'assets attendus par l'updater : `Tuiles-et-Toiles-x.y.z.exe` (`MOTIF_EXE`) et
