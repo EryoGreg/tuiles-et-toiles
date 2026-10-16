@@ -120,6 +120,27 @@ export function NouvellePartie({ onLancer }) {
           </span>
         </button>
 
+        <button
+          className={'np-lancer' + (peutLancer ? '' : ' off')}
+          disabled={!peutLancer}
+          onClick={lancer}
+        >
+          <span>Lancer <I.Fleche /></span>
+          {mode === 'revision' && rev && (
+            <span className="np-lancer-sub">
+              {rev.dues + rev.nouvelles === 0 ? 'rien à revoir pour l’instant' : (rev.dues + rev.nouvelles) + ' tuile' + (rev.dues + rev.nouvelles > 1 ? 's' : '') + ' aujourd’hui'}
+            </span>
+          )}
+          {mode === 'categorie' && (
+            <span className="np-lancer-sub">
+              {choisies.length === 0
+                ? 'choisir au moins une catégorie'
+                : total == null ? '…'
+                : total === 0 ? 'aucune tuile — combinaison impossible'
+                : total + (total > 1 ? ' tuiles' : ' tuile')}
+            </span>
+          )}
+        </button>
         <div className="np-difficulte">
           <div className="np-diff-tete">Difficulté</div>
           <div className="np-diff-choix">
@@ -142,27 +163,6 @@ export function NouvellePartie({ onLancer }) {
           </div>
         </div>
 
-        <button
-          className={'np-lancer' + (peutLancer ? '' : ' off')}
-          disabled={!peutLancer}
-          onClick={lancer}
-        >
-          <span>Lancer <I.Fleche /></span>
-          {mode === 'revision' && rev && (
-            <span className="np-lancer-sub">
-              {rev.dues + rev.nouvelles === 0 ? 'rien à revoir pour l’instant' : (rev.dues + rev.nouvelles) + ' tuile' + (rev.dues + rev.nouvelles > 1 ? 's' : '') + ' aujourd’hui'}
-            </span>
-          )}
-          {mode === 'categorie' && (
-            <span className="np-lancer-sub">
-              {choisies.length === 0
-                ? 'choisir au moins une catégorie'
-                : total == null ? '…'
-                : total === 0 ? 'aucune tuile — combinaison impossible'
-                : total + (total > 1 ? ' tuiles' : ' tuile')}
-            </span>
-          )}
-        </button>
       </div>
 
       {mode === 'categorie' && (
