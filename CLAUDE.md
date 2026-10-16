@@ -6,7 +6,12 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.19 (Latest, GitHub, 15/10/2026) — **déclencheur de l'appareil intégré** réparé (rapport
+- **Publiée** : 0.3.20 (Latest, GitHub, 16/10/2026) — **mises à jour partielles** Android (paquet web ~800 Ko) et PC
+  (lanceur + paquet de code ~440 Ko), signées Ed25519 ; 0.3.20 elle-même passe par l'APK / l'exe complets (natifMin =
+  exeMin = 320) : les paquets légers servent **à partir de la 0.3.21**. **Appareil intégré : photo en 0,1 s** au lieu
+  de ~20 s (rapport R261016103929-2d08 : `toBlob` attend ~4 s dans la WebView quelle que soit la taille → `toDataURL`
+  partout ; photo réduite à 1 400 px et enregistrée telle quelle ; boutons bloqués pendant la capture).
+- **0.3.19** (15/10/2026) — **déclencheur de l'appareil intégré** réparé (rapport
   R261015151602-3b51, Honor : `takePhoto` refusé « Track is in an invalid state » à chaque appui, repli muet) :
   image de l'aperçu dès 1 400 px, sinon ImageCapture plafonné 2 560 px et borné 1,5 s / 4 s, puis grabFrame,
   sinon message + appareil du téléphone ; état de la piste journalisé. **Étape 1 de la MAJ partielle** (contenu
