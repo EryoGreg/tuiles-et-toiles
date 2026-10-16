@@ -6,7 +6,10 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.20 (Latest, GitHub, 16/10/2026) — **mises à jour partielles** Android (paquet web ~800 Ko) et PC
+- **Publiée** : 0.3.21 (Latest, GitHub, 16/10/2026) — **photos des tuiles créées en vrais fichiers** (mobile, hors
+  mémoire, migration vérifiée). **Premier vrai essai des mises à jour légères** depuis la 0.3.20 (paquets n320 :
+  805 Ko Android, 441 Ko PC).
+- **0.3.20** (16/10/2026) — **mises à jour partielles** Android (paquet web ~800 Ko) et PC
   (lanceur + paquet de code ~440 Ko), signées Ed25519 ; 0.3.20 elle-même passe par l'APK / l'exe complets (natifMin =
   exeMin = 320) : les paquets légers servent **à partir de la 0.3.21**. **Appareil intégré : photo en 0,1 s** au lieu
   de ~20 s (rapport R261016103929-2d08 : `toBlob` attend ~4 s dans la WebView quelle que soit la taille → `toDataURL`
