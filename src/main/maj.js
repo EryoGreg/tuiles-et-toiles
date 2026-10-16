@@ -51,8 +51,25 @@ function configurer({ dossierUser }) {
   // Mise a jour partielle (maj-code.js) : paquets dans <userData>/code, charges par le lanceur.
   majCode.configurer({
     racine: path.join(dossierUser, 'code'), fetch: net.fetch,
-    relancer: () => app.relaunch(process.env.PORTABLE_EXECUTABLE_FILE ? { execPath: process.env.PORTABLE_EXECUTABLE_FILE } : undefined)
+    relancer: relancerDiffere
   });
+}
+
+/**
+ * « Redemarrer maintenant » : relance l'exe 3 s plus tard, par cmd, une fois
+ * l'appli fermee. Pas app.relaunch : l'exe portable relance pendant que son
+ * ancien lanceur nettoie encore ne demarrait jamais (essai du 16/10/2026,
+ * 0.3.20 -> 0.3.21 : l'appli se fermait sans revenir). Memes arguments.
+ */
+function relancerDiffere() {
+  const exe = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+  const q = (s) => '"' + String(s).replace(/"/g, '') + '"';
+  const args = process.argv.slice(1).filter((a) => a && !/^--(type|inspect)/.test(a));
+  const ligne = 'ping -n 4 127.0.0.1 >nul & start "" ' + q(exe) + (args.length ? ' ' + args.map(q).join(' ') : '');
+  spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', '"' + ligne + '"'], {
+    detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true
+  }).unref();
+  journal.evt('maj', 'relance-programmee', { exe, args: args.length });
 }
 
 // Version de l'exe (le code charge peut venir d'un paquet plus recent : lanceur.js).
