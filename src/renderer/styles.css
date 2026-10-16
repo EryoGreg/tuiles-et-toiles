@@ -302,7 +302,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   border-right: 1px solid var(--trait);
   transition: width 180ms ease;
 }
-.barre.repliee { width: 4%; padding: 18px 0; align-items: center; }
+.barre.repliee { width: clamp(56px, 4%, 80px); padding: 18px 0; align-items: center; }
 .barre.repliee .libelle, .barre.repliee .compte { display: none; }
 
 .entree {
@@ -795,7 +795,8 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .carte-galerie-image { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--surface-2); }
 .carte-galerie-image-vide { background: var(--hachure); }
 
-.carte-galerie-corps { padding: clamp(9px, 0.7vw, 13px); display: flex; flex-direction: column; gap: 3px; }
+.carte-galerie-corps { padding: clamp(9px, 0.7vw, 13px); display: flex; flex-direction: column; gap: 3px;
+  min-width: 0; overflow-wrap: anywhere; hyphens: auto; }
 .carte-galerie-corps .numero { font-family: var(--mono); font-size: 10px; color: var(--accent, var(--laiton)); letter-spacing: 0.06em; }
 .carte-galerie-titre { font-family: var(--serif); font-size: clamp(12.5px, 0.95vw, 15.5px); line-height: 1.22; color: var(--encre-vive); }
 .carte-galerie-artiste { font-size: clamp(10px, 0.75vw, 11.5px); color: var(--attenue); }
@@ -876,8 +877,19 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 /* --- edition ---------------------------------------------------------- */
 
-.edition-choix { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 8px; }
-.edition-choix .carte { width: clamp(210px, 30vw, 360px); }
+/* Cartes de la page Edition : toutes sur une rangee si chacune garde 200 px,
+   sinon en rangees pleines (jamais une carte seule sur sa ligne).
+   (A - 100 %) * 1000 : tres grand si la largeur est sous le seuil A, negatif au-dessus. */
+.edition-choix {
+  display: grid; gap: 18px; margin-top: 8px; width: min(1180px, 100%);
+  /* 3 cartes : 3 colonnes, sinon 1. */
+  grid-template-columns: repeat(auto-fill, minmax(max(calc((100% - 36px) / 3), min(100%, (636px - 100%) * 1000)), 1fr));
+}
+/* 4 cartes : 4 colonnes, sinon 2. */
+.edition-choix:has(> :nth-child(4)) {
+  grid-template-columns: repeat(auto-fill, minmax(max(calc((100% - 54px) / 4), min(calc((100% - 18px) / 2), (854px - 100%) * 1000)), 1fr));
+}
+.edition-choix .carte { width: auto; min-width: 0; }
 
 .edition-retour {
   position: fixed; bottom: 24px; right: 28px; z-index: 20;
@@ -1337,7 +1349,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .carte-corbeille:hover { transform: none; }
 .carte-corbeille .carte-galerie-image { opacity: 0.72; filter: grayscale(0.35); }
 .corbeille-dates { font-size: 11px; color: var(--discret); margin-top: 4px; line-height: 1.45; }
-.corbeille-restaurer { margin-top: 8px; align-self: flex-start; font-size: 12.5px; padding: 6px 11px; }
+.corbeille-restaurer { margin-top: 8px; align-self: flex-start; max-width: 100%; font-size: 12.5px; padding: 6px 11px; }
+[data-grille="3"] .corbeille-restaurer, [data-grille="4"] .corbeille-restaurer {
+  align-self: stretch; justify-content: center; padding: 6px 4px; font-size: 11.5px; }
+[data-grille="4"] .corbeille-restaurer svg { display: none; }
 
 /* --- conflits de synchro ------------------------------------------------------ */
 
@@ -1395,7 +1410,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .barre > .entree:first-child { display: none; }          /* replier la barre */
   .barre > .entree:last-child { display: none; }           /* Quitter */
   .barre .entree, .barre.repliee .entree {
-    flex: 1 0 44px; width: auto; height: 46px; min-width: 44px; padding: 0;
+    flex: 1 1 0; width: auto; height: 46px; min-width: 30px; padding: 0;
     justify-content: center; position: relative;
   }
   .barre .libelle { display: none; }
@@ -1505,7 +1520,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   [data-grille="4"] .carte-galerie { border-radius: 9px; }
   .options { padding: 20px 16px 32px; max-width: none; }
   .nouvelle-partie { padding: 18px 14px; }
-  .edition-choix .carte { width: 100%; }
+  .edition-choix, .edition-choix:has(> :nth-child(4)) { grid-template-columns: minmax(0, 1fr); }
   .edition-retour { bottom: calc(70px + env(safe-area-inset-bottom)); }
   .bandeau-synchro, .edition-toast { bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
   .bandeau-annulation { bottom: calc(126px + env(safe-area-inset-bottom)); }
