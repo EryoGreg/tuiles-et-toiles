@@ -57,7 +57,11 @@ async function demarrer() {
   const t0 = Date.now();
   const [SQL] = await Promise.all([
     initSqlJs({ locateFile: (f) => f }),
-    fs.charger()
+    // Photos des tuiles creees : vrais fichiers de l'appli (vfs-externe.js), hors memoire.
+    fs.charger({ externe: natif() ? require('./shims/vfs-externe').creer({
+      Filesystem: require('@capacitor/filesystem').Filesystem, Directory: require('@capacitor/filesystem').Directory,
+      convertir: (u) => window.Capacitor.convertFileSrc(u), journal
+    }) : null })
   ]);
   Database.initialiser(SQL);
   // Pack, manifeste et vignettes : copie dans les donnees de l'appli si elle est
@@ -118,6 +122,11 @@ async function demarrer() {
   journal.evt('app', 'demarrage-mobile', { ms: Date.now() - t0, appareil: moi.id, oeuvres: db.compterOeuvres(), memoire: memoire(), contenu: contenu.etat() });
   // Copie du contenu livre (une fois par contenu, ~15 Mo de vignettes) : apres
   // le demarrage, sans le ralentir.
+  // Photos d'une version precedente (IndexedDB) -> fichiers : fin de la
+  // migration en arriere-plan (ancienne copie effacee apres verification).
+  setTimeout(() => fs.finirMigration()
+    .then((b) => { if (b) journal.evt('image', 'migration-photos', b, b.gardees.length ? 'WARN' : 'INFO'); })
+    .catch((e) => journal.erreur('image', 'migration-photos', e)), 3000);
   // Nouveau code (mise a jour partielle) qui a demarre sans encombre : retenu.
   if (natif()) setTimeout(() => majWeb.valider().catch((e) => journal.erreur('maj', 'web-validation', e)), 10000);
   if (sourceContenu === 'livre') {

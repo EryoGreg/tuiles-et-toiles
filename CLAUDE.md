@@ -452,6 +452,17 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   fichier illisible est ignoré (`fs.illisibles()`, journalisé) au lieu de bloquer ; ancien
   format relu puis réécrit. `fs.promises` existe (le transport Drive range les images reçues
   par `transport-dossier.ecrireAtomique`, asynchrone).
+- **Photos des tuiles créées = vrais fichiers** (16/10, `src/mobile/shims/vfs-externe.js`) : `/data/images-locales/` n'est
+  plus en mémoire ni dans IndexedDB mais dans `Directory.Data/images-locales/` ; le vfs ne garde que nom / taille / date.
+  Affichage : adresse du fichier (`fs.adresseExterne`, `convertFileSrc`), sans rien lire ; pendant l'écriture native
+  (file séquentielle écrire → renommer → supprimer), les octets restent « en attente » et sont servis en URL blob.
+  Lecture du contenu : **`fs.promises.readFile`** seulement (`readFileSync` lève `EASYNC` hors écriture en cours) — envoi
+  au Drive passé en asynchrone (`transport-drive.envoyerImage`). `fs.sauver()` attend aussi la file (`ext.vider`).
+  **Migration** au démarrage : photos lues dans IndexedDB → fichiers ; la copie IndexedDB n'est effacée (3 s après le
+  démarrage, `fs.finirMigration`) qu'une fois le fichier relu à la bonne taille (journal `migration-photos`). Gain chez le
+  testeur : ~29 Mo de RAM et leur chargement au démarrage. Navigateur : inchangé (pas de fichiers natifs). Tests :
+  `tests/vfs-externe.test.js` (7) ; émulateur : 0.3.20 avec 3 photos → nouveau code : 3/3 migrées, copies IndexedDB
+  effacées, affichage depuis le fichier, nouvelle photo persistée après redémarrage.
 - **Contenu recopié dans les données** (étape 1 de `PLAN-maj-partielle.md`, `src/mobile/contenu.js`) : `pack.db`,
   `images-manifest.json` et les 431 vignettes sont recopiés une fois dans `Directory.Data/contenu/` (20 s après le
   démarrage, ~3,5 s sur l'émulateur, 14,7 Mo), puis lus par leur adresse fichier (`convertFileSrc`). `contenu.json`

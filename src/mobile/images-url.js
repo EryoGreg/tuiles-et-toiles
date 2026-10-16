@@ -123,7 +123,8 @@ if (typeof document !== 'undefined') {
     if (!cle) return;
     const chemin = dossierLocales + '/' + cle.slice(2);
     if (!fs.existsSync(chemin)) return;
-    img.src = urlBlob(cle, () => fs.readFileSync(chemin));
+    const adr = fs.adresseExterne ? fs.adresseExterne(chemin) : null;
+    img.src = adr || urlBlob(cle, () => (fs.enAttenteExterne && fs.enAttenteExterne(chemin)) || fs.readFileSync(chemin));
   }, true);
 }
 
@@ -184,7 +185,11 @@ function traduire(url, { garder = false } = {}) {
   const mini = brut.startsWith('mini/');
   const nom = brut.replace(/^mini\//, '').split('/').pop();
   const locale = dossierLocales + '/' + nom;
-  if (fs.existsSync(locale)) return urlBlob('l:' + nom, () => fs.readFileSync(locale));
+  // Photo en vrai fichier (appli Android, vfs-externe.js) : son adresse, sans
+  // rien lire ; pendant son ecriture, une copie en memoire (URL blob).
+  const adr = fs.adresseExterne ? fs.adresseExterne(locale) : null;
+  if (adr) return adr;
+  if (fs.existsSync(locale)) return urlBlob('l:' + nom, () => (fs.enAttenteExterne && fs.enAttenteExterne(locale)) || fs.readFileSync(locale));
   // Photo d'une tuile creee ailleurs, pas encore recue : rien plutot qu'une
   // image cassee (la carte montre alors sa zone vide).
   if (!manifeste.images[nom]) return '';

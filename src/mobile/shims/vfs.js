@@ -5,9 +5,15 @@
  * sauvegarde dans IndexedDB.
  *
  * Tout est charge en memoire au demarrage (charger()) : la base utilisateur,
- * appareil.json, les images des tuiles creees. Seuls les chemins sous
- * PERSISTANTS sont sauvegardes, en differe (une ecriture = une sauvegarde de
- * ce fichier au plus tard 1 s apres) ; les journaux restent en memoire.
+ * appareil.json, le journal. Seuls les chemins sous PERSISTANTS sont
+ * sauvegardes, en differe (une ecriture = une sauvegarde de ce fichier au plus
+ * tard 1 s apres).
+ *
+ * Exception (appli Android) : les photos des tuiles creees (/data/images-locales/)
+ * sont de vrais fichiers de l'appli, hors memoire et hors IndexedDB
+ * (vfs-externe.js) ; celles d'une version precedente sont migrees au
+ * demarrage. Leur contenu se lit par fs.promises.readFile (readFileSync ne
+ * les sert que pendant leur ecriture).
  */
 
 const path = require('path-browserify');
@@ -24,6 +30,8 @@ const BASE_IDB = 'tuiles-et-toiles';
 const MAGASIN = 'fichiers';
 
 const fichiers = new Map();   // chemin -> { octets: Uint8Array, mtime: number }
+let ext = null;               // fichiers externes (vfs-externe.js), appli Android seulement
+const aMigrer = [];           // photos lues dans IndexedDB, a effacer une fois le fichier natif verifie
 const dossiers = new Set(['/']);
 const aSauver = new Set();
 const aSupprimer = new Set();
@@ -89,8 +97,18 @@ function lireCle(store, cle) {
   });
 }
 
-/** Charge en memoire tous les fichiers sauvegardes. A attendre avant tout. */
-async function charger() {
+/**
+ * Charge en memoire tous les fichiers sauvegardes. A attendre avant tout.
+ * @param {{ externe?: object }} o  vfs-externe.creer(...) : photos en vrais fichiers
+ */
+async function charger(o = {}) {
+  if (o.externe) {
+    try {
+      await o.externe.init();
+      ext = o.externe;
+      mkdirSync(ext.RACINE);
+    } catch (e) { illisibles.push({ chemin: 'images-locales (fichiers)', erreur: String(e && e.message || e) }); ext = null; }
+  }
   idb = await ouvrirIdb();
   const t = idb.transaction(MAGASIN, 'readonly');
   const store = t.objectStore(MAGASIN);
@@ -104,6 +122,7 @@ async function charger() {
     const { valeur, erreur: err } = await lireCle(store, cle);
     if (err || !valeur) { illisibles.push({ chemin: cle, erreur: String(err && err.message || 'vide') }); continue; }
     if (valeur.octets) {                           // ancien format : a reecrire
+      if (ext && ext.estExterne(cle)) { migrerPhoto(cle, new Uint8Array(valeur.octets)); nbMorceaux.set(cle, 0); continue; }
       ecrireMemoire(cle, new Uint8Array(valeur.octets), valeur.mtime);
       aSauver.add(cle);
       continue;
@@ -117,14 +136,47 @@ async function charger() {
       tout.set(o, pos); pos += o.length;
     }
     if (!ok) { illisibles.push({ chemin: cle, erreur: 'morceau manquant' }); continue; }
-    ecrireMemoire(cle, tout, valeur.mtime);
     nbMorceaux.set(cle, valeur.n);
+    if (ext && ext.estExterne(cle)) { migrerPhoto(cle, tout); continue; }
+    ecrireMemoire(cle, tout, valeur.mtime);
   }
   if (aSauver.size) planifier([...aSauver][0]);   // migration vers les morceaux
 }
 
+// Photo d'une version precedente (dans IndexedDB) -> fichier de l'appli. Un
+// fichier natif deja la a la meme taille n'est pas reecrit.
+function migrerPhoto(cle, octets) {
+  const st = ext.stat(cle);
+  if (!st || st.taille !== octets.length) ext.ecrire(cle, octets);
+  aMigrer.push({ cle, taille: octets.length });
+}
+
+/**
+ * Fin de la migration des photos (en arriere-plan, apres le demarrage) : chaque
+ * copie IndexedDB n'est effacee qu'une fois le fichier natif relu a la bonne
+ * taille. Renvoie le bilan (journalise par l'appelant).
+ */
+async function finirMigration() {
+  if (!ext || !aMigrer.length) return null;
+  await ext.vider();
+  const bilan = { photos: aMigrer.length, effacees: 0, gardees: [] };
+  for (const { cle, taille } of aMigrer.splice(0)) {
+    const nom = cle.slice(ext.RACINE.length + 1);
+    if (await ext.tailleNative(nom) === taille) { planifier(cle, true); bilan.effacees++; }
+    else bilan.gardees.push(nom);
+  }
+  await sauver();
+  return bilan;
+}
+
 /** Sauvegarde ce qui a change (appele en differe ; aussi a la mise en veille). */
 function sauver() {
+  // Photos (fichiers natifs) : leur ecriture en cours se termine aussi.
+  if (ext) return Promise.all([sauverIdb(), ext.vider()]).then(() => {});
+  return sauverIdb();
+}
+
+function sauverIdb() {
   if (!idb || (!aSauver.size && !aSupprimer.size)) return Promise.resolve();
   const ecrire = [...aSauver]; const effacer = [...aSupprimer];
   aSauver.clear(); aSupprimer.clear();
@@ -162,6 +214,12 @@ function ecrireMemoire(p, octets, mtime = Date.now()) {
 /** Octets en memoire par dossier (rapport d'erreur) : { '/data/images-locales': { fichiers, octets } … }. */
 function occupation() {
   const r = {};
+  if (ext) {
+    const o = ext.occupation();
+    // Sur disque, pas en memoire : seuls les octets en cours d'ecriture le sont.
+    r['/data/images-locales (fichiers)'] = { fichiers: o.fichiers, octets: o.octets, surDisque: true };
+    if (o.enMemoire) r['/data/images-locales (en cours)'] = { fichiers: 0, octets: o.enMemoire };
+  }
   for (const [p, f] of fichiers) {
     const d = p.startsWith('/data/') ? p.split('/').slice(0, 3).join('/') : p.split('/').slice(0, 2).join('/');
     const e = r[d] || (r[d] = { fichiers: 0, octets: 0 });
@@ -171,10 +229,16 @@ function occupation() {
   return r;
 }
 
-function existsSync(p) { p = norm(p); return fichiers.has(p) || dossiers.has(p); }
+function existsSync(p) { p = norm(p); return (ext && ext.estExterne(p)) ? ext.existe(p) : fichiers.has(p) || dossiers.has(p); }
 
 function statSync(p) {
   p = norm(p);
+  if (ext && ext.estExterne(p)) {
+    const m = ext.stat(p);
+    if (!m) throw erreur('ENOENT', p);
+    const mtime = new Date(m.mtime);
+    return { size: m.taille, mtime, mtimeMs: mtime.getTime(), isFile: () => true, isDirectory: () => false };
+  }
   const f = fichiers.get(p);
   if (!f && !dossiers.has(p)) throw erreur('ENOENT', p);
   const mtime = new Date(f ? f.mtime : 0);
@@ -183,6 +247,12 @@ function statSync(p) {
 
 function readFileSync(p, enc) {
   p = norm(p);
+  if (ext && ext.estExterne(p)) {
+    const o = ext.enAttente(p);
+    if (!o) throw erreur(ext.existe(p) ? 'EASYNC' : 'ENOENT', p + ' (photo : lire par fs.promises.readFile)');
+    const e = typeof enc === 'string' ? enc : enc && enc.encoding;
+    return e ? Buffer.from(o).toString(e) : Buffer.from(o);
+  }
   const f = fichiers.get(p);
   if (!f) throw erreur('ENOENT', p);
   const b = Buffer.from(f.octets);
@@ -192,6 +262,7 @@ function readFileSync(p, enc) {
 
 function writeFileSync(p, data, enc) {
   p = norm(p);
+  if (ext && ext.estExterne(p)) { ext.ecrire(p, versOctets(data, enc)); return; }
   ecrireMemoire(p, versOctets(data, enc));
   planifier(p);
 }
@@ -217,6 +288,7 @@ function readdirSync(p) {
   if (!dossiers.has(p)) throw erreur('ENOENT', p);
   const pref = p === '/' ? '/' : p + '/';
   const noms = new Set();
+  if (ext && p === ext.RACINE) for (const n of ext.noms()) noms.add(n);
   for (const k of [...fichiers.keys(), ...dossiers]) {
     if (k !== p && k.startsWith(pref)) noms.add(k.slice(pref.length).split('/')[0]);
   }
@@ -225,6 +297,12 @@ function readdirSync(p) {
 
 function rmSync(p, { force = false, recursive = false } = {}) {
   p = norm(p);
+  if (ext && ext.estExterne(p)) {
+    if (ext.existe(p)) { ext.supprimer(p); return; }
+    if (!force) throw erreur('ENOENT', p);
+    return;
+  }
+  if (ext && recursive && (p === ext.RACINE || ext.RACINE.startsWith(p + '/'))) for (const n of ext.noms()) ext.supprimer(ext.RACINE + '/' + n);
   if (fichiers.has(p)) { fichiers.delete(p); planifier(p, true); return; }
   if (dossiers.has(p)) {
     if (!recursive) throw erreur('EISDIR', p);
@@ -237,6 +315,18 @@ function rmSync(p, { force = false, recursive = false } = {}) {
 
 function renameSync(de, vers) {
   de = norm(de); vers = norm(vers);
+  if (ext && ext.estExterne(de)) {
+    if (!ext.estExterne(vers)) throw erreur('EXDEV', de + ' -> ' + vers);
+    if (!ext.renommer(de, vers)) throw erreur('ENOENT', de);
+    return;
+  }
+  if (ext && ext.estExterne(vers)) {
+    const f0 = fichiers.get(de);
+    if (!f0) throw erreur('ENOENT', de);
+    ext.ecrire(vers, f0.octets);
+    fichiers.delete(de); planifier(de, true);
+    return;
+  }
   const f = fichiers.get(de);
   if (!f) throw erreur('ENOENT', de);
   fichiers.delete(de); planifier(de, true);
@@ -256,7 +346,15 @@ module.exports = {
   promises: {
     mkdir: async (p, o) => mkdirSync(p, o),
     writeFile: async (p, d, e) => writeFileSync(p, d, e),
-    readFile: async (p, e) => readFileSync(p, e),
+    readFile: async (p, e) => {
+      const n = norm(p);
+      if (ext && ext.estExterne(n)) {
+        const o = Buffer.from(await ext.lire(n));
+        const enc = typeof e === 'string' ? e : e && e.encoding;
+        return enc ? o.toString(enc) : o;
+      }
+      return readFileSync(p, e);
+    },
     rename: async (a, b) => renameSync(a, b),
     readdir: async (p) => readdirSync(p),
     rm: async (p, o) => rmSync(p, o),
@@ -266,5 +364,9 @@ module.exports = {
     copyFile: async (a, b) => copyFileSync(a, b)
   },
   // propres au mobile
-  charger, sauver, _fichiers: fichiers, illisibles: () => illisibles.slice(), occupation
+  charger, sauver, _fichiers: fichiers, illisibles: () => illisibles.slice(), occupation, finirMigration,
+  // Photos (fichiers natifs) : adresse pour <img>, octets en cours d'ecriture.
+  adresseExterne: (p) => (ext && ext.estExterne(norm(p)) ? ext.adresse(norm(p)) : null),
+  enAttenteExterne: (p) => (ext && ext.estExterne(norm(p)) ? ext.enAttente(norm(p)) : null),
+  externeActif: () => !!ext
 };

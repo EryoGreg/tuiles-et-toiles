@@ -278,7 +278,8 @@ function creerTransportDrive(apiBrute, { nomRacine = F.NOM_RACINE, cleCache } = 
     async envoyerImage(nom, source) {
       const l = await listeImages();
       if (l.has(nom)) return false;
-      const id = await api.creerFichier(nom, (await sous('images'))[0], fs.readFileSync(source), mimeImage(nom));
+      // Lecture asynchrone : sur mobile, la photo est un fichier natif (vfs-externe.js).
+      const id = await api.creerFichier(nom, (await sous('images'))[0], await fs.promises.readFile(source), mimeImage(nom));
       l.set(nom, id);
       return true;
     },
