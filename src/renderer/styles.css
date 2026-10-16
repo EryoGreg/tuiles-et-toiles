@@ -1198,6 +1198,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .bandeau-synchro > svg { color: var(--laiton); flex: none; }
 .bandeau-synchro .bouton-neutre { padding: 5px 11px; font-size: 12.5px; }
 .bandeau-annulation { bottom: 76px; }
+/* Rangee d'actions en bas d'ecran (editeur, partie) : les bandeaux passent en haut,
+   sinon « Synchro en echec » couvrait « Valider les changements ». */
+body:has(.ligne-actions) .bandeau-synchro { top: 16px; bottom: auto; }
+body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
 .bandeau-synchro.echec { border-color: color-mix(in srgb, var(--revoir) 60%, var(--trait)); }
 .bandeau-synchro.echec svg { color: var(--revoir); }
 .bandeau-synchro-x { background: none; border: none; color: var(--discret); cursor: pointer; padding: 4px; display: flex; }
@@ -1524,6 +1528,8 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   .edition-retour { bottom: calc(70px + env(safe-area-inset-bottom)); }
   .bandeau-synchro, .edition-toast { bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
   .bandeau-annulation { bottom: calc(126px + env(safe-area-inset-bottom)); }
+  body:has(.ligne-actions) .bandeau-synchro { top: calc(10px + env(safe-area-inset-top)); bottom: auto; }
+  body:has(.ligne-actions) .bandeau-annulation { top: calc(66px + env(safe-area-inset-top)); bottom: auto; }
   .boite-cartel { max-height: calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   .maj-bandeau { left: 12px; right: 12px; width: auto; bottom: calc(70px + env(safe-area-inset-bottom)); padding: 14px 16px; }
   .journal-entree { grid-template-columns: 40px 44px 1fr; }
