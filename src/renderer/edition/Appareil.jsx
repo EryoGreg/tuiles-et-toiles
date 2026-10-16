@@ -22,12 +22,32 @@ export const APPAREIL_INTEGRE = typeof navigator !== 'undefined'
 const COTE_SUFFISANT = 1400;
 const COTE_MAX_CAPTURE = 2560;
 
-const versJpeg = (source, l, h) => {
+// canvas -> JPEG. Pas toBlob : dans la WebView d'Android il attend ~4 s quelle que
+// soit la taille (mesure : 64x64 -> 4 s ; toDataURL -> 0,1 s pour 960x1280).
+function jpegDepuisCanvas(canvas, qualite) {
+  const u = canvas.toDataURL('image/jpeg', qualite);
+  const bin = atob(u.slice(u.indexOf(',') + 1));
+  const o = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
+  return new Blob([o], { type: 'image/jpeg' });
+}
+
+// Reduite d'emblee a COTE_SUFFISANT (taille finale de l'import) : encoder
+// l'apercu 1920x2560 prenait 13 s sur un Honor (rapport R261016103929-2d08) ;
+// l'import l'enregistre ensuite tel quel (images-import.js, origine appareil-integre).
+const versJpeg = async (source, l, h) => {
+  const k = Math.min(1, COTE_SUFFISANT / Math.max(l, h));
   const c = document.createElement('canvas');
-  c.width = l;
-  c.height = h;
-  c.getContext('2d').drawImage(source, 0, 0);
-  return new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.92));
+  c.width = Math.round(l * k);
+  c.height = Math.round(h * k);
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(source, 0, 0, c.width, c.height);
+  const t0 = Date.now();
+  const blob = jpegDepuisCanvas(c, 0.85);
+  window.api.evt('image', 'appareil-integre-encodage', { image: c.width + 'x' + c.height, octets: blob && blob.size, ms: Date.now() - t0 });
+  return blob;
 };
 
 // Image de l'apercu. Apercu encore vide (aucune image recue : largeur 0) : on
@@ -113,10 +133,11 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
   }, []);
 
   useEffect(() => {
-    const clavier = (e) => { if (e.key === 'Escape') onFermer(); };
+    // Retour Android pendant la capture : ignore (la photo arrive juste apres).
+    const clavier = (e) => { if (e.key === 'Escape' && etat !== 'capture') onFermer(); };
     window.addEventListener('keydown', clavier);
     return () => window.removeEventListener('keydown', clavier);
-  }, [onFermer]);
+  }, [onFermer, etat]);
 
   const declencher = async () => {
     const piste = flux.current && flux.current.getVideoTracks()[0];
@@ -148,6 +169,7 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
       <video ref={video} className="appareil-video" autoPlay playsInline muted />
       <div className="appareil-titre">{titre}</div>
       {etat === 'ouverture' && <div className="appareil-message">Ouverture de l’appareil photo…</div>}
+      {etat === 'capture' && <div className="appareil-message">Photo en cours… quelques secondes.</div>}
       {etat && etat.echec && (
         <div className="appareil-message">
           La photo n’a pas pu être prise ici.
@@ -161,10 +183,11 @@ export function BoiteAppareil({ titre, onPhoto, onSecours, onFermer }) {
         </div>
       )}
       <div className="appareil-barre">
-        <button className="appareil-annuler" onClick={onFermer} aria-label="Annuler"><I.Croix t={22} /></button>
+        {/* Pendant la capture : ni annuler ni l'appareil du telephone (sinon deux photos arrivent). */}
+        <button className="appareil-annuler" onClick={onFermer} disabled={etat === 'capture'} aria-label="Annuler"><I.Croix t={22} /></button>
         <button className="appareil-declencheur" onClick={declencher} disabled={etat !== 'pret' && !(etat && etat.echec)}
           aria-label="Prendre la photo">{etat === 'capture' ? '…' : ''}</button>
-        <button className="appareil-secours" onClick={() => onSecours('choix')} title="Appareil photo du téléphone">
+        <button className="appareil-secours" onClick={() => onSecours('choix')} disabled={etat === 'capture'} title="Appareil photo du téléphone">
           <I.Appareil t={20} />
         </button>
       </div>

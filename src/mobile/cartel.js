@@ -83,6 +83,16 @@ async function ecrirePhoto(octets) {
   return r.uri;
 }
 
+// canvas -> JPEG. Pas toBlob : dans la WebView d'Android il attend ~4 s quelle que
+// soit la taille (mesure : 64x64 -> 4 s ; toDataURL -> 0,1 s pour 960x1280).
+function jpegDepuisCanvas(canvas, qualite) {
+  const u = canvas.toDataURL('image/jpeg', qualite);
+  const bin = atob(u.slice(u.indexOf(',') + 1));
+  const o = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
+  return new Blob([o], { type: 'image/jpeg' });
+}
+
 /**
  * Derniere photo lue, prete pour Claude : JPEG, cote <= 1 568 px.
  * @returns {Promise<{ data: string, media_type: string } | null>}
@@ -96,7 +106,7 @@ async function imageIA() {
   canvas.width = Math.round(bmp.width * k);
   canvas.height = Math.round(bmp.height * k);
   canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85));
+  const blob = jpegDepuisCanvas(canvas, 0.85);
   const { Buffer } = require('buffer');
   return { data: Buffer.from(await blob.arrayBuffer()).toString('base64'), media_type: 'image/jpeg' };
 }

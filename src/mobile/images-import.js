@@ -18,8 +18,18 @@ const POIDS_MAX = 500 * 1024;
 
 function blobVersBuffer(blob) { return blob.arrayBuffer().then((a) => Buffer.from(a)); }
 
+// canvas -> JPEG. Pas toBlob : dans la WebView d'Android il attend ~4 s quelle que
+// soit la taille (mesure : 64x64 -> 4 s ; toDataURL -> 0,1 s pour 960x1280).
+function jpegDepuisCanvas(canvas, qualite) {
+  const u = canvas.toDataURL('image/jpeg', qualite);
+  const bin = atob(u.slice(u.indexOf(',') + 1));
+  const o = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
+  return new Blob([o], { type: 'image/jpeg' });
+}
+
 function encoder(canvas, type, qualite) {
-  return new Promise((ok) => canvas.toBlob((b) => ok(b), type, qualite));
+  return Promise.resolve(jpegDepuisCanvas(canvas, qualite));
 }
 
 async function importer(source, dossierCible, contexte = {}) {
@@ -28,6 +38,24 @@ async function importer(source, dossierCible, contexte = {}) {
   try { brut = typeof source === 'string' ? fs.readFileSync(source) : Buffer.from(source); }
   catch (e) { return { erreur: 'Fichier illisible : ' + e.message }; }
   journal.evt('image', 'import:debut', { ...contexte, octets: brut.length });
+
+  // Photo de l'appareil integre : deja un JPEG a la taille finale, fait par un
+  // canvas (aucune metadonnee, pas de position GPS) -> enregistree telle quelle,
+  // sans 2e decodage + encodage (2,6 a 8,6 s sur un Honor). Les autres sources
+  // sont toujours reencodees (ce qui retire les metadonnees d'une photo de galerie).
+  const jpeg = brut.length > 3 && brut[0] === 0xff && brut[1] === 0xd8 && brut[2] === 0xff;
+  if (contexte.origine === 'appareil-integre' && jpeg && brut.length <= POIDS_MAX) {
+    let dims = null;
+    try { const b = await createImageBitmap(new Blob([brut])); dims = { largeur: b.width, hauteur: b.height }; b.close(); } catch { /* reencodee plus bas */ }
+    if (dims && Math.max(dims.largeur, dims.hauteur) <= COTE_MAX) {
+      const nom = crypto.randomUUID() + '.jpg';
+      fs.mkdirSync(dossierCible, { recursive: true });
+      fs.writeFileSync(path.join(dossierCible, nom), brut);
+      const out = { nom, ...dims, octets: brut.length, redimensionnee: false };
+      journal.evt('image', 'import:fin', { ...out, telleQuelle: true, ms: Date.now() - t0 });
+      return out;
+    }
+  }
 
   let bmp;
   try { bmp = await createImageBitmap(new Blob([brut])); }
