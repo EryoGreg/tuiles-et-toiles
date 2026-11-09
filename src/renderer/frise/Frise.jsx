@@ -7,7 +7,7 @@ import * as I from '../icones.jsx';
 import { NavContext, SUR_MOBILE, usePref, useSession } from '../commun/base.jsx';
 import { RecouvrementApercu, useMenuTuile } from '../tuile/Cartes.jsx';
 import { SelecteurTags } from '../galeries/Galeries.jsx';
-import { creerEchelle, graduations, milieu, nomQuiTient, ranger, texteAnnee } from './echelle.js';
+import { creerEchelle, graduations, milieu, nomQuiTient, ranger, sansDateLisible, texteAnnee } from './echelle.js';
 
 const ZOOMS = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24];
 const ETROIT = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
@@ -51,6 +51,7 @@ export function PageFrise({ onEtat }) {
   const liste = filtre ? affichees : corpus;
   const listeDatees = useMemo(() => (liste ? liste.filter((o) => o.periode) : null), [liste]);
   const sansDate = liste ? liste.length - listeDatees.length : 0;
+  const [listeSansDate, setListeSansDate] = useState(false);   // boite « sans date lisible »
 
   // Largeur de la vue (barre laterale, rotation du telephone…)
   useLayoutEffect(() => {
@@ -148,11 +149,12 @@ export function PageFrise({ onEtat }) {
 
   const fermerApercu = () => { setApercuId(null); setNonce((n) => n + 1); };
   const menuTuile = useMenuTuile({ onMaj: () => setNonce((n) => n + 1), onAgrandir: (o) => setApercuId(o.id), onEtat });
-  const { setRetour } = useContext(NavContext);
+  const { setRetour, modifierTuile } = useContext(NavContext);
   useEffect(() => {
-    setRetour(apercuId ? () => { fermerApercu(); return true; } : null);
+    setRetour(apercuId ? () => { fermerApercu(); return true; }
+      : listeSansDate ? () => { setListeSansDate(false); return true; } : null);
     return () => setRetour(null);
-  }, [apercuId]);
+  }, [apercuId, listeSansDate]);
 
   // Densite pour la vue d'ensemble : un trait par tuile datee (corpus filtre).
   const traits = useMemo(() => {
@@ -281,11 +283,72 @@ export function PageFrise({ onEtat }) {
             {' '}Bordure pointillée : date estimée.
           </span>
         )}
-        {sansDate > 0 && <span className="frise-sans-date">{sansDate} tuile{sansDate > 1 ? 's' : ''} sans date lisible</span>}
+        {sansDate > 0 && (
+          <button className="frise-sans-date" onClick={() => setListeSansDate(true)}
+            title="Voir ces tuiles pour leur donner une date">
+            {sansDate} tuile{sansDate > 1 ? 's' : ''} sans date lisible — voir
+          </button>
+        )}
       </div>
 
+      {listeSansDate && !apercuId && (
+        <BoiteSansDate
+          tuiles={sansDateLisible(liste)}
+          onFermer={() => setListeSansDate(false)}
+          onAgrandir={(o) => setApercuId(o.id)}
+          onCorriger={modifierTuile ? (o) => modifierTuile(o.id) : null}
+        />
+      )}
       {menuTuile.rendu}
       {apercuId && <RecouvrementApercu id={apercuId} onFermer={fermerApercu} onEtat={onEtat} />}
+    </div>
+  );
+}
+
+// Tuiles que la frise ne sait pas placer : date vide ou non reconnue. « Corriger
+// la date » ouvre l'editeur sur la tuile (page Edition) ; « Agrandir » l'apercu.
+function BoiteSansDate({ tuiles, onFermer, onAgrandir, onCorriger }) {
+  useEffect(() => {
+    const echap = (e) => { if (e.key === 'Escape') onFermer(); };
+    window.addEventListener('keydown', echap);
+    return () => window.removeEventListener('keydown', echap);
+  }, [onFermer]);
+  return (
+    <div className="recouvrement" onClick={onFermer}>
+      <div className="boite-dialogue boite-sans-date" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Tuiles sans date lisible">
+        <h3>{tuiles.length} tuile{tuiles.length > 1 ? 's' : ''} sans date lisible</h3>
+        <p className="sans-date-aide">
+          La frise ne sait pas où les placer. Formats compris : 1665 · 1550-1560 · vers 1580 · années 1760 ·
+          XIXe siècle · fin XIXe siècle · 450 av. J.-C.
+        </p>
+        {tuiles.length === 0 ? (
+          <div className="galerie-vide">Toutes les tuiles ont une date lisible.</div>
+        ) : (
+          <ul className="sans-date-liste">
+            {tuiles.map(({ o, raison }) => (
+              <li key={o.id} className="sans-date-ligne">
+                {o.image
+                  ? <img src={o.vignette || o.image} alt="" loading="lazy" />
+                  : <span className="sans-date-vide">{(o.titre || '?').slice(0, 1)}</span>}
+                <span className="sans-date-texte">
+                  <span className="sans-date-titre"><span className="numero">#{o.ref}</span> {o.titre || '—'}</span>
+                  <span className="sans-date-raison">
+                    {raison === 'vide' ? 'Pas de date' : <>Date non reconnue : <code>{o.date}</code></>}
+                    {o.artiste ? ' · ' + o.artiste : ''}
+                  </span>
+                </span>
+                <span className="sans-date-actions">
+                  {onCorriger && <button className="bouton-valide" onClick={() => onCorriger(o)}><I.Crayon t={14} /> Corriger la date</button>}
+                  <button className="bouton-neutre" onClick={() => onAgrandir(o)}>Agrandir</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="actions">
+          <button className="bouton-neutre" onClick={onFermer}>Fermer</button>
+        </div>
+      </div>
     </div>
   );
 }

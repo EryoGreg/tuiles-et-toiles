@@ -129,6 +129,30 @@ function alea(graine) {
     assert.equal(E.nomQuiTient(e, 10), '');
   });
 
+  await test('tuiles sans date lisible : seulement elles, raison juste, non reconnues d\'abord puis par numero', () => {
+    const l = [
+      { id: 'a', ref: '061', date: '', periode: null },
+      { id: 'b', ref: 'L12', date: 'XVIl siècle', periode: null },
+      { id: 'c', ref: '005', date: '1570-1575', periode: { debut: 1570, fin: 1575, estimee: false } },
+      { id: 'd', ref: '004', date: '   ', periode: null },
+      { id: 'e', ref: 'L2', date: 'Trop tard', periode: null },
+      { id: 'f', ref: '377', date: null, periode: null }
+    ];
+    const r = E.sansDateLisible(l);
+    assert.deepEqual(r.map((x) => x.o.id), ['e', 'b', 'd', 'a', 'f']);
+    assert.deepEqual(r.map((x) => x.raison), ['illisible', 'illisible', 'vide', 'vide', 'vide']);
+    assert.deepEqual(E.sansDateLisible([]), []);
+    assert.deepEqual(E.sansDateLisible(null), []);
+    assert.deepEqual(E.sansDateLisible([null, undefined]), []);
+  });
+
+  await test('le pack et dates.js s\'accordent : la liste = exactement les tuiles que la frise ne place pas', () => {
+    const toutes = pack.map((o) => ({ id: o.id, ref: o.id, date: o.date, periode: dates.analyser(o.date) }));
+    const r = E.sansDateLisible(toutes);
+    assert.equal(r.length, toutes.length - tuiles.length);
+    for (const { o, raison } of r) assert.equal(raison, String(o.date || '').trim() ? 'illisible' : 'vide');
+  });
+
   await test('dates.js : 20 000 textes au hasard, jamais d\'exception, normaliser idempotent, analyser coherent', () => {
     const r = alea(20261109);
     const morceaux = ['vers ', 'V.', 'C. ', 'c', 'Circa ', 'av J.-C.', ' ap J.-C.', 'XIX', 'XVIs', ' siècle', 'Fin ', 'début ',

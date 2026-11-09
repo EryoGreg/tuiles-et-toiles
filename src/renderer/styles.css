@@ -1786,7 +1786,11 @@ body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
   padding-top: 10px; font-size: 12px; color: var(--attenue); min-height: 18px;
 }
 .frise-pied b { color: var(--encre-vive); font-weight: 600; }
-.frise-sans-date { font-family: var(--mono); font-size: 11px; color: var(--discret); }
+.frise-sans-date {
+  font-family: var(--mono); font-size: 11px; color: var(--laiton);
+  background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+}
+.frise-sans-date:hover { color: var(--encre-vive); }
 
 /* Accueil : la frise en carte pleine largeur sous les autres */
 .carte.carte-large {
@@ -1839,3 +1843,26 @@ body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
 .garde-page p { color: var(--attenue); font-size: 13.5px; line-height: 1.55; }
 .garde-page-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 .garde-page-detail { font-family: var(--mono); font-size: 11px; color: var(--discret); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Frise : liste des tuiles sans date lisible */
+.boite-sans-date { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.sans-date-aide { font-size: 12.5px; color: var(--attenue); line-height: 1.5; margin: 0 0 12px; }
+.sans-date-liste { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.sans-date-ligne {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 8px; border: 1px solid var(--trait); border-radius: 10px; background: var(--surface);
+}
+.sans-date-ligne img, .sans-date-vide { width: 48px; height: 48px; border-radius: 7px; object-fit: cover; background: var(--surface-2); }
+.sans-date-vide { display: flex; align-items: center; justify-content: center; font-family: var(--serif); color: var(--attenue); }
+.sans-date-texte { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sans-date-titre { font-size: 13.5px; color: var(--encre-vive); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sans-date-raison { font-size: 12px; color: var(--attenue); overflow-wrap: anywhere; }
+.sans-date-raison code { font-family: var(--mono); font-size: 11.5px; color: var(--revoir); }
+.sans-date-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.sans-date-actions button { font-size: 12px; padding: 6px 10px; display: inline-flex; align-items: center; gap: 5px; }
+@media (max-width: 700px) {
+  .sans-date-ligne { grid-template-columns: 40px minmax(0, 1fr); }
+  .sans-date-ligne img, .sans-date-vide { width: 40px; height: 40px; }
+  .sans-date-actions { grid-column: 1 / -1; justify-content: stretch; }
+  .sans-date-actions button { flex: 1 1 0; justify-content: center; }
+}

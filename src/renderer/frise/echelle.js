@@ -126,3 +126,17 @@ export function ranger(tuiles, ech, W, C, ecart = 4) {
   }
   return { places, couloirs: fins.length };
 }
+
+/**
+ * Tuiles que la frise ne sait pas placer, pour les corriger : date vide, ou
+ * texte non reconnu (« XVIl siècle »). Les non reconnues d'abord (souvent une
+ * faute de frappe), puis par numero.
+ * @returns {{ o, raison: 'vide'|'illisible' }[]}
+ */
+export function sansDateLisible(tuiles) {
+  const num = (r) => String(r || '');
+  return (tuiles || []).filter((o) => o && !o.periode)
+    .map((o) => ({ o, raison: String(o.date == null ? '' : o.date).trim() ? 'illisible' : 'vide' }))
+    .sort((a, b) => (a.raison === b.raison ? 0 : a.raison === 'illisible' ? -1 : 1)
+      || num(a.o.ref).localeCompare(num(b.o.ref), undefined, { numeric: true }));
+}
