@@ -1137,6 +1137,39 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .np-chip.actif { border-color: var(--laiton); background: color-mix(in srgb, var(--laiton) 15%, var(--surface)); color: var(--encre-vive); }
 .np-chip-n { font-family: var(--mono); font-size: 11px; color: var(--discret); }
 
+/* Par categorie : ecran compact. Modes en onglets (sans description, une
+   rangee meme sur telephone), difficulte en ligne, Lancer en pied ; la liste
+   des categories prend toute la hauteur restante et defile seule. */
+.nouvelle-partie.np-compacte { overflow: hidden; gap: 12px; padding-bottom: 0; }
+.np-compacte .np-tete .soustitre { display: none; }
+.np-compacte .np-tete h2 { font-size: clamp(22px, 2vw, 30px); margin: 0; }
+.np-compacte .np-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.np-compacte .np-mode { padding: 9px 12px; align-items: center; gap: 9px; border-radius: 10px; }
+.np-compacte .np-mode-desc { display: none; }
+.np-compacte .np-mode-nom { margin: 0; font-size: 13.5px; }
+.np-compacte .np-difficulte { order: 0; gap: 10px; }
+.np-compacte .np-diff { flex-direction: row; align-items: baseline; gap: 8px; padding: 7px 12px; border-radius: 9px; }
+.np-compacte .np-cats { gap: 10px; }
+.np-compacte .np-chips { width: 100%; padding-bottom: 8px; }
+.np-tri .np-combi-mot { color: var(--encre); }
+.np-choisies { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.np-choisie {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 6px 4px 10px; border-radius: 999px; border: 1px solid var(--laiton);
+  background: color-mix(in srgb, var(--laiton) 18%, var(--surface)); color: var(--encre-vive);
+  font-size: 12px;
+}
+.np-choisie span { font-size: 14px; line-height: 1; color: var(--attenue); padding: 0 3px; }
+.np-choisie:hover span { color: var(--revoir); }
+.np-choisies-vider { border: 0; background: none; color: var(--attenue); font-size: 12px; text-decoration: underline; padding: 4px 6px; }
+.np-pied {
+  flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 14px;
+  margin: 0 calc(-1 * clamp(20px, 3.5vw, 56px)); padding: 10px clamp(20px, 3.5vw, 56px) 12px;
+  border-top: 1px solid var(--trait); background: var(--fond);
+}
+.np-pied-compte { font-size: 13px; color: var(--attenue); }
+.np-pied .np-lancer { flex-direction: row; padding: 11px 28px; min-height: 0; font-size: 16px; }
+
 /* --- mise a jour ------------------------------------------------------------ */
 
 .maj-bandeau {
@@ -1524,6 +1557,19 @@ body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
   [data-grille="4"] .carte-galerie { border-radius: 9px; }
   .options { padding: 20px 16px 32px; max-width: none; }
   .nouvelle-partie { padding: 18px 14px; }
+  .nouvelle-partie.np-compacte { padding: 12px 12px 0; gap: 9px; }
+  .np-compacte .np-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .np-compacte .np-mode { padding: 8px 8px; gap: 6px; }
+  .np-compacte .np-mode .np-radio { display: none; }
+  .np-compacte .np-mode-nom { font-size: 12.5px; text-align: center; width: 100%; }
+  .np-compacte .np-diff-desc { display: none; }
+  .np-compacte .np-diff { justify-content: center; padding: 6px 10px; }
+  .np-compacte .np-cats-barre { gap: 6px; }
+  .np-compacte .np-cats-barre .biblio-recherche { flex: 1 1 100%; }
+  .np-compacte .np-chips { gap: 6px; }
+  .np-compacte .np-chip { padding: 7px 11px; font-size: 13px; }
+  .np-pied { margin: 0 -12px; padding: 8px 12px 10px; justify-content: space-between; }
+  .np-pied .np-lancer { padding: 10px 22px; }
   .edition-choix, .edition-choix:has(> :nth-child(4)) { grid-template-columns: minmax(0, 1fr); }
   .edition-retour { bottom: calc(70px + env(safe-area-inset-bottom)); }
   .bandeau-synchro, .edition-toast { bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
@@ -1639,3 +1685,127 @@ body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
 }
 .appareil-declencheur:disabled { opacity: 0.4; }
 .appareil-declencheur:active { transform: scale(0.93); }
+
+/* --- frise des dates ------------------------------------------------------ */
+
+.frise-page { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 14px; }
+.frise-page .galerie-tete { margin-bottom: 16px; }
+.frise-barre { margin-bottom: 12px; }
+.frise-zoom { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.frise-zoom .tri-bouton { width: 32px; justify-content: center; padding: 5px 0; font-size: 16px; line-height: 1; }
+.frise-zoom .tri-bouton:disabled { opacity: 0.35; cursor: default; }
+.frise-zoom-val { font-family: var(--mono); font-size: 11px; color: var(--attenue); min-width: 34px; text-align: center; }
+
+/* Vue d'ensemble */
+.frise-mini {
+  position: relative; flex: none; height: 38px; margin-bottom: 10px;
+  border: 1px solid var(--trait); border-radius: 8px; overflow: hidden; cursor: pointer;
+  background: var(--surface);
+}
+.frise-mini-ep {
+  position: absolute; top: 0; height: 22px; padding: 4px 5px 0;
+  border-left: 1px solid var(--trait);
+  font-size: 10.5px; color: var(--attenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.frise-mini-ep:first-child { border-left: 0; }
+.frise-mini-ep.impaire { background: color-mix(in srgb, var(--laiton) 6%, transparent); }
+.frise-mini-ep span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.frise-mini-traits { position: absolute; left: 0; right: 0; bottom: 3px; width: 100%; height: 11px; }
+.frise-mini-traits path { stroke: var(--laiton); stroke-width: 1.4; opacity: 0.55; vector-effect: non-scaling-stroke; }
+.frise-mini-fenetre {
+  position: absolute; top: 0; bottom: 0; min-width: 4px;
+  border: 2px solid var(--laiton); border-radius: 6px;
+  background: color-mix(in srgb, var(--laiton) 10%, transparent);
+  pointer-events: none;
+}
+
+/* Frise */
+.frise-vue {
+  position: relative; flex: 1 1 auto; min-height: 0;
+  overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--trait); border-radius: 12px; background: var(--fond);
+  cursor: grab; user-select: none; -webkit-user-select: none;
+}
+.frise-vue:active { cursor: grabbing; }
+.frise-toile { position: relative; min-height: 100%; }
+.frise-axe {
+  position: sticky; top: 0; z-index: 3; left: 0; right: 0;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-bottom: 1px solid var(--trait-fort);
+  backdrop-filter: blur(4px);
+}
+.frise-ep { position: absolute; top: 0; height: 22px; border-left: 1px solid var(--trait-fort); padding: 4px 8px 0; overflow: hidden; }
+.frise-ep.impaire { background: color-mix(in srgb, var(--laiton) 7%, transparent); }
+.frise-ep-nom {
+  position: sticky; left: 8px;
+  font-family: var(--serif); font-size: 13px; color: var(--encre-vive); white-space: nowrap;
+}
+.frise-tick { position: absolute; top: 22px; bottom: 0; border-left: 1px solid var(--trait); }
+.frise-tick span {
+  position: absolute; left: 4px; bottom: 6px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--attenue); white-space: nowrap;
+  z-index: 1; padding-right: 4px; background: var(--surface);
+}
+.frise-tick.limite { border-left: 2px solid var(--laiton); top: 0; }
+.frise-tick.limite span { color: var(--laiton); font-weight: 700; }
+.frise-axe-periode {
+  position: absolute; bottom: 0; height: 5px; border-radius: 3px 3px 0 0;
+  background: var(--laiton);
+}
+.frise-bande { position: absolute; bottom: 0; border-left: 1px dashed var(--trait); pointer-events: none; }
+.frise-bande.impaire { background: color-mix(in srgb, var(--laiton) 3.5%, transparent); }
+.frise-periode {
+  position: absolute; bottom: 0; pointer-events: none; z-index: 1;
+  background: color-mix(in srgb, var(--laiton) 12%, transparent);
+  border-left: 1px solid var(--laiton); border-right: 1px solid var(--laiton);
+}
+
+.frise-carte {
+  position: absolute; z-index: 2;
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+}
+.frise-carte img, .frise-carte-vide {
+  display: block; width: 100%; object-fit: cover; border-radius: 7px;
+  border: 1.5px solid var(--trait-fort); background: var(--surface-2);
+  box-shadow: 0 3px 10px -6px rgba(0, 0, 0, 0.6);
+}
+.frise-carte-vide { display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 20px; color: var(--attenue); }
+.frise-carte.estimee img, .frise-carte.estimee .frise-carte-vide { border-style: dashed; border-color: var(--attenue); }
+.frise-carte:hover img, .frise-carte.survol img, .frise-carte:focus-visible img,
+.frise-carte.survol .frise-carte-vide { border-color: var(--laiton); border-style: solid; transform: translateY(-1px); }
+.frise-carte:focus-visible { outline: none; }
+.frise-carte-date {
+  font-family: var(--mono); font-size: 9.5px; line-height: 1.25; color: var(--attenue);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+}
+.frise-carte.survol .frise-carte-date, .frise-carte:hover .frise-carte-date { color: var(--encre-vive); }
+
+.frise-pied {
+  flex: none; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px;
+  padding-top: 10px; font-size: 12px; color: var(--attenue); min-height: 18px;
+}
+.frise-pied b { color: var(--encre-vive); font-weight: 600; }
+.frise-sans-date { font-family: var(--mono); font-size: 11px; color: var(--discret); }
+
+/* Accueil : la frise en carte pleine largeur sous les autres */
+.carte.carte-large {
+  grid-column: 1 / -1; min-height: 0; flex-direction: row; align-items: center; gap: 18px;
+  padding-top: clamp(14px, 1.6vh, 20px); padding-bottom: clamp(14px, 1.6vh, 20px);
+}
+.carte-large .apercu-frise { flex: 1 1 auto; height: 34px; min-width: 60px; }
+.carte-large .apercu-frise path { stroke: var(--laiton); stroke-width: 1.5; opacity: 0.6; vector-effect: non-scaling-stroke; }
+.carte-large .apercu-frise line { stroke: var(--trait-fort); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+@media (max-width: 700px) {
+  .frise-page { padding: 14px 10px 8px; }
+  .frise-page .galerie-tete { margin-bottom: 10px; }
+  .frise-barre { gap: 6px; margin-bottom: 8px; }
+  .frise-barre .biblio-recherche { flex: 1 1 100%; width: auto; }
+  .frise-mini { height: 34px; margin-bottom: 8px; }
+  .frise-mini-ep { font-size: 9.5px; padding: 3px 3px 0; }
+  .frise-ep-nom { font-size: 12px; }
+  .frise-pied { font-size: 11px; padding-top: 6px; }
+  .frise-vue { cursor: auto; }
+  .carte.carte-large { gap: 12px; }
+}

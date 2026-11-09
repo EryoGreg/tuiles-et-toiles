@@ -6,6 +6,7 @@ import { PageEdition } from './edition/PageEdition.jsx';
 import { prendreBrouillon } from './commun/brouillon.js';
 import { PageBibliotheque, PageEtoile, PageLivre, PageRevoir } from './galeries/Galeries.jsx';
 import { Jeu } from './jeu/Jeu.jsx';
+import { PageFrise } from './frise/Frise.jsx';
 import { BandeauMaj, MajContext, useMaj } from './options/Maj.jsx';
 import { Options, RACCOURCIS } from './options/Options.jsx';
 import { PageConflits } from './pages/Conflits.jsx';
@@ -55,6 +56,18 @@ function Menu({ etat, aller, onQuitter }) {
             </span>
           </button>
         ))}
+
+        <button className="carte carte-large" onClick={() => aller('frise')}>
+          <span className="pastille"><I.Frise t={23} /></span>
+          <span>
+            <div className="nom">Frise des dates</div>
+            <div className="desc">Toutes les tuiles sur une ligne du temps</div>
+          </span>
+          <svg className="apercu-frise" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="26" x2="300" y2="26" />
+            <path d="M18 26v-6M40 26v-9M75 26v-7M120 26v-12M138 26v-8M160 26v-15M176 26v-10M190 26v-18M204 26v-13M216 26v-20M228 26v-16M240 26v-22M252 26v-17M264 26v-21M276 26v-12M288 26v-9" />
+          </svg>
+        </button>
       </div>
 
       <div className="menu-actions">
@@ -76,6 +89,7 @@ function Barre({ page, aller, etat, repliee, basculer, onQuitter, synchro }) {
     ['menu', I.Maison, 'Accueil', null],
     ['jeu', I.Manette, 'Jouer', null],
     ['bibliotheque', I.Bibliotheque, 'Bibliothèque', etat.oeuvres],
+    ['frise', I.Frise, 'Frise des dates', null],
     ['livre', I.Livre, 'Livre', etat.tags.livre],
     ['etoile', I.Etoile, 'Étoile', etat.tags.etoile],
     ['revoir', I.Revoir, 'À revoir', etat.tags.bad_smiley],
@@ -492,7 +506,7 @@ export default function App() {
 
   // Pages qu'« Actualiser » peut remonter sans rien perdre (pas l'editeur :
   // une saisie en cours serait perdue ; pas Conflits : il se relit seul).
-  const PAGES_LISTES = ['bibliotheque', 'livre', 'etoile', 'revoir', 'corbeille'];
+  const PAGES_LISTES = ['bibliotheque', 'frise', 'livre', 'etoile', 'revoir', 'corbeille'];
   const bandeauNouveautes = nouveautes && (nouveautes.conflits || PAGES_LISTES.includes(page)) && (
     <div className="bandeau-synchro" role="status">
       <I.Echange t={15} />
@@ -583,6 +597,7 @@ export default function App() {
               : page === 'conflits' ? <PageConflits onEtat={charger} />
               : page === 'corbeille' ? <PageCorbeille onEtat={charger} />
               : page === 'bibliotheque' ? <PageBibliotheque onEtat={charger} />
+              : page === 'frise' ? <PageFrise onEtat={charger} />
               : page === 'edition' ? <PageEdition onEtat={charger} />
               : page === 'livre' ? <PageLivre onEtat={charger} />
               : page === 'etoile' ? <PageEtoile onEtat={charger} />

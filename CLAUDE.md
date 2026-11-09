@@ -672,6 +672,29 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
   du démarrage mobile passe par `textContent` (avant : `innerHTML` avec le message d'erreur).
 - Clés / champs `__proto__`, `constructor` reçus : sans pollution de prototype ; valeurs non JSON rejetées.
 
+## Dates et frise (09/11/2026, non publié)
+
+- **Convention** (`src/main/dates.js`, celle de la majorité des tuiles) : `1665`, `1550-1560` (années complètes),
+  `vers 1580`, `années 1760`, `février 1928`, `XIXe siècle`, `XVIe-XVIIe siècle`, `début / milieu / fin XIXe siècle`,
+  `1re / 2de moitié`, `1er / 2e / dernier tiers`, `avant 1856`, `après 1750`, `depuis 2009`, `450 av. J.-C.`,
+  `700-500 av. J.-C.`, `64 apr. J.-C.` (apr. J.-C. seulement avant l'an 1000), précision accessoire entre parenthèses.
+  `normaliser` (texte incompris rendu tel quel, jamais perdu) ; `analyser` → `{ debut, fin, estimee }` (av. J.-C. négatif).
+  Appliquée : au build du pack (`import.js`, **pack 1.1.0**, le CSV reste brut), à l'écriture dans l'éditeur
+  (`edition.texte`), et une fois aux données de l'utilisateur (ops ordinaires ; une correction de date redevenue égale
+  au pack est retirée, `valeur_source` recalée → pas de faux conflit « MAJ de pack »). `jeu.completer` renvoie
+  `periode`. Test : `tests/dates.test.js`.
+- **Frise des dates** (`src/renderer/frise/`, page `frise`, barre + carte pleine largeur à l'accueil) : échelle
+  linéaire **par époques** (`echelle.js` : Préhistoire, Antiquité, Moyen Âge, XVe…XVIIIe, puis 1800/1850/1900/1950 →
+  aujourd'hui), largeur = 30 % répartis à égalité + 70 % au prorata des tuiles (plancher 3 %), calculée sur tout le
+  corpus (filtrer ne déplace rien). Tuile au milieu de sa période, couloirs empilés sans chevauchement, bordure
+  pointillée = date estimée, survol = période surlignée sur l'axe. Vue d'ensemble cliquable, zoom ×1 à ×24 (boutons,
+  Ctrl + molette), glisser à la souris, recherche + tags. Ouverte sur la médiane des dates.
+- **Jouer → Par catégorie** : écran compact (modes en onglets, difficulté en ligne, Lancer en pied de page),
+  catégories sur toute la hauteur, tri « les plus fournies » / A → Z, catégories choisies rappelées en haut.
+- **Données remplacées le 09/11/2026** par celles de Willy (`WILLY-tuiles-et-toiles.zip`) : import fusion de son
+  journal puis réécriture de tout écart (état hors `stat` = le sien, 363 tuiles), anciennes tuiles en Corbeille. Copie :
+  `%APPDATA%\Tuiles et Toiles\utilisateur.db.avant-willy-2026-11-09`. ~4 100 ops à envoyer à la prochaine synchro.
+
 ## Identité des œuvres
 
 - `id` — `p:` + 10 hex, opaque, **gelé dans `data/registre.json`**, jamais

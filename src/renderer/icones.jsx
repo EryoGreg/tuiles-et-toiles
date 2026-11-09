@@ -168,3 +168,14 @@ export const Note = ({ t = 19 }) => (
     <path d="M8.5 11.5h7M8.5 15h7M8.5 18h4" />
   </svg>
 );
+
+export const Frise = ({ t = 19 }) => (
+  <svg {...base(t)}>
+    <path d="M2.5 12h19" />
+    <path d="M5 12V8.5M10 12V6M14 12v3.5M19 12V7.5" />
+    <circle cx="5" cy="7" r="1.4" />
+    <circle cx="10" cy="4.6" r="1.4" />
+    <circle cx="14" cy="17" r="1.4" />
+    <circle cx="19" cy="6" r="1.4" />
+  </svg>
+);
