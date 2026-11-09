@@ -18,12 +18,13 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { SCHEMA_PACK } = require('./db');
 const { calculer, normaliser } = require('./masques');
+const dates = require('./dates');
 
 const RACINE = path.resolve(__dirname, '..', '..');
 const CSV = path.join(RACINE, 'data', 'manifest.csv');
 const REGISTRE = path.join(RACINE, 'data', 'registre.json');
 const PACK = path.join(RACINE, 'data', 'pack.db');
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';   // 1.1.0 : dates a la convention de dates.js
 
 /** Lecteur CSV minimal : separateur ';', guillemets doubles echappes. */
 function lireCsv(texte) {
@@ -83,7 +84,7 @@ function main() {
       ref: e.ref,
       artiste: o.artiste || '',
       titre: o.titre || '',
-      date: o.date || '',
+      date: dates.normaliser(o.date || ''),
       lieu: o.lieu || '',
       description: o.description || '',
       tags: o.tags || '',

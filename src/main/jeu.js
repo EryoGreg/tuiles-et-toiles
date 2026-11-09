@@ -10,6 +10,7 @@
 const db = require('./db');
 const etat = require('./synchro/etat');
 const { decrire, TOUT, normaliser, nbChamps, BIT } = require('./masques');
+const dates = require('./dates');
 
 /** Difficulte courante (reglage par appareil, range dans prefs_affichage). */
 function difficulte() {
@@ -214,6 +215,8 @@ function completer(o, enConflit, avecNote) {
     artiste: o.artiste,
     titre: o.titre,
     date: o.date,
+    // Date lue en annees (frise) : { debut, fin, estimee } ou null.
+    periode: dates.analyser(o.date),
     lieu: o.lieu,
     description: o.description,
     tags: o.tags,

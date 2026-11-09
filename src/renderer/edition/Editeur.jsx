@@ -363,7 +363,7 @@ export function EditeurTuile({ mode, tuile, brouillon, onFini, onAnnuler, onSupp
                 <ChampEdit etiquette="Titre" v={champs.titre} onChange={set('titre')} serif grand />
                 <ChampEdit etiquette="Artiste" v={champs.artiste} onChange={set('artiste')} />
                 <ChampEdit etiquette="Année / période" v={champs.date} onChange={set('date')} mono
-                  placeholder="masquée au tirage" />
+                  placeholder="1665 · 1550-1560 · vers 1580 · XIXe siècle" />
                 <ChampEdit etiquette="Conservation" v={champs.lieu} onChange={set('lieu')} />
               </div>
 

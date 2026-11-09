@@ -18,6 +18,7 @@ const compaction = require('./synchro/compaction');
 const { versIso } = require('./synchro/hlc');
 const lisezmoi = require('./lisezmoi');
 const journal = require('./journal');
+const dates = require('./dates');
 
 const CHAMPS = etat.CHAMPS_LOCALE;
 
@@ -444,7 +445,9 @@ function journalModifs({ avant = null, limite = 400 } = {}) {
 
 /** Champ texte d'un formulaire, nettoye ('' si absent). */
 function texte(champs, c) {
-  return String(champs[c] == null ? '' : champs[c]).trim();
+  const v = String(champs[c] == null ? '' : champs[c]).trim();
+  // Date : toujours ecrite a la convention commune (dates.js).
+  return c === 'date' && v.length <= 200 ? dates.normaliser(v) : v;
 }
 
 // Tailles maximales d'un champ de tuile (caracteres). Au-dela, la tuile n'est
