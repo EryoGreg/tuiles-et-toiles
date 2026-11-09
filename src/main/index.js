@@ -302,6 +302,9 @@ app.whenReady().then(() => {
   db.ouvrir(USER, PACK);
   edition.configurer(DOSSIER_IMAGES_LOCALES);
   edition.nettoyerOrphelines();   // images importees jamais validees
+  // Dates a la convention commune (tuiles ecrites avant la 0.3.22, ou recues
+  // d'un appareil reste sur une ancienne version). N'ecrit que l'ecart.
+  try { edition.normaliserDates(); } catch (e) { journal.erreur('edition', 'dates-normalisees', e); }
   sauvegarde.configurer({
     user: USER, imagesLocales: DOSSIER_IMAGES_LOCALES, pack: PACK, versionApp: app.getVersion()
   });

@@ -546,6 +546,58 @@ function ecrireNote(id, texte) {
   return { ok: true };
 }
 
+/**
+ * Dates des tuiles creees et des corrections de date -> convention commune
+ * (dates.js). Idempotente : n'ecrit que ce qui n'est pas deja au format.
+ * Lancee au demarrage et apres un import : rattrape les tuiles ecrites avant la
+ * convention ou par un appareil reste sur une ancienne version. Ecritures
+ * ordinaires (synchronisees, elles citent toutes les tetes : un conflit de date
+ * entre deux formes de la meme date se ferme).
+ * Correction de date d'une oeuvre du pack : retiree si elle dit la meme chose
+ * que le pack ; sa valeur_source est recalee sur le pack si ce n'en etait que
+ * l'ancienne ecriture (sinon faux conflit « MAJ de pack contre correction »).
+ * @returns {{ locales, corrections, retirees }}
+ */
+function normaliserDates() {
+  const d = db.instance();
+  const t0 = Date.now();
+  const n = { locales: 0, corrections: 0, retirees: 0 };
+  const exemples = [];
+  const lire = (v) => { try { return JSON.parse(v); } catch { return null; } };
+  etat.lot(() => {
+    for (const r of d.prepare("SELECT cle, valeur FROM etat WHERE entite='locale' AND champ='date' AND valeur IS NOT NULL").all()) {
+      const v = lire(r.valeur);
+      // Tuile supprimee : on n'y touche pas (sinon « supprimee ici, modifiee la-bas »).
+      if (typeof v !== 'string' || v.length > 200 || !etat.existe(r.cle)) continue;
+      const nv = dates.normaliser(v);
+      if (nv === v) continue;
+      etat.ecrire('locale', r.cle, 'date', nv || null);
+      n.locales++;
+      if (exemples.length < 10) exemples.push([v, nv]);
+    }
+    const datePack = d.prepare('SELECT date FROM pack.oeuvres WHERE id = ?');
+    for (const r of d.prepare("SELECT cle, valeur FROM etat WHERE entite='override' AND champ='date' AND valeur IS NOT NULL").all()) {
+      const o = lire(r.valeur);
+      const p = datePack.get(r.cle);
+      if (!o || typeof o.valeur !== 'string' || !p || o.valeur.length > 200) continue;
+      const pack = String(p.date == null ? '' : p.date);
+      const nv = dates.normaliser(o.valeur);
+      if (nv === pack) { etat.ecrire('override', r.cle, 'date', null); n.retirees++; continue; }
+      const src = typeof o.valeur_source === 'string' && o.valeur_source !== pack
+        && dates.normaliser(o.valeur_source) === pack ? pack : o.valeur_source;
+      if (nv === o.valeur && src === o.valeur_source) continue;
+      etat.ecrire('override', r.cle, 'date', { valeur: nv, valeur_source: src });
+      n.corrections++;
+      if (exemples.length < 10) exemples.push([o.valeur, nv]);
+    }
+  });
+  if (n.locales || n.corrections || n.retirees) {
+    appliquer();
+    journal.evt('edition', 'dates-normalisees', { ...n, exemples, ms: Date.now() - t0 });
+  }
+  return n;
+}
+
 function appliquer() {
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
@@ -554,7 +606,7 @@ function appliquer() {
 
 module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
-  conflitsPack, trancherPack, lireNote, ecrireNote, apercuDate, LIMITES, LIMITE_CHAMP,
+  conflitsPack, trancherPack, lireNote, ecrireNote, apercuDate, normaliserDates, LIMITES, LIMITE_CHAMP,
   rafraichir: appliquer,
   imagesReferencees, manquesDe
 };

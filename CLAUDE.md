@@ -6,7 +6,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
-- **Publiée** : 0.3.21 (Latest, GitHub, 16/10/2026) — **photos des tuiles créées en vrais fichiers** (mobile, hors
+- **0.3.23** (09/11/2026) — frise des dates, dates uniformisées (pack 1.1.0 : exe et APK complets), Par
+  catégorie compact, rattrapage des dates au démarrage / à l'import. Voir « Dates et frise ».
+- **Publiée avant** : 0.3.21 (Latest, GitHub, 16/10/2026) — **photos des tuiles créées en vrais fichiers** (mobile, hors
   mémoire, migration vérifiée). **Premier vrai essai des mises à jour légères** depuis la 0.3.20 (paquets n320 :
   805 Ko Android, 441 Ko PC).
 - **0.3.20** (16/10/2026) — **mises à jour partielles** Android (paquet web ~800 Ko) et PC
@@ -74,6 +76,9 @@ l'exe ; sauvegarde de `debug.keystore` (à rappeler) ; projet GCP vide `tuiles-e
 .test.js [n] [graine]`. Banc des cartels : `tests/banc-cartels.js` (photos et clé hors dépôt). Vérifier
 l'interface dans le navigateur avec `node scripts/build-mobile.js` + la configuration « mobile-web »
 (`.claude/launch.json`), `window.api` réel en mémoire.
+
+**Android** : `JAVA_HOME` de la machine pointe sur un JDK 25 (09/11/2026) ; Gradle veut le 21 →
+`JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.7.6-hotspot"` le temps de `npm run dist:android`.
 
 **Écrire du code depuis un script** : outil Write pour les scripts Python (les heredocs Bash mangent `\`
 et transforment `\r\n` en vrais sauts de ligne — arrivé plusieurs fois).
@@ -672,7 +677,7 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
   du démarrage mobile passe par `textContent` (avant : `innerHTML` avec le message d'erreur).
 - Clés / champs `__proto__`, `constructor` reçus : sans pollution de prototype ; valeurs non JSON rejetées.
 
-## Dates et frise (09/11/2026, non publié)
+## Dates et frise (0.3.23, 09/11/2026)
 
 - **Convention** (`src/main/dates.js`, celle de la majorité des tuiles) : `1665`, `1550-1560` (années complètes),
   `vers 1580`, `années 1760`, `février 1928`, `XIXe siècle`, `XVIe-XVIIe siècle`, `début / milieu / fin XIXe siècle`,
@@ -683,6 +688,16 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
   (`edition.texte`), et une fois aux données de l'utilisateur (ops ordinaires ; une correction de date redevenue égale
   au pack est retirée, `valeur_source` recalée → pas de faux conflit « MAJ de pack »). `jeu.completer` renvoie
   `periode`. Test : `tests/dates.test.js`.
+- **Rattrapage automatique** (`edition.normaliserDates`, idempotente, n'écrit que l'écart) : au **démarrage** (PC et
+  mobile) et **après un import** de zip. Couvre les tuiles écrites avant la 0.3.23 ou reçues d'un appareil resté sur
+  une ancienne version ; une écriture cite toutes les têtes, donc deux écritures concurrentes d'une même date (« C. 1890 »
+  chez l'un, « vers 1890 » chez l'autre) ne laissent pas de conflit. **Jamais sur une tuile supprimée** (sinon conflit
+  « supprimée ici, modifiée là-bas » — arrivé le 09/11 avec le script manuel, refermé en gardant la suppression).
+  Test : `tests/dates-migration.test.js` (scénario Willy : zip du dossier complet, il continue sur une ancienne
+  version, 2e zip importé → ses modifications gardées, dates au format, 0 conflit).
+- **Import d'un zip du dossier de données complet** (`sauvegarde.racine`) : `utilisateur.db` et `images-locales/`
+  cherchés dans le dossier le plus haut du zip (zip fait à la main de `%APPDATA%\Tuiles et Toiles`), le reste ignoré.
+  Copie de secours d'avant import au nom unique (deux imports dans la même seconde échouaient).
 - **Frise des dates** (`src/renderer/frise/`, page `frise`, barre + carte pleine largeur à l'accueil) : échelle
   linéaire **par époques** (`echelle.js` : Préhistoire, Antiquité, Moyen Âge, XVe…XVIIIe, puis 1800/1850/1900/1950 →
   aujourd'hui), largeur = 30 % répartis à égalité + 70 % au prorata des tuiles (plancher 3 %), calculée sur tout le
@@ -694,6 +709,8 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
 - **Données remplacées le 09/11/2026** par celles de Willy (`WILLY-tuiles-et-toiles.zip`) : import fusion de son
   journal puis réécriture de tout écart (état hors `stat` = le sien, 363 tuiles), anciennes tuiles en Corbeille. Copie :
   `%APPDATA%\Tuiles et Toiles\utilisateur.db.avant-willy-2026-11-09`. ~4 100 ops à envoyer à la prochaine synchro.
+  Ses tuiles écrites depuis : il renvoie un zip (dossier complet ou Options → Exporter), import par Options →
+  Importer (fusion). Tag `v0.3.22` poussé mais jamais publié (build interrompu) : la version suivante est 0.3.23.
 
 ## Identité des œuvres
 

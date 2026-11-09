@@ -108,14 +108,29 @@ function lireVersionPack() {
 }
 
 /**
+ * Dossier du zip qui contient utilisateur.db : '' pour une sauvegarde exportee
+ * par l'appli, 'Tuiles et Toiles/' (ou autre) pour un zip fait a la main du
+ * dossier de donnees complet. Le plus haut s'il y en a plusieurs.
+ */
+function racine(zip) {
+  const l = zip.getEntries()
+    .filter((e) => !e.isDirectory && (e.entryName === 'utilisateur.db' || e.entryName.endsWith('/utilisateur.db')))
+    .map((e) => e.entryName.slice(0, -'utilisateur.db'.length))
+    .filter((r) => !r.split('/').includes('..'))
+    .sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length);
+  return l.length ? l[0] : null;
+}
+
+/**
  * Lit le manifest d'un zip sans rien modifier — pour l'ecran de confirmation.
  * @returns {{ manifest }|{ erreur }}
  */
 function inspecter(cheminZip) {
   try {
     const zip = new AdmZip(cheminZip);
-    const entreeDb = zip.getEntry('utilisateur.db');
-    const entreeManifest = zip.getEntry('manifest.json');
+    const r = racine(zip);
+    const entreeDb = r == null ? null : zip.getEntry(r + 'utilisateur.db');
+    const entreeManifest = r == null ? null : zip.getEntry(r + 'manifest.json');
     if (!entreeDb) return { erreur: 'Ce zip ne contient pas utilisateur.db — ce n’est pas une sauvegarde Tuiles & Toiles.' };
     let manifest = null;
     if (entreeManifest) {
@@ -168,7 +183,8 @@ function importer(cheminZip) {
   });
 
   const zip = new AdmZip(cheminZip);
-  const entreeDb = zip.getEntry('utilisateur.db');
+  const prefixe = racine(zip);
+  const entreeDb = zip.getEntry(prefixe + 'utilisateur.db');
   // Plafond anti-bombe : l'entree annonce sa taille decompressee avant qu'on
   // l'alloue. Une vraie base, meme a des milliers de tuiles, reste bien en
   // dessous ; au-dela c'est un zip trafique.
@@ -196,7 +212,9 @@ function importer(cheminZip) {
   journal.evt('sauvegarde', 'import:ops-lues', { source: lu.source, ops: lu.ops.length, appareilDerive: lu.appareilDerive || null });
 
   // Copie de secours de la base actuelle (VACUUM INTO : propre, sans -wal).
-  const sauvegardePrecedente = cfg.user + '.avant-import-' + horodatage();
+  // Nom unique meme pour deux imports dans la meme seconde (VACUUM INTO refuse d'ecraser).
+  let sauvegardePrecedente = cfg.user + '.avant-import-' + horodatage();
+  for (let i = 2; fs.existsSync(sauvegardePrecedente); i++) sauvegardePrecedente = cfg.user + '.avant-import-' + horodatage() + '-' + i;
   db.exporterVers(sauvegardePrecedente);
 
   let f;
@@ -217,8 +235,9 @@ function importer(cheminZip) {
   let imagesCopiees = 0, imagesPresentes = 0, imagesRefusees = 0;
   for (const e of zip.getEntries()) {
     if (e.isDirectory) continue;
-    const m = e.entryName.match(/^images-locales\/(.+)$/);
-    if (!m || path.basename(m[1]) === lisezmoi.NOM) continue;
+    if (!e.entryName.startsWith(prefixe + 'images-locales/')) continue;
+    const m = [null, e.entryName.slice((prefixe + 'images-locales/').length)];
+    if (!m[1] || path.basename(m[1]) === lisezmoi.NOM) continue;
     const nom = path.basename(m[1]);
     if (!format.RE_IMAGE.test(nom)) { imagesRefusees++; continue; }
     const cible = path.join(cfg.imagesLocales, nom);
@@ -232,9 +251,13 @@ function importer(cheminZip) {
 
   db.reconstruireVue({ force: true });
   jeu.reinitialiserSac();
+  // Tuiles importees ecrites avant la convention des dates : remises au format
+  // (ecritures ordinaires, qui ferment un conflit entre deux ecritures d'une meme date).
+  let dates = null;
+  try { dates = require('./edition').normaliserDates(); } catch (e) { journal.erreur('sauvegarde', 'import-dates', e); }
   const conflits = db.instance().prepare('SELECT COUNT(*) n FROM conflits WHERE resolu=0').get().n;
   journal.evt('sauvegarde', 'import:fin', {
-    source: lu.source, bilan: f.bilan, resume: f.resume, conflits, imagesCopiees, imagesPresentes,
+    source: lu.source, bilan: f.bilan, resume: f.resume, conflits, imagesCopiees, imagesPresentes, dates,
     sauvegardePrecedente, comptesApres: comptesLocaux(), ms: Date.now() - t0
   });
 
@@ -244,4 +267,4 @@ function importer(cheminZip) {
   };
 }
 
-module.exports = { configurer, exporter, inspecter, importer, _lireOps: lireOps };
+module.exports = { configurer, exporter, inspecter, importer, _lireOps: lireOps, _racine: racine };

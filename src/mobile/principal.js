@@ -104,6 +104,8 @@ async function demarrer() {
   etat.configurer({ appareil: moi });
   db.ouvrir(USER, PACK);
   edition.configurer(IMAGES_LOCALES);
+  // Dates a la convention commune (voir edition.normaliserDates). N'ecrit que l'ecart.
+  try { edition.normaliserDates(); } catch (e) { journal.erreur('edition', 'dates-normalisees', e); }
   await imagesUrl.configurer({ manifeste, locales: IMAGES_LOCALES, vignettes });
   imagesUrl.surArrivee(() => {});
   require('../main/rapport').configurer({
