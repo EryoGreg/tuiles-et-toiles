@@ -452,6 +452,47 @@ async function tout() {
 
   console.log('a travers le vrai code HTTP (drive-api.js)');
 
+  await test('images : 4 transferts a la fois, nouvel essai si Drive demande de ralentir, toutes arrivent', async () => {
+    const { faux, PC, TEL } = await monde();
+    // Latence d'un envoi / d'une lecture reels (~2 s mesures, 120 ms ici) + simultaneite observee.
+    let enCours = 0, max = 0, refus = 1;
+    for (const m of ['creerFichier', 'lire']) {
+      const orig = faux[m].bind(faux);
+      faux[m] = async (...a) => {
+        enCours++; max = Math.max(max, enCours);
+        try {
+          await new Promise((r) => setTimeout(r, 120));
+          if (m === 'creerFichier' && /\.jpg$/.test(a[0]) && refus > 0) { refus--; throw new Error('Envoi 429 : rateLimitExceeded'); }
+          return await orig(...a);
+        } finally { enCours--; }
+      };
+    }
+    ouvrir(PC);
+    const images = path.join(PC, 'images-locales');
+    const noms = [];
+    for (let i = 0; i < 12; i++) {
+      const nom = require('crypto').randomUUID() + '.jpg';
+      fs.writeFileSync(path.join(images, nom), 'jpeg ' + i);
+      edition.creer({ titre: 'Image ' + i, artiste: 'x', image: nom });
+      noms.push(nom);
+    }
+    max = 0;
+    const t0 = Date.now();
+    const r = await manuelle(faux);
+    assert.ok(!r.erreur, r.erreur);
+    assert.equal(r.imagesEnvoyees, 12);
+    assert.ok(max >= 3 && max <= 4, 'simultanes : ' + max);
+    assert.ok(Date.now() - t0 < 12 * 120 + 2500, 'plus court qu\'une par une : ' + (Date.now() - t0) + ' ms');
+    for (const nom of noms) assert.ok(faux.trouver('Tuiles et Toiles', 'images', nom), nom);
+    assert.equal(db.etatSync('images_a_reprendre') || '', '');
+    ouvrir(TEL);
+    max = 0;
+    const r2 = await manuelle(faux);
+    assert.equal(r2.imagesRecues, 12);
+    assert.ok(max >= 3 && max <= 4, 'reception simultanee : ' + max);
+    for (const nom of noms) assert.ok(fs.existsSync(path.join(TEL, 'images-locales', nom)), nom);
+  });
+
   await test('fil des changements et dates de modification par HTTP : rapide en 1 requete', async () => {
     viderCaches();
     const faux = creerFauxDrive();

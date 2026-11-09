@@ -120,11 +120,18 @@ function creerTransportDrive(apiBrute, { nomRacine = F.NOM_RACINE, cleCache } = 
     vus.add(parent + '/' + cle);
   }
 
-  async function listeImages() {
-    if (images) return images;
-    images = new Map();
-    for (const f of await fichiers(await sous('images'))) {
-      if (F.RE_IMAGE.test(f.name) && !images.has(f.name)) images.set(f.name, f.id);
+  // Promesse memorisee : les images partent en parallele (service.transfererImages),
+  // tous les appels doivent attendre la MEME liste complete.
+  function listeImages() {
+    if (!images) {
+      images = (async () => {
+        const m = new Map();
+        for (const f of await fichiers(await sous('images'))) {
+          if (F.RE_IMAGE.test(f.name) && !m.has(f.name)) m.set(f.name, f.id);
+        }
+        return m;
+      })();
+      images.catch(() => { images = null; });
     }
     return images;
   }
@@ -274,6 +281,9 @@ function creerTransportDrive(apiBrute, { nomRacine = F.NOM_RACINE, cleCache } = 
     // --- images ---
 
     imageValide(nom) { return F.RE_IMAGE.test(nom); },
+
+    /** Avant les transferts en parallele : dossier images (cree une seule fois) et liste. */
+    async preparerImages() { await sous('images'); await listeImages(); },
 
     async envoyerImage(nom, source) {
       const l = await listeImages();

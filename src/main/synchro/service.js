@@ -21,6 +21,7 @@ const edition = require('../edition');
 const drive = require('../drive');
 const etat = require('./etat');
 const cycle = require('./cycle');
+const { parLots } = require('./echange');
 const moteur = require('./moteur');
 const erreurs = require('./erreurs');
 const compaction = require('./compaction');
@@ -188,30 +189,54 @@ function oublierDossier() {
  * Images dans un sens. Une image en echec est journalisee et ne bloque pas
  * la synchro : elle sera retentee a la suivante.
  */
+// Transferts d'images simultanes. Chaque envoi au Drive coute ~2 s d'attente
+// quelle que soit la taille (mesure du 09/11/2026 : 385 photos = 14 min une par
+// une) ; 4 a la fois restent sous la limite d'ecriture de Drive (~3/s).
+const IMAGES_EN_PARALLELE = 4;
+// Drive demande de ralentir (429, rateLimitExceeded) ou panne passagere (5xx).
+const RE_REESSAYER = /\b(429|500|502|503|504)\b|rate ?limit|userRateLimitExceeded|backendError/i;
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function transfererImages(t, sens) {
   let n = 0;
   const faites = [], manquantes = [], echecs = [], invalides = [];
   const toutes = [...edition.imagesReferencees()];
-  let i = 0;
-  for (const nom of toutes) {
-    i++;
-    if (toutes.length > 3) signaler({ faits: i, total: toutes.length });
-    if (!t.imageValide(nom)) { invalides.push(nom); continue; }
+  // Dossier et liste du Drive prepares une fois avant les appels simultanes.
+  const aFaire = toutes.filter((nom) => {
+    if (!t.imageValide(nom)) { invalides.push(nom); return false; }
     const local = path.join(cfg.imagesLocales, nom);
-    try {
-      if (sens === 'envoi') {
-        if (!fs.existsSync(local)) { manquantes.push(nom); continue; }
-        if (await t.envoyerImage(nom, local)) { n++; faites.push({ nom, octets: fs.statSync(local).size }); }
-      } else if (!fs.existsSync(local)) {
-        if (await t.recupererImage(nom, local)) { n++; faites.push({ nom, octets: fs.statSync(local).size }); }
+    if (sens === 'envoi' && !fs.existsSync(local)) { manquantes.push(nom); return false; }
+    return sens === 'envoi' || !fs.existsSync(local);
+  });
+  if (aFaire.length && t.preparerImages) await t.preparerImages();
+  let faits = toutes.length - aFaire.length;
+  let jetonMort = null;
+  await parLots(aFaire, IMAGES_EN_PARALLELE, async (nom) => {
+    if (jetonMort) return;
+    const local = path.join(cfg.imagesLocales, nom);
+    for (let essai = 1; ; essai++) {
+      try {
+        if (sens === 'envoi') {
+          if (await t.envoyerImage(nom, local)) { n++; faites.push({ nom, octets: fs.statSync(local).size }); }
+        } else if (await t.recupererImage(nom, local)) { n++; faites.push({ nom, octets: fs.statSync(local).size }); }
         else manquantes.push(nom);
+        break;
+      } catch (e) {
+        if (e && e.jetonMort) { jetonMort = e; return; }
+        if (essai < 4 && RE_REESSAYER.test(String(e && e.message))) {
+          journal.evt('synchro', 'image-' + sens + '-ralentir', { nom, essai, erreur: e.message }, 'WARN');
+          await pause(1500 * 2 ** (essai - 1));
+          continue;
+        }
+        echecs.push({ nom, erreur: e.message });
+        journal.erreur('synchro', 'image-' + sens, e, { nom });
+        break;
       }
-    } catch (e) {
-      if (e && e.jetonMort) throw e;
-      echecs.push({ nom, erreur: e.message });
-      journal.erreur('synchro', 'image-' + sens, e, { nom });
     }
-  }
+    faits++;
+    if (toutes.length > 3) signaler({ faits, total: toutes.length });
+  });
+  if (jetonMort) throw jetonMort;
   // A reprendre a la prochaine synchro complete : un echec de transfert,
   // toujours ; une image annoncee mais pas encore sur le Drive, pendant 24 h
   // (au-dela, son appareil d'origine l'a sans doute perdue : inutile de forcer
