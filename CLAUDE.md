@@ -153,7 +153,7 @@ et transforment `\r\n` en vrais sauts de ligne — arrivé plusieurs fois).
   Toiles/` (sans `&` — nom de dossier Drive). Fichier `utilisateur.zip` mis à jour en place ;
   avant tout écrasement la version distante est copiée dans `historique/`. Conflit détecté via
   `headRevisionId` distant retenu dans la table `sync` (`drive_rev`, `drive_synchro_le`).
-  Jeton (refresh_token) chiffré `safeStorage` → `%APPDATA%\Tuiles et Toiles\drive-jeton.bin`.
+  Jeton (refresh_token) chiffré `safeStorage` → `%APPDATA%\tuiles-et-toiles\drive-jeton.bin`.
   Client OAuth : `src/main/oauth-client.json` (gitignoré, embarqué dans l'asar). Projet Google
   Cloud **`dislike-334115`** (ID figé ; renommé « Tuiles et Toiles » le 26/09/2026 — l'ancien
   projet d'ID `tuiles-et-toiles` était vide et est à supprimer). Bristol utilise le même client :
@@ -626,7 +626,7 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
   Raccourcis visant l'ancien exe : détection de raccourcis périmés.
 - **Icône des raccourcis** : jamais lue dans l'exe (la MAJ silencieuse le retire quelques
   secondes → Windows cache une icône vide, persistante). `resources/icone.ico` copiée dans
-  `%APPDATA%\Tuiles et Toiles\icone-<empreinte>.ico` (nom lié au contenu depuis le 16/10 : Windows garde l'icône d'un
+  `%APPDATA%\tuiles-et-toiles\icone-<empreinte>.ico` (nom lié au contenu depuis le 16/10 : Windows garde l'icône d'un
   raccourci en cache par chemin — la grenouille de Bristol n'apparaissait pas dans la barre) ; au démarrage,
   `raccourcis.reparerIcones` repointe
   tout .lnk visant l'exe (bureau, menu, barre — y compris les épinglages faits par Windows,
@@ -634,6 +634,17 @@ principal (base, jeu, édition, journal, synchro) **dans la page**, avant l'inte
 - Noms d'assets attendus par l'updater : `Tuiles-et-Toiles-x.y.z.exe` (`MOTIF_EXE`) et
   `Tuiles-et-Toiles-Setup-x.y.z.exe` (`MOTIF_SETUP`). Les changer casse la mise à jour des
   installations existantes.
+
+## Dossier des données (PC) : `%APPDATA%\tuiles-et-toiles`
+
+Depuis la **0.3.20** (lanceur), Electron nommait `userData` d'après le `name` du package.json, car `lanceur.js`
+lisait `getPath('userData')` avant le `app.setName('Tuiles et Toiles')` d'`index.js`. Toutes les installations à
+jour vivent donc dans `tuiles-et-toiles` (nouvelle identité d'appareil reprise par empreinte, données revenues par la
+synchro) ; l'ancien `Tuiles et Toiles` était abandonné en silence. **Décision du 09/11/2026 : `tuiles-et-toiles` est le
+dossier officiel**, fixé par `app.setPath('userData', …)` en tête de `lanceur.js` (et d'`index.js`). Une installation
+restée en ≤ 0.3.19 qui passe directement à une version récente : si `tuiles-et-toiles` n'a pas d'`utilisateur.db`,
+`index.js` (`reprendreAncienDossier`) y recopie celui de `Tuiles et Toiles` (+ appareil, jetons, images), sans rien
+écraser ; journal `app reprise-ancien-dossier`. Le nom affiché reste « Tuiles & Toiles ».
 
 ## Règles non négociables
 
@@ -696,7 +707,7 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
   Test : `tests/dates-migration.test.js` (scénario Willy : zip du dossier complet, il continue sur une ancienne
   version, 2e zip importé → ses modifications gardées, dates au format, 0 conflit).
 - **Import d'un zip du dossier de données complet** (`sauvegarde.racine`) : `utilisateur.db` et `images-locales/`
-  cherchés dans le dossier le plus haut du zip (zip fait à la main de `%APPDATA%\Tuiles et Toiles`), le reste ignoré.
+  cherchés dans le dossier le plus haut du zip (zip fait à la main de `%APPDATA%\tuiles-et-toiles`), le reste ignoré.
   Copie de secours d'avant import au nom unique (deux imports dans la même seconde échouaient).
 - **Frise des dates** (`src/renderer/frise/`, page `frise`, barre + carte pleine largeur à l'accueil) : échelle
   linéaire **par époques** (`echelle.js` : Préhistoire, Antiquité, Moyen Âge, XVe…XVIIIe, puis 1800/1850/1900/1950 →
@@ -708,7 +719,9 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
   catégories sur toute la hauteur, tri « les plus fournies » / A → Z, catégories choisies rappelées en haut.
 - **Données remplacées le 09/11/2026** par celles de Willy (`WILLY-tuiles-et-toiles.zip`) : import fusion de son
   journal puis réécriture de tout écart (état hors `stat` = le sien, 363 tuiles), anciennes tuiles en Corbeille. Copie :
-  `%APPDATA%\Tuiles et Toiles\utilisateur.db.avant-willy-2026-11-09`. ~4 100 ops à envoyer à la prochaine synchro.
+  `%APPDATA%\tuiles-et-toiles\utilisateur.db.avant-willy-2026-11-09`. ~4 160 ops à envoyer à la prochaine synchro.
+  (Fait d'abord par erreur dans l'ancien dossier `Tuiles et Toiles`, abandonné depuis la 0.3.20 — voir « Dossier des
+  données » ; refait dans le bon, ancien dossier mis à la corbeille le 09/11 après vérification : rien d'unique.)
   Ses tuiles écrites depuis : il renvoie un zip (dossier complet ou Options → Exporter), import par Options →
   Importer (fusion). Tag `v0.3.22` poussé mais jamais publié (build interrompu) : la version suivante est 0.3.23.
 
@@ -743,7 +756,7 @@ recopie les tables `user_*`, **re-clé les tags** des anciens slugs vers les `id
 stables via le registre (slug disparu → tag ignoré), renomme l'ancien fichier
 `tuiles.db.avant-v2`.
 
-Emplacements (empaqueté) : `%APPDATA%\Tuiles et Toiles\` — `pack.db` (copié du
+Emplacements (empaqueté) : `%APPDATA%\tuiles-et-toiles\` — `pack.db` (copié du
 bundle si sa version est **strictement supérieure**, donc un pack téléchargé
 plus récent n'est jamais écrasé), `utilisateur.db` (jamais écrasé). Images :
 `resources/data/images/`, lecture seule, jamais recopiées. En dev : tout dans
@@ -806,7 +819,7 @@ correction).
 
 ## Journal et rapport d'erreur
 
-- **Journal** (`src/main/journal.js`) : `%APPDATA%\Tuiles et Toiles\logs\journal.log`
+- **Journal** (`src/main/journal.js`) : `%APPDATA%\tuiles-et-toiles\logs\journal.log`
   (`data/logs/` en dev), 5 fichiers × 5 Mo. Une ligne par événement :
   `horodatage NIVEAU domaine évènement s=<session> {json}` — filtrer par niveau
   (`DEBUG`/`INFO`/`WARN`/`ERREUR`), domaine (`app ipc ui db edition image jeu synchro drive

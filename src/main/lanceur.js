@@ -14,6 +14,14 @@
 const { app } = require('electron');
 const path = require('path');
 
+// Dossier des donnees : %APPDATA%\tuiles-et-toiles, fixe ici AVANT tout
+// getPath('userData'). Depuis la 0.3.20 (lanceur), Electron le nommait d'apres
+// le champ "name" du package.json, avant que index.js ait pu donner le sien :
+// toutes les installations a jour vivent donc dans ce dossier (09/11/2026).
+// L'ancien « Tuiles et Toiles » n'est repris que s'il n'y a rien ici (index.js).
+// --user-data-dir (essais sur un dossier jetable) reste prioritaire.
+if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'tuiles-et-toiles'));
+
 const versionExe = app.getVersion();
 global.__ttLanceur = { versionExe, version: versionExe, paquet: false, essai: false, evenements: [], valider: () => false };
 

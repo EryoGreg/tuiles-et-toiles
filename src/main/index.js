@@ -38,9 +38,11 @@ const copieSecurite = require('./copie-securite');
 const imagesDistantes = require('./images-distantes');
 const annuler = require('./annuler');
 
-// Avant tout getPath('userData') : sinon Electron nomme le dossier d'apres le
-// champ "name" du package.json (tuiles-et-toiles).
+// Nom affiche de l'application. Le dossier des donnees, lui, est fixe a
+// %APPDATA%\tuiles-et-toiles (lanceur.js ; repete ici si index.js est lance
+// directement) : c'est celui de toutes les installations depuis la 0.3.20.
 app.setName('Tuiles et Toiles');
+if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'tuiles-et-toiles'));
 
 const DEV = !app.isPackaged;
 // Lanceur (lanceur.js) : version de l'exe, paquet de code charge. Absent si
@@ -59,9 +61,32 @@ const DOSSIER_IMAGES = path.join(DATA_LIVRE, 'images');
 const DOSSIER_VIGNETTES = path.join(DATA_LIVRE, 'vignettes');
 const MANIFESTE_IMAGES = path.join(DATA_LIVRE, 'images-manifest.json');
 
-// Emplacement inscriptible : %APPDATA%\Tuiles et Toiles (pas a cote de l'exe,
+// Emplacement inscriptible : %APPDATA%\tuiles-et-toiles (pas a cote de l'exe,
 // pas dans le cache temporaire du stub portable). En dev : le depot.
 const DOSSIER_USER = DEV ? DATA_LIVRE : app.getPath('userData');
+
+// Installation restee en 0.3.19 ou avant : ses donnees sont dans l'ancien
+// dossier « Tuiles et Toiles ». Rien ici -> on les recopie (jamais l'inverse,
+// jamais d'ecrasement ; l'ancien dossier reste intact).
+function reprendreAncienDossier() {
+  if (DEV || app.commandLine.hasSwitch('user-data-dir')) return null;
+  const ancien = path.join(app.getPath('appData'), 'Tuiles et Toiles');
+  if (path.resolve(ancien).toLowerCase() === path.resolve(DOSSIER_USER).toLowerCase()) return null;
+  if (fs.existsSync(path.join(DOSSIER_USER, 'utilisateur.db')) || !fs.existsSync(path.join(ancien, 'utilisateur.db'))) return null;
+  const copies = [];
+  fs.mkdirSync(DOSSIER_USER, { recursive: true });
+  for (const nom of ['appareil.json', 'drive-jeton.bin', 'ia-cle.bin', 'pack.db', 'utilisateur.db']) {
+    const src = path.join(ancien, nom);
+    if (fs.existsSync(src) && !fs.existsSync(path.join(DOSSIER_USER, nom))) { fs.copyFileSync(src, path.join(DOSSIER_USER, nom)); copies.push(nom); }
+  }
+  for (const sous of ['images-locales', 'images-cache']) {
+    const src = path.join(ancien, sous);
+    if (fs.existsSync(src)) { fs.cpSync(src, path.join(DOSSIER_USER, sous), { recursive: true, force: false, errorOnExist: false }); copies.push(sous + '/'); }
+  }
+  return { ancien, copies };
+}
+let repriseAncien = null;
+try { repriseAncien = reprendreAncienDossier(); } catch (e) { repriseAncien = { erreur: e.message }; }
 
 // Images des tuiles creees par l'utilisateur.
 const DOSSIER_IMAGES_LOCALES = path.join(DOSSIER_USER, 'images-locales');
@@ -247,6 +272,7 @@ app.whenReady().then(() => {
     journal.evt('maj', 'lanceur-' + ev.quoi, ev, ev.quoi === 'refuse' || ev.quoi === 'paquet-incomplet' ? 'WARN' : 'INFO');
   }
   journal.armerErreurs(app);
+  if (repriseAncien) journal.evt('app', 'reprise-ancien-dossier', repriseAncien, 'WARN');
   journal.evt('app', 'demarrage', { pack: lireVersionPack(PACK_LIVRE), packInstalle: lireVersionPack(PACK) });
   preparerDonnees();
   // Un LISEZMOI dans chaque dossier cree par l'app. Pas en dev : data/ est le depot.
