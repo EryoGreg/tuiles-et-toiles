@@ -1809,3 +1809,26 @@ body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
   .frise-vue { cursor: auto; }
   .carte.carte-large { gap: 12px; }
 }
+
+/* Editeur : champ date, apercu du format et aide */
+.champ-date-tete { display: flex; align-items: center; gap: 8px; }
+.champ-date-aide-btn {
+  width: 17px; height: 17px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--trait-fort); background: none; color: var(--attenue);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0; line-height: 1; cursor: pointer;
+}
+.champ-date-aide-btn:hover, .champ-date-aide-btn.actif { border-color: var(--laiton); color: var(--laiton); }
+.champ-date-note { font-size: 11.5px; color: var(--attenue); }
+.champ-date-note b { font-family: var(--mono); font-weight: 400; color: var(--encre-vive); }
+.champ-date-note.alerte { color: var(--revoir); }
+.champ-date-aide {
+  display: flex; flex-direction: column; gap: 4px; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--trait); background: var(--surface-2); font-size: 11.5px;
+}
+.champ-date-aide-ligne { display: grid; grid-template-columns: 118px 1fr; gap: 8px; }
+.champ-date-aide-ligne span { color: var(--attenue); }
+.champ-date-aide-ligne code { font-family: var(--mono); font-size: 11px; color: var(--encre-vive); white-space: normal; }
+.champ-date-aide-pied { margin-top: 3px; color: var(--discret); font-size: 11px; }
+@media (max-width: 700px) {
+  .champ-date-aide-ligne { grid-template-columns: 1fr; gap: 1px; }
+}

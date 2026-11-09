@@ -86,6 +86,11 @@ test('edition : la date est ecrite a la convention', () => {
   assert.equal(edition.tuile(r.id).date, 'vers 1542-1545');
   edition.modifier(r.id, { ...edition.tuile(r.id), date: 'XIXs' });
   assert.equal(edition.tuile(r.id).date, 'XIXe siècle');
+  // Apercu pendant la saisie (champ date de l'editeur)
+  assert.deepEqual(edition.apercuDate(' C. 1542-45 '), { saisie: 'C. 1542-45', enregistree: 'vers 1542-1545', change: true, lisible: true });
+  assert.deepEqual(edition.apercuDate('1665'), { saisie: '1665', enregistree: '1665', change: false, lisible: true });
+  assert.equal(edition.apercuDate('époque Meiji').lisible, false);
+  assert.equal(edition.apercuDate('').lisible, true);
   db.fermer();
 });
 

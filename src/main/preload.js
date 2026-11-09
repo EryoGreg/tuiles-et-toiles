@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('api', {
   edition: {
     creer: (champs) => ipcRenderer.invoke('edition:creer', champs),
     tuile: (id) => ipcRenderer.invoke('edition:tuile', id),
+    apercuDate: (texte) => ipcRenderer.invoke('edition:apercuDate', texte),
     modifier: (id, champs) => ipcRenderer.invoke('edition:modifier', { id, champs }),
     supprimer: (id) => ipcRenderer.invoke('edition:supprimer', id),
     versions: (id) => ipcRenderer.invoke('edition:versions', id),

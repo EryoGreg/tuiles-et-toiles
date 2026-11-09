@@ -443,6 +443,16 @@ function journalModifs({ avant = null, limite = 400 } = {}) {
   return { entrees, suite: ops.length === limite ? ops[ops.length - 1].hlc : null };
 }
 
+/**
+ * Apercu d'une date en cours de saisie (editeur) : ce qui sera enregistre et si
+ * la frise saura la placer. { saisie, enregistree, change, lisible }
+ */
+function apercuDate(texteSaisi) {
+  const saisie = String(texteSaisi == null ? '' : texteSaisi).trim().slice(0, 200);
+  const enregistree = saisie ? dates.normaliser(saisie) : '';
+  return { saisie, enregistree, change: enregistree !== saisie, lisible: !saisie || !!dates.analyser(enregistree) };
+}
+
 /** Champ texte d'un formulaire, nettoye ('' si absent). */
 function texte(champs, c) {
   const v = String(champs[c] == null ? '' : champs[c]).trim();
@@ -544,7 +554,7 @@ function appliquer() {
 
 module.exports = {
   configurer, creer, tuile, modifier, supprimer, corbeille, restaurer, versions, journalModifs, nettoyerOrphelines, oublierImage,
-  conflitsPack, trancherPack, lireNote, ecrireNote, LIMITES, LIMITE_CHAMP,
+  conflitsPack, trancherPack, lireNote, ecrireNote, apercuDate, LIMITES, LIMITE_CHAMP,
   rafraichir: appliquer,
   imagesReferencees, manquesDe
 };

@@ -11,6 +11,65 @@ import { rangerBrouillon, effacerBrouillon } from '../commun/brouillon.js';
 /* --------------------------------------------------------------- edition */
 
 // Un champ texte de l'editeur, dans la meme case (.valeur) qu'en affichage.
+// Formats de date conseilles (convention de src/main/dates.js).
+export const FORMATS_DATE = [
+  ['Année', '1665'],
+  ['Période', '1550-1560'],
+  ['Date estimée', 'vers 1580 · vers 1550-1560'],
+  ['Décennie, mois', 'années 1760 · février 1928'],
+  ['Siècle', 'XIXe siècle · XVIe-XVIIe siècle'],
+  ['Partie de siècle', 'début / milieu / fin XIXe siècle · 1re moitié XVe siècle · 1er tiers XIXe siècle'],
+  ['Bornes', 'avant 1856 · après 1750 · depuis 2009'],
+  ['Avant / après J.-C.', '450 av. J.-C. · 700-500 av. J.-C. · 64 apr. J.-C.']
+];
+
+// Champ « Année / période » : sous la saisie, ce qui sera enregistre (la date
+// est remise au format commun) ou un avertissement si la frise ne saura pas la
+// placer ; « ? » ouvre la liste des formats.
+export function ChampDate({ v, onChange }) {
+  const [apercu, setApercu] = useState(null);
+  const [aide, setAide] = useState(false);
+  useEffect(() => {
+    let vivant = true;
+    const t = setTimeout(() => {
+      window.api.edition.apercuDate(v || '').then((r) => { if (vivant) setApercu(r); }).catch(() => {});
+    }, 150);
+    return () => { vivant = false; clearTimeout(t); };
+  }, [v]);
+  const saisie = (v || '').trim();
+  return (
+    <div className="champ champ-date">
+      <div className="etiquette champ-date-tete">
+        Année / période
+        <button type="button" className={'champ-date-aide-btn' + (aide ? ' actif' : '')}
+          onClick={() => setAide((x) => !x)} title="Formats de date conseillés" aria-expanded={aide}>?</button>
+      </div>
+      <div className="valeur">
+        <input
+          className="editeur-input e-mono"
+          value={v}
+          onChange={onChange}
+          placeholder="1665 · 1550-1560 · vers 1580 · XIXe siècle"
+          spellCheck={false}
+        />
+      </div>
+      {saisie && apercu && apercu.saisie === saisie && (!apercu.lisible ? (
+        <div className="champ-date-note alerte">Format non reconnu : la tuile n’apparaîtra pas sur la frise. Voir « ? ».</div>
+      ) : apercu.change ? (
+        <div className="champ-date-note">Sera enregistrée : <b>{apercu.enregistree}</b></div>
+      ) : null)}
+      {aide && (
+        <div className="champ-date-aide" role="note">
+          {FORMATS_DATE.map(([cas, ex]) => (
+            <div key={cas} className="champ-date-aide-ligne"><span>{cas}</span><code>{ex}</code></div>
+          ))}
+          <div className="champ-date-aide-pied">Une autre écriture est acceptée et remise à ce format quand c’est possible.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChampEdit({ etiquette, v, onChange, placeholder, serif, mono, grand }) {
   return (
     <div className="champ">
@@ -362,8 +421,7 @@ export function EditeurTuile({ mode, tuile, brouillon, onFini, onAnnuler, onSupp
               <div className="grille2">
                 <ChampEdit etiquette="Titre" v={champs.titre} onChange={set('titre')} serif grand />
                 <ChampEdit etiquette="Artiste" v={champs.artiste} onChange={set('artiste')} />
-                <ChampEdit etiquette="Année / période" v={champs.date} onChange={set('date')} mono
-                  placeholder="1665 · 1550-1560 · vers 1580 · XIXe siècle" />
+                <ChampDate v={champs.date} onChange={set('date')} />
                 <ChampEdit etiquette="Conservation" v={champs.lieu} onChange={set('lieu')} />
               </div>
 

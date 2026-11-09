@@ -423,7 +423,7 @@ function infosRapport() {
 const ROUTINE = new Set([
   'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'annuler:etat', 'images:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
   'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero', 'revision:etat',
-  'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile'
+  'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile', 'edition:apercuDate'
 ]);
 
 function resumerResultat(r) {
@@ -489,6 +489,7 @@ const NOMS_MARQUES = { livre: 'livre', etoile: 'étoile', bad_smiley: 'à revoir
 gerer('edition:creer', (_e, champs) =>
   annuler.action((r) => 'Création de #' + (r && r.ref), () => edition.creer(champs || {})));
 gerer('edition:tuile', (_e, id) => edition.tuile(id));
+gerer('edition:apercuDate', (_e, texte) => edition.apercuDate(texte));
 gerer('edition:modifier', (_e, { id, champs }) =>
   annuler.action('Modification de ' + refDe(id), () => edition.modifier(id, champs || {})));
 gerer('edition:supprimer', (_e, id) =>

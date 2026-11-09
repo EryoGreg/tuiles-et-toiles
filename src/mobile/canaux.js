@@ -28,7 +28,7 @@ const iaCle = require('../main/ia-cle');
 const imagesQualite = require('../main/images-qualite');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
-  'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:versions',
+  'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:apercuDate', 'edition:versions',
   'edition:cartelEtat', 'edition:lireCartel', 'revision:etat']);
 
 function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauverTout }) {
@@ -102,6 +102,7 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   // --- edition, corbeille, annuler -------------------------------------------
   g('edition:creer', (champs) => annuler.action((r) => 'Création de #' + (r && r.ref), () => edition.creer(champs || {})));
   g('edition:tuile', (id) => edition.tuile(id));
+  g('edition:apercuDate', (texte) => edition.apercuDate(texte));
   g('edition:modifier', ({ id, champs }) => annuler.action('Modification de ' + refDe(id), () => edition.modifier(id, champs || {})));
   g('edition:supprimer', (id) => annuler.action('Suppression de ' + refDe(id), () => edition.supprimer(id)));
   g('edition:versions', (id) => edition.versions(id));
