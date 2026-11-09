@@ -493,6 +493,89 @@ async function tout() {
     for (const nom of noms) assert.ok(fs.existsSync(path.join(TEL, 'images-locales', nom)), nom);
   });
 
+  /** Faux Drive dont l'envoi des images echoue selon `regle(nom, essai)` (message d'erreur ou null). */
+  function imagesQuiEchouent(faux, regle) {
+    const essais = new Map();
+    const orig = faux.creerFichier.bind(faux);
+    faux.creerFichier = async (nom, ...a) => {
+      if (/\.(jpg|png)$/.test(nom)) {
+        const k = (essais.get(nom) || 0) + 1;
+        essais.set(nom, k);
+        const m = regle(nom, k);
+        if (m) { const e = new Error(m); if (m === 'JETON') e.jetonMort = true; throw e; }
+      }
+      return orig(nom, ...a);
+    };
+    return essais;
+  }
+  function tuilesAvecImages(dir, n) {
+    const images = path.join(dir, 'images-locales');
+    const noms = [];
+    for (let i = 0; i < n; i++) {
+      const nom = require('crypto').randomUUID() + '.jpg';
+      fs.writeFileSync(path.join(images, nom), 'jpeg ' + i);
+      edition.creer({ titre: 'Img ' + i, artiste: 'x', image: nom });
+      noms.push(nom);
+    }
+    return noms;
+  }
+
+  await test('images : Drive refuse durablement UNE image -> 4 essais, notee a reprendre, les autres passent, reprise ensuite', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    const noms = tuilesAvecImages(PC, 6);
+    let bloque = true;
+    const essais = imagesQuiEchouent(faux, (nom) => (bloque && nom === noms[2] ? 'Envoi 429 : userRateLimitExceeded' : null));
+    const r = await manuelle(faux);
+    assert.ok(!r.erreur, r.erreur);
+    assert.equal(r.imagesEnvoyees, 5);
+    assert.equal(essais.get(noms[2]), 4, 'essais : ' + essais.get(noms[2]));
+    assert.ok(!faux.trouver('Tuiles et Toiles', 'images', noms[2]));
+    assert.ok(JSON.parse(db.etatSync('images_a_reprendre')).echecs === 1);
+    bloque = false;
+    const r2 = await manuelle(faux);
+    assert.equal(r2.imagesEnvoyees, 1);
+    assert.ok(faux.trouver('Tuiles et Toiles', 'images', noms[2]));
+    assert.equal(db.etatSync('images_a_reprendre') || '', '');
+  });
+
+  await test('images : erreur definitive (400) -> pas de nouvel essai, notee a reprendre', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    const noms = tuilesAvecImages(PC, 3);
+    const essais = imagesQuiEchouent(faux, (nom) => (nom === noms[0] ? 'Envoi 400 : badRequest' : null));
+    const r = await manuelle(faux);
+    assert.ok(!r.erreur, r.erreur);
+    assert.equal(r.imagesEnvoyees, 2);
+    assert.equal(essais.get(noms[0]), 1);
+    assert.ok(db.etatSync('images_a_reprendre'));
+  });
+
+  await test('images : session expiree pendant les envois -> synchro en erreur « session », sans blocage', async () => {
+    const { faux, PC } = await monde();
+    ouvrir(PC);
+    tuilesAvecImages(PC, 8);
+    imagesQuiEchouent(faux, (nom, k) => (k === 1 ? 'JETON' : null));
+    const t0 = Date.now();
+    const r = await manuelle(faux);
+    assert.ok(r.erreur, 'erreur attendue');
+    assert.ok(Date.now() - t0 < 10000, 'pas de blocage');
+  });
+
+  await test('images : reception, une image annoncee absente du Drive -> les autres arrivent quand meme', async () => {
+    const { faux, PC, TEL } = await monde();
+    ouvrir(PC);
+    const noms = tuilesAvecImages(PC, 5);
+    await manuelle(faux);
+    await faux.supprimer(faux.trouver('Tuiles et Toiles', 'images', noms[1]).id);
+    ouvrir(TEL);
+    const r = await manuelle(faux);
+    assert.ok(!r.erreur, r.erreur);
+    assert.equal(r.imagesRecues, 4);
+    for (const [i, nom] of noms.entries()) assert.equal(fs.existsSync(path.join(TEL, 'images-locales', nom)), i !== 1, nom);
+    assert.ok(db.etatSync('images_a_reprendre'), 'manquante notee pour 24 h');
+  });
+
   await test('fil des changements et dates de modification par HTTP : rapide en 1 requete', async () => {
     viderCaches();
     const faux = creerFauxDrive();

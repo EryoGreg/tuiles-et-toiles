@@ -37,12 +37,13 @@ const { creerAuto } = require('./synchro/auto');
 const copieSecurite = require('./copie-securite');
 const imagesDistantes = require('./images-distantes');
 const annuler = require('./annuler');
+const dossierDonnees = require('./dossier-donnees');
 
 // Nom affiche de l'application. Le dossier des donnees, lui, est fixe a
 // %APPDATA%\tuiles-et-toiles (lanceur.js ; repete ici si index.js est lance
 // directement) : c'est celui de toutes les installations depuis la 0.3.20.
 app.setName('Tuiles et Toiles');
-if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'tuiles-et-toiles'));
+if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), dossierDonnees.NOM));
 
 const DEV = !app.isPackaged;
 // Lanceur (lanceur.js) : version de l'exe, paquet de code charge. Absent si
@@ -66,27 +67,14 @@ const MANIFESTE_IMAGES = path.join(DATA_LIVRE, 'images-manifest.json');
 const DOSSIER_USER = DEV ? DATA_LIVRE : app.getPath('userData');
 
 // Installation restee en 0.3.19 ou avant : ses donnees sont dans l'ancien
-// dossier « Tuiles et Toiles ». Rien ici -> on les recopie (jamais l'inverse,
-// jamais d'ecrasement ; l'ancien dossier reste intact).
-function reprendreAncienDossier() {
-  if (DEV || app.commandLine.hasSwitch('user-data-dir')) return null;
-  const ancien = path.join(app.getPath('appData'), 'Tuiles et Toiles');
-  if (path.resolve(ancien).toLowerCase() === path.resolve(DOSSIER_USER).toLowerCase()) return null;
-  if (fs.existsSync(path.join(DOSSIER_USER, 'utilisateur.db')) || !fs.existsSync(path.join(ancien, 'utilisateur.db'))) return null;
-  const copies = [];
-  fs.mkdirSync(DOSSIER_USER, { recursive: true });
-  for (const nom of ['appareil.json', 'drive-jeton.bin', 'ia-cle.bin', 'pack.db', 'utilisateur.db']) {
-    const src = path.join(ancien, nom);
-    if (fs.existsSync(src) && !fs.existsSync(path.join(DOSSIER_USER, nom))) { fs.copyFileSync(src, path.join(DOSSIER_USER, nom)); copies.push(nom); }
-  }
-  for (const sous of ['images-locales', 'images-cache']) {
-    const src = path.join(ancien, sous);
-    if (fs.existsSync(src)) { fs.cpSync(src, path.join(DOSSIER_USER, sous), { recursive: true, force: false, errorOnExist: false }); copies.push(sous + '/'); }
-  }
-  return { ancien, copies };
-}
+// dossier « Tuiles et Toiles », recopiees ici s'il n'y a pas encore de base
+// (dossier-donnees.js : jamais d'ecrasement, l'ancien reste intact).
 let repriseAncien = null;
-try { repriseAncien = reprendreAncienDossier(); } catch (e) { repriseAncien = { erreur: e.message }; }
+if (!DEV && !app.commandLine.hasSwitch('user-data-dir')) {
+  try {
+    repriseAncien = dossierDonnees.reprendre(path.join(app.getPath('appData'), dossierDonnees.ANCIEN_NOM), DOSSIER_USER);
+  } catch (e) { repriseAncien = { erreur: e.message }; }
+}
 
 // Images des tuiles creees par l'utilisateur.
 const DOSSIER_IMAGES_LOCALES = path.join(DOSSIER_USER, 'images-locales');

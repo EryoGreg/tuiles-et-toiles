@@ -6,6 +6,13 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
+- **0.3.25** (09/11/2026) — **tags cumulables en soustractif** dans le sélecteur commun (frise, Bibliothèque :
+  `SelecteurTags`) : un tag qui ferait tomber le résultat à 0 (« siège » + « Asie ») est grisé, les autres
+  affichent le nombre de tuiles qu'il resterait (`jeu.apercuCategories` renvoie `comptes`) ; un tag mémorisé
+  disparu est retiré tout seul (comme dans Jouer). Reprise de l'ancien dossier sortie d'`index.js` →
+  `dossier-donnees.js`. Tests ajoutés : `categories`, `dossier-donnees`, `sauvegarde-zip`, cas limites dans
+  `dates-migration` et `synchro-rapide` (image refusée durablement, erreur définitive, session expirée, image absente).
+  **Non testable en Node** (vérifié dans le navigateur / l'exe) : `GardePage`, fermeture sans réponse du rendu.
 - **0.3.24** (09/11/2026) — **plantage de la frise** au choix d'un tag corrigé (liste filtrée pas encore arrivée →
   `null.map` ; le tag mémorisé replantait la page à chaque ouverture, écran gris) ; **chaque page sous `GardePage`**
   (`commun/GardePage.jsx` : message, journal `ui page-plantee`, « Réessayer sans les filtres de la page »

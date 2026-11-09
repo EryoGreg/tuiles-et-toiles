@@ -147,6 +147,36 @@ test('tuile supprimee : sa date n\'est pas touchee (pas de « supprimee ici, mod
   assert.equal(ouverts(), 0);
 });
 
+test('donnees abimees ou inattendues : ignorees sans erreur, rien de reecrit', () => {
+  const D = 'local:dddddddd-0000-4000-8000-000000000004';
+  etat.ecrire('locale', D, '_existe', 1);
+  etat.ecrire('locale', D, 'date', 'V.' + '1'.repeat(300));            // > 200 caracteres
+  etat.ecrire('override', 'p:inexistant', 'date', { valeur: 'C.1500', valeur_source: 'x' });   // oeuvre inconnue
+  const Z = db.instance().prepare("SELECT id FROM pack.oeuvres WHERE date = '1665' LIMIT 1").get();
+  etat.ecrire('override', Z.id, 'date', { valeur: 1700, valeur_source: null });                 // valeur non texte
+  db.instance().prepare("UPDATE etat SET valeur = '{pas du json' WHERE entite='locale' AND cle=? AND champ='date'").run(A);
+  const avant = db.instance().prepare('SELECT COUNT(*) n FROM changements').get().n;
+  assert.deepEqual(edition.normaliserDates(), { locales: 0, corrections: 0, retirees: 0 });
+  assert.equal(db.instance().prepare('SELECT COUNT(*) n FROM changements').get().n, avant);
+});
+
+test('date farfelue : remise au format une seule fois, plus jamais reecrite ensuite', () => {
+  const F = 'local:ffffffff-0000-4000-8000-000000000006';
+  etat.ecrire('locale', F, '_existe', 1);
+  etat.ecrire('locale', F, 'date', ',) et 1803-26');
+  edition.normaliserDates();
+  const v1 = v('locale', F, 'date');
+  for (let i = 0; i < 3; i++) assert.deepEqual(edition.normaliserDates(), { locales: 0, corrections: 0, retirees: 0 });
+  assert.equal(v('locale', F, 'date'), v1);
+});
+
+test('correction de date dont la source n\'est pas une ancienne ecriture du pack : source gardee (vrai conflit possible)', () => {
+  const Z = db.instance().prepare("SELECT id, date FROM pack.oeuvres WHERE date = 'vers 1780' LIMIT 1").get();
+  etat.ecrire('override', Z.id, 'date', { valeur: '1781', valeur_source: '1779' });   // le pack a vraiment change
+  edition.normaliserDates();
+  assert.deepEqual(v('override', Z.id, 'date'), { valeur: '1781', valeur_source: '1779' });
+});
+
 test('zip sans utilisateur.db : refuse', () => {
   const z = new AdmZip();
   z.addFile('dossier/autre.txt', Buffer.from('x'));
