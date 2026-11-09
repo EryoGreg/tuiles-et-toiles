@@ -162,6 +162,11 @@ const { versionSuperieure } = maj;
 
 let fenetre = null;
 let fermetureAutorisee = false;
+let fermetureVue = false;          // le rendu a recu la demande de fermeture
+let minuteurFermeture = null;
+ipcMain.on('app:fermeture-vue', (e) => {
+  if (fenetre && e.sender === fenetre.webContents) fermetureVue = true;
+});
 
 // Les images vivent sur disque, hors du bundle : un protocole dedie evite
 // d'ouvrir file:// au rendu.
@@ -215,6 +220,18 @@ function creerFenetre() {
   fenetre.on('close', (e) => {
     if (fermetureAutorisee) return;
     e.preventDefault();
+    // Le rendu accuse reception (preload) et affiche la confirmation. Pas de
+    // reponse en 1,5 s (interface plantee, page grise) : on ferme quand meme,
+    // apres l'envoi de ce qui reste a synchroniser.
+    fermetureVue = false;
+    clearTimeout(minuteurFermeture);
+    minuteurFermeture = setTimeout(async () => {
+      if (fermetureVue || fermetureAutorisee) return;
+      journal.evt('app', 'fermeture-sans-reponse-du-rendu', null, 'WARN');
+      try { await synchroAuto.avantFermeture(); } catch (err) { journal.erreur('synchro', 'auto-fermeture', err); }
+      fermetureAutorisee = true;
+      if (fenetre && !fenetre.isDestroyed()) fenetre.close(); else app.quit();
+    }, 1500);
     fenetre.webContents.send('app:tenter-fermeture');
   });
 

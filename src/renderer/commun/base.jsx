@@ -58,6 +58,14 @@ export function usePref(cle, defaut) {
   return [v, poser];
 }
 
+/** Oublie les preferences et recherches d'une page (cles « prefixe:… »). */
+export function oublierPrefsDe(...prefixes) {
+  const touche = (k) => prefixes.some((p) => k.startsWith(p + ':'));
+  PREFS.valeurs = Object.fromEntries(Object.entries(PREFS.valeurs).filter(([k]) => !touche(k)));
+  enregistrerPrefs();
+  for (const k of [...MEMOIRE_SESSION.keys()]) if (touche(k)) MEMOIRE_SESSION.delete(k);
+}
+
 // Texte de recherche : garde en changeant d'onglet, oublie au redemarrage
 // (une vieille recherche oubliee ferait croire a une page vide).
 export const MEMOIRE_SESSION = new Map();

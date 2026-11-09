@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from 'react';
 import * as I from './icones.jsx';
-import { DENSITES, GrilleContext, NavContext, SUR_MOBILE, chargerPrefs, densiteValide, editionEnAttente } from './commun/base.jsx';
+import { DENSITES, GrilleContext, NavContext, SUR_MOBILE, chargerPrefs, densiteValide, editionEnAttente, oublierPrefsDe } from './commun/base.jsx';
 import { BoiteConfirmation, EnChantier } from './commun/boites.jsx';
 import { PageEdition } from './edition/PageEdition.jsx';
 import { prendreBrouillon } from './commun/brouillon.js';
 import { PageBibliotheque, PageEtoile, PageLivre, PageRevoir } from './galeries/Galeries.jsx';
 import { Jeu } from './jeu/Jeu.jsx';
 import { PageFrise } from './frise/Frise.jsx';
+import { GardePage } from './commun/GardePage.jsx';
 import { BandeauMaj, MajContext, useMaj } from './options/Maj.jsx';
 import { Options, RACCOURCIS } from './options/Options.jsx';
 import { PageConflits } from './pages/Conflits.jsx';
@@ -592,6 +593,8 @@ export default function App() {
           {/* cle = page + nonce : recliquer l'onglet courant (ou revenir via
               souris4/5) remonte la page et repart de son etat initial. */}
           <Fragment key={page + '#' + navNonce}>
+           <GardePage page={page} onAccueil={() => naviguer('menu')}
+             onReinitialiser={() => oublierPrefsDe(page, page === 'jeu' ? 'partie' : page)}>
             {page === 'jeu' ? <Jeu onEtat={charger} />
               : page === 'options' ? <Options etat={etat} onEtat={charger} aller={naviguer} />
               : page === 'conflits' ? <PageConflits onEtat={charger} />
@@ -603,6 +606,7 @@ export default function App() {
               : page === 'etoile' ? <PageEtoile onEtat={charger} />
               : page === 'revoir' ? <PageRevoir onEtat={charger} />
               : <EnChantier nom={page} />}
+           </GardePage>
           </Fragment>
         </div>
         {dialogueFermeture}

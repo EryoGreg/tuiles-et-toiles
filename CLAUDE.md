@@ -6,6 +6,15 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
+- **0.3.24** (09/11/2026) — **plantage de la frise** au choix d'un tag corrigé (liste filtrée pas encore arrivée →
+  `null.map` ; le tag mémorisé replantait la page à chaque ouverture, écran gris) ; **chaque page sous `GardePage`**
+  (`commun/GardePage.jsx` : message, journal `ui page-plantee`, « Réessayer sans les filtres de la page »
+  = `oublierPrefsDe`) ; **croix de fenêtre** : sans accusé de réception du rendu (`app:fermeture-vue`, envoyé par le
+  preload) en 1,5 s, fermeture quand même après la synchro ; **images synchronisées 4 à la fois** (~2 s d'attente
+  Drive par fichier quelle que soit sa taille : 385 photos = 14 min une par une), nouvel essai si Drive demande de
+  ralentir (429 / rateLimit / 5xx, 3 essais) ; `normaliser` des dates garanti idempotent (fuzz) ; dossier PC fixé.
+  Tests : `tests/frise.test.js` (échelle, graduations, rangement, fuzz de 20 000 dates), images en parallèle dans
+  `synchro-rapide`.
 - **0.3.23** (09/11/2026) — frise des dates, dates uniformisées (pack 1.1.0 : exe et APK complets), Par
   catégorie compact, rattrapage des dates au démarrage / à l'import. Voir « Dates et frise ».
 - **Publiée avant** : 0.3.21 (Latest, GitHub, 16/10/2026) — **photos des tuiles créées en vrais fichiers** (mobile, hors

@@ -1832,3 +1832,10 @@ body:has(.ligne-actions) .bandeau-annulation { top: 72px; bottom: auto; }
 @media (max-width: 700px) {
   .champ-date-aide-ligne { grid-template-columns: 1fr; gap: 1px; }
 }
+
+/* Page qui a plante (commun/GardePage.jsx) */
+.garde-page { flex-grow: 1; overflow-y: auto; padding: clamp(24px, 4vh, 48px) clamp(18px, 4vw, 56px); max-width: 760px; }
+.garde-page h2 { margin: 0 0 10px; font-family: var(--serif); font-weight: 400; font-size: 24px; color: var(--encre-vive); }
+.garde-page p { color: var(--attenue); font-size: 13.5px; line-height: 1.55; }
+.garde-page-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.garde-page-detail { font-family: var(--mono); font-size: 11px; color: var(--discret); white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -149,10 +149,21 @@ function normaliserPartie(brut, era) {
  * (espaces et ponctuation finale nettoyes) : la date n'est jamais perdue.
  */
 function normaliser(brut) {
-  if (brut == null) return '';
+  const { resultat, nettoye } = normaliserUneFois(brut);
+  // Garantie : normaliser(normaliser(x)) === normaliser(x). Sinon une date
+  // farfelue serait reecrite a chaque lancement (rattrapage au demarrage) ; dans
+  // ce cas rare, le texte est garde tel quel (seulement nettoye).
+  if (resultat === nettoye || normaliserUneFois(resultat).resultat === resultat) return resultat;
+  return nettoye;
+}
+
+function normaliserUneFois(brut) {
+  if (brut == null) return { resultat: '', nettoye: '' };
   let s = String(brut).normalize('NFC').replace(/[‐-―−]/g, '-').replace(/\s+/g, ' ').trim();
   s = s.replace(/[,;]+$/, '').replace(/(\d)\.$/, '$1').trim();
-  if (!s) return '';
+  const nettoye = s;
+  const r = (resultat) => ({ resultat, nettoye });
+  if (!s) return r('');
   // Precision entre parentheses deja ecrite a la convention
   let comp = '';
   const mp = s.match(/^(.*?)\s*\(([^()]*)\)$/);
@@ -160,11 +171,12 @@ function normaliser(brut) {
   // Ere commune a toute la date (« V-IV av. J.-C, XIX » : l'ere vaut pour la 1re partie)
   const parties = comp ? [s] : s.split(/\s*,\s*/);
   const era = { bc: false, ad: false };
-  const tete = normaliserPartie(parties[0], era);
-  if (tete == null) return s + (comp ? ' (' + comp + ')' : '');
+  // Premiere partie vide (« , 1820 ») ou incomprise : texte garde tel quel.
+  const tete = parties[0] ? normaliserPartie(parties[0], era) : null;
+  if (tete == null) return r(nettoye);
   const reste = (comp ? [comp] : parties.slice(1)).filter(Boolean)
     .map((p) => { const n = normaliserPartie(p, { bc: false, ad: false }); return n == null ? p.trim() : n; });
-  return tete + (reste.length ? ' (' + reste.join(', ') + ')' : '');
+  return r(tete + (reste.length ? ' (' + reste.join(', ') + ')' : ''));
 }
 
 /**

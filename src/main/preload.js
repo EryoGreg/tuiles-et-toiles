@@ -186,7 +186,9 @@ contextBridge.exposeInMainWorld('api', {
   // La croix de la fenetre demande la fermeture ; le rendu affiche le
   // dialogue de confirmation.
   onTenterFermeture: (fn) => {
-    const ecouteur = () => fn();
+    // Accuse de reception : sans lui (interface hors service), le processus
+    // principal ferme quand meme au lieu de laisser la croix sans effet.
+    const ecouteur = () => { ipcRenderer.send('app:fermeture-vue'); fn(); };
     ipcRenderer.on('app:tenter-fermeture', ecouteur);
     return () => ipcRenderer.removeListener('app:tenter-fermeture', ecouteur);
   },

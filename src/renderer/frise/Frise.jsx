@@ -216,7 +216,7 @@ export function PageFrise({ onEtat }) {
         onPointerUp={surHaut}
         onPointerCancel={surHaut}
       >
-        {!corpus ? (
+        {!corpus || !listeDatees ? (
           <div className="chargement">chargement…</div>
         ) : (
           <div className="frise-toile" style={{ width: W, height: AXE + rang.couloirs * (H_CARTE + 6) + 16 }}>
@@ -246,7 +246,7 @@ export function PageFrise({ onEtat }) {
               <div className="frise-periode"
                 style={{ left: ech.x(sur.debut) * W, width: Math.max(2, (ech.x(sur.fin) - ech.x(sur.debut)) * W), top: AXE }} />
             )}
-            {listeDatees.map((o) => {
+            {(listeDatees || []).map((o) => {
               const p = rang.places.get(o.id);
               if (!p) return null;
               return (
