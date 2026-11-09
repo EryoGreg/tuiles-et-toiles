@@ -1,6 +1,6 @@
 {
   "name": "tuiles-et-toiles",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "description": "Tuiles et Toiles",
   "main": "src/main/lanceur.js",
   "private": true,
