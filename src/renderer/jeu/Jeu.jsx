@@ -47,12 +47,17 @@ export function NouvellePartie({ onLancer }) {
     return () => { vivant = false; clearTimeout(h); };
   }, [mode, choisies, soustractif]);
 
+  // Ordre des catégories : les plus fournies d'abord (défaut) ou A → Z.
+  const [triCats, setTriCats] = usePref('partie:tri-categories', 'n');
   const filtrees = useMemo(() => {
     if (!cats) return [];
     const n = q.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    if (!n) return cats;
-    return cats.filter((c) => c.valeur.includes(n) || c.label.toLowerCase().includes(n));
-  }, [cats, q]);
+    const l = n ? cats.filter((c) => c.valeur.includes(n) || c.label.toLowerCase().includes(n)) : cats.slice();
+    return triCats === 'az'
+      ? l.sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }))
+      : l.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  }, [cats, q, triCats]);
+  const labelDe = useMemo(() => new Map((cats || []).map((c) => [c.valeur, c.label])), [cats]);
 
   const basculerCat = (v) => setChoisies((s) =>
     s.includes(v) ? s.filter((x) => x !== v) : [...s, v]);
@@ -71,7 +76,9 @@ export function NouvellePartie({ onLancer }) {
   };
 
   return (
-    <div className="nouvelle-partie">
+    // Par catégorie : écran compact (modes en onglets, sans description ;
+    // Lancer en pied de page) pour laisser la hauteur à la liste des catégories.
+    <div className={'nouvelle-partie' + (mode === 'categorie' ? ' np-compacte' : '')}>
       <div className="np-tete">
         <h2>Nouvelle partie</h2>
         <div className="soustitre">Choisir un mode de tirage, puis lancer.</div>
@@ -120,27 +127,20 @@ export function NouvellePartie({ onLancer }) {
           </span>
         </button>
 
-        <button
-          className={'np-lancer' + (peutLancer ? '' : ' off')}
-          disabled={!peutLancer}
-          onClick={lancer}
-        >
-          <span>Lancer <I.Fleche /></span>
-          {mode === 'revision' && rev && (
-            <span className="np-lancer-sub">
-              {rev.dues + rev.nouvelles === 0 ? 'rien à revoir pour l’instant' : (rev.dues + rev.nouvelles) + ' tuile' + (rev.dues + rev.nouvelles > 1 ? 's' : '') + ' aujourd’hui'}
-            </span>
-          )}
-          {mode === 'categorie' && (
-            <span className="np-lancer-sub">
-              {choisies.length === 0
-                ? 'choisir au moins une catégorie'
-                : total == null ? '…'
-                : total === 0 ? 'aucune tuile — combinaison impossible'
-                : total + (total > 1 ? ' tuiles' : ' tuile')}
-            </span>
-          )}
-        </button>
+        {mode !== 'categorie' && (
+          <button
+            className={'np-lancer' + (peutLancer ? '' : ' off')}
+            disabled={!peutLancer}
+            onClick={lancer}
+          >
+            <span>Lancer <I.Fleche /></span>
+            {mode === 'revision' && rev && (
+              <span className="np-lancer-sub">
+                {rev.dues + rev.nouvelles === 0 ? 'rien à revoir pour l’instant' : (rev.dues + rev.nouvelles) + ' tuile' + (rev.dues + rev.nouvelles > 1 ? 's' : '') + ' aujourd’hui'}
+              </span>
+            )}
+          </button>
+        )}
         <div className="np-difficulte">
           <div className="np-diff-tete">Difficulté</div>
           <div className="np-diff-choix">
@@ -184,7 +184,26 @@ export function NouvellePartie({ onLancer }) {
               <span className="np-combi-signe">{soustractif ? '−' : '+'}</span>
               <span className="np-combi-mot">{soustractif ? 'toutes' : 'au moins une'}</span>
             </button>
+            <button
+              className="np-combi np-tri"
+              onClick={() => setTriCats((t) => (t === 'az' ? 'n' : 'az'))}
+              title={triCats === 'az' ? 'Ordre alphabétique. Cliquer pour classer par nombre de tuiles.' : 'Les plus fournies d’abord. Cliquer pour l’ordre alphabétique.'}
+            >
+              <span className="np-combi-mot">{triCats === 'az' ? 'A → Z' : 'les plus fournies'}</span>
+            </button>
           </div>
+          {choisies.length > 0 && (
+            <div className="np-choisies">
+              {choisies.map((v) => (
+                <button key={v} className="np-choisie" onClick={() => basculerCat(v)} title="Retirer">
+                  {labelDe.get(v) || v} <span aria-hidden="true">×</span>
+                </button>
+              ))}
+              {choisies.length > 1 && (
+                <button className="np-choisies-vider" onClick={() => setChoisies([])}>Tout retirer</button>
+              )}
+            </div>
+          )}
           {!cats ? (
             <div className="chargement">chargement…</div>
           ) : filtrees.length === 0 ? (
@@ -204,6 +223,26 @@ export function NouvellePartie({ onLancer }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {mode === 'categorie' && (
+        <div className="np-pied">
+          <span className="np-pied-compte">
+            {choisies.length === 0
+              ? 'Choisir au moins une catégorie'
+              : total == null ? '…'
+              : total === 0 ? 'Aucune tuile — combinaison impossible'
+              : total + (total > 1 ? ' tuiles' : ' tuile')
+                + ' · ' + choisies.length + (choisies.length > 1 ? ' catégories' : ' catégorie')}
+          </span>
+          <button
+            className={'np-lancer' + (peutLancer ? '' : ' off')}
+            disabled={!peutLancer}
+            onClick={lancer}
+          >
+            <span>Lancer <I.Fleche /></span>
+          </button>
         </div>
       )}
     </div>
