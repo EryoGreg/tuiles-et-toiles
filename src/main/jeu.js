@@ -188,17 +188,21 @@ function apercuCategories({ cats = [], soustractif = false } = {}) {
 
   const total = compte(choisies, soustractif);
 
-  let possibles = null;
+  // Soustractif : categories encore ajoutables (le resultat ne tombe pas a 0)
+  // et, pour chacune, le nombre de tuiles si on l'ajoute.
+  let possibles = null, comptes = null;
   if (soustractif) {
     possibles = [];
+    comptes = {};
     const toutes = new Set();
     for (const s of ensembles) for (const v of s) toutes.add(v);
     for (const v of toutes) {
       if (choisies.includes(v)) continue;
-      if (compte([...choisies, v], true) > 0) possibles.push(v);
+      const n = compte([...choisies, v], true);
+      if (n > 0) { possibles.push(v); comptes[v] = n; }
     }
   }
-  return { total, possibles };
+  return { total, possibles, comptes };
 }
 
 /**

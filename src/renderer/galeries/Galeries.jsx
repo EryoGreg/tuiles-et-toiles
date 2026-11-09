@@ -37,7 +37,17 @@ export function SelecteurTags({ choisies, onChoisies, soustractif, onSoustractif
   const [q, setQ] = useState('');
   const enveloppe = useRef(null);
 
-  useEffect(() => { if (ouvert && !cats) window.api.jeu.categories().then(setCats); }, [ouvert, cats]);
+  // Liste chargee a l'ouverture, ou tout de suite s'il y a des tags memorises :
+  // un tag disparu depuis (tuile supprimee, pack mis a jour) est retire, sinon
+  // il filtrerait tout sans qu'on le voie dans la liste (comme dans Jouer).
+  useEffect(() => {
+    if ((ouvert || choisies.length) && !cats) window.api.jeu.categories().then(setCats).catch(() => {});
+  }, [ouvert, cats, choisies.length]);
+  useEffect(() => {
+    if (!cats || !choisies.length) return;
+    const connues = new Set(cats.map((c) => c.valeur));
+    if (!choisies.every((v) => connues.has(v))) onChoisies(choisies.filter((v) => connues.has(v)));
+  }, [cats, choisies]);
   useEffect(() => {
     if (!ouvert) return undefined;
     const dehors = (e) => { if (enveloppe.current && !enveloppe.current.contains(e.target)) setOuvert(false); };
@@ -56,6 +66,24 @@ export function SelecteurTags({ choisies, onChoisies, soustractif, onSoustractif
   const basculer = (v) => onChoisies(
     choisies.includes(v) ? choisies.filter((x) => x !== v) : [...choisies, v]
   );
+
+  // Soustractif : un tag qui ferait tomber le resultat a 0 (« siège » + « Asie »)
+  // est desactive ; les autres affichent le nombre de tuiles qu'il resterait.
+  // Un tag deja choisi reste toujours cliquable (pour le retirer).
+  const [apercu, setApercu] = useState(null);
+  useEffect(() => {
+    if (!ouvert || !soustractif || !choisies.length) { setApercu(null); return undefined; }
+    let vivant = true;
+    const t = setTimeout(async () => {
+      const r = await window.api.jeu.apercuCategories({ cats: choisies, soustractif: true });
+      if (vivant) setApercu(r);
+    }, 60);
+    return () => { vivant = false; clearTimeout(t); };
+  }, [ouvert, soustractif, choisies]);
+  const possibles = apercu && apercu.possibles ? new Set(apercu.possibles) : null;
+  const bloquee = (v) => !!possibles && !choisies.includes(v) && !possibles.has(v);
+  const nombre = (c) => (possibles && !choisies.includes(c.valeur) && apercu.comptes && apercu.comptes[c.valeur] != null
+    ? apercu.comptes[c.valeur] : c.n);
 
   return (
     <div className="sel-tags" ref={enveloppe}>
@@ -99,10 +127,12 @@ export function SelecteurTags({ choisies, onChoisies, soustractif, onSoustractif
               {filtrees.map((c) => (
                 <button
                   key={c.valeur}
-                  className={'np-chip' + (choisies.includes(c.valeur) ? ' actif' : '')}
+                  className={'np-chip' + (choisies.includes(c.valeur) ? ' actif' : '') + (bloquee(c.valeur) ? ' bloquee' : '')}
+                  disabled={bloquee(c.valeur)}
+                  title={bloquee(c.valeur) ? 'Aucune tuile ne porte ce tag avec ceux déjà choisis' : undefined}
                   onClick={() => basculer(c.valeur)}
                 >
-                  {c.label} <span className="np-chip-n">{c.n}</span>
+                  {c.label} <span className="np-chip-n">{nombre(c)}</span>
                 </button>
               ))}
             </div>
