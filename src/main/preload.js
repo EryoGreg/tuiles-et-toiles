@@ -39,7 +39,8 @@ contextBridge.exposeInMainWorld('api', {
     reveler: (id) => ipcRenderer.invoke('jeu:reveler', id),
     apercu: (id) => ipcRenderer.invoke('jeu:apercu', id),
     categories: () => ipcRenderer.invoke('jeu:categories'),
-    apercuCategories: (sel) => ipcRenderer.invoke('jeu:apercuCategories', sel)
+    apercuCategories: (sel) => ipcRenderer.invoke('jeu:apercuCategories', sel),
+    marques: (sel) => ipcRenderer.invoke('jeu:marques', sel)
   },
 
   oeuvres: {

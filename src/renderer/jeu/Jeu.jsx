@@ -4,6 +4,12 @@ import * as I from '../icones.jsx';
 import { NavContext, usePref, useSession } from '../commun/base.jsx';
 import { Revision, texteRevision } from './Revision.jsx';
 import { Tuile } from '../tuile/Tuile.jsx';
+import { MARQUES_MENU, PIPS } from '../tuile/Cartes.jsx';
+
+// Icone et couleur des marques connues ; une marque inconnue (marque creee
+// par l'utilisateur, plus tard) s'affiche avec son seul libelle.
+const ICONE_MARQUE = new Map(MARQUES_MENU.map(([v, , Icone]) => [v, Icone]));
+const COULEUR_MARQUE = new Map(PIPS);
 
 /* ------------------------------------------------------ nouvelle partie */
 
@@ -22,6 +28,10 @@ export function NouvellePartie({ onLancer }) {
   // Difficulte (par appareil, persistee) : « difficile » (defaut) = 1 indice,
   // « normal » = 2. Lue par le processus principal au tirage (jeu.tuile).
   const [difficulte, setDifficulte] = usePref('difficulte', 'difficile');
+  // Aleatoire restreint (facultatif) : tuiles portant au moins une des marques
+  // choisies (Livre, Etoile, A revoir, ou marque utilisateur future). Aucune = tout.
+  const [marquesChoisies, setMarquesChoisies] = usePref('partie:marques', []);
+  const [marques, setMarques] = useState(null);   // { liste, total }
   const [apercu, setApercu] = useState(null);     // { total, possibles }
   const [rev, setRev] = useState(null);           // compteurs de la revision espacee
   useEffect(() => { window.api.revision.etat().then(setRev).catch(() => {}); }, []);
@@ -47,6 +57,25 @@ export function NouvellePartie({ onLancer }) {
     return () => { vivant = false; clearTimeout(h); };
   }, [mode, choisies, soustractif]);
 
+  useEffect(() => {
+    if (mode !== 'aleatoire') return undefined;
+    let vivant = true;
+    window.api.jeu.marques({ marques: marquesChoisies }).then((r) => {
+      if (!vivant) return;
+      // Marque memorisee disparue depuis (marque utilisateur supprimee) : retiree.
+      const connues = new Set(r.liste.map((m) => m.valeur));
+      if (!marquesChoisies.every((v) => connues.has(v))) {
+        setMarquesChoisies((s) => s.filter((v) => connues.has(v)));
+        return;
+      }
+      setMarques(r);
+    }).catch(() => {});
+    return () => { vivant = false; };
+  }, [mode, marquesChoisies]);
+  const basculerMarque = (v) => setMarquesChoisies((s) =>
+    s.includes(v) ? s.filter((x) => x !== v) : [...s, v]);
+  const totalMarques = marquesChoisies.length && marques ? marques.total : null;
+
   // Ordre des catégories : les plus fournies d'abord (défaut) ou A → Z.
   const [triCats, setTriCats] = usePref('partie:tri-categories', 'n');
   const filtrees = useMemo(() => {
@@ -68,11 +97,13 @@ export function NouvellePartie({ onLancer }) {
   const bloquee = (v) => !!possibles && !choisies.includes(v) && !possibles.has(v);
 
   const total = apercu ? apercu.total : null;
-  const peutLancer = mode === 'aleatoire' || mode === 'revision'
+  const peutLancer = (mode === 'aleatoire' && totalMarques !== 0) || mode === 'revision'
     || (choisies.length > 0 && (total == null || total > 0));
   const lancer = () => {
     if (!peutLancer) return;
-    onLancer(mode === 'categorie' ? { cats: choisies, soustractif } : mode === 'revision' ? { revision: true } : null);
+    onLancer(mode === 'categorie' ? { cats: choisies, soustractif }
+      : mode === 'revision' ? { revision: true }
+      : marquesChoisies.length ? { marques: marquesChoisies } : null);
   };
 
   return (
@@ -134,6 +165,11 @@ export function NouvellePartie({ onLancer }) {
             onClick={lancer}
           >
             <span>Lancer <I.Fleche /></span>
+            {mode === 'aleatoire' && marquesChoisies.length > 0 && (
+              <span className="np-lancer-sub">
+                {totalMarques == null ? '…' : totalMarques === 0 ? 'aucune tuile marquée' : totalMarques + ' tuile' + (totalMarques > 1 ? 's' : '')}
+              </span>
+            )}
             {mode === 'revision' && rev && (
               <span className="np-lancer-sub">
                 {rev.dues + rev.nouvelles === 0 ? 'rien à revoir pour l’instant' : (rev.dues + rev.nouvelles) + ' tuile' + (rev.dues + rev.nouvelles > 1 ? 's' : '') + ' aujourd’hui'}
@@ -162,6 +198,40 @@ export function NouvellePartie({ onLancer }) {
             </button>
           </div>
         </div>
+
+        {mode === 'aleatoire' && (
+          <div className="np-marques">
+            <div className="np-diff-tete">Marques <span className="np-facultatif">facultatif</span></div>
+            <div className="np-marques-choix">
+              {(marques ? marques.liste : MARQUES_MENU.map(([valeur, label]) => ({ valeur, label, n: null }))).map((m) => {
+                const Icone = ICONE_MARQUE.get(m.valeur);
+                const actif = marquesChoisies.includes(m.valeur);
+                const vide = m.n === 0 && !actif;
+                return (
+                  <button
+                    key={m.valeur}
+                    type="button"
+                    className={'np-marque' + (actif ? ' actif' : '') + (vide ? ' bloquee' : '')}
+                    style={{ '--marque': COULEUR_MARQUE.get(m.valeur) || 'var(--laiton)' }}
+                    disabled={vide}
+                    aria-pressed={actif}
+                    title={vide ? 'Aucune tuile marquée « ' + m.label + ' »' : actif ? 'Retirer de la sélection' : 'Ne tirer que parmi les tuiles marquées (au moins une marque choisie)'}
+                    onClick={() => basculerMarque(m.valeur)}
+                  >
+                    {Icone && <Icone t={14} />}
+                    <span className="np-marque-nom">{m.label}</span>
+                    {m.n != null && <span className="np-chip-n">{m.n}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="np-marques-desc">
+              {marquesChoisies.length === 0
+                ? 'Aucune : tirage dans toutes les œuvres.'
+                : 'Tuiles portant au moins une des marques choisies.'}
+            </div>
+          </div>
+        )}
 
       </div>
 

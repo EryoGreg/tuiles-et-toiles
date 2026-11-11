@@ -456,7 +456,7 @@ function infosRapport() {
 // Lectures appelees en boucle -> DEBUG ; resultat { erreur } -> WARN.
 const ROUTINE = new Set([
   'etat', 'drive:etat', 'synchro:etat', 'copie:etat', 'annuler:etat', 'images:etat', 'raccourcis:etat', 'raccourcis:perimes', 'theme:systeme',
-  'jeu:categories', 'jeu:apercuCategories', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero', 'revision:etat',
+  'jeu:categories', 'jeu:apercuCategories', 'jeu:marques', 'jeu:apercu', 'oeuvres:chercher', 'oeuvres:numero', 'revision:etat',
   'oeuvres:parTag', 'oeuvres:toutes', 'edition:tuile', 'edition:apercuDate'
 ]);
 
@@ -805,6 +805,7 @@ gerer('jeu:reveler', (_e, id) => jeu.reveler(id));
 gerer('jeu:apercu', (_e, id) => jeu.apercu(id));
 gerer('jeu:categories', () => jeu.categories());
 gerer('jeu:apercuCategories', (_e, sel) => jeu.apercuCategories(sel || {}));
+gerer('jeu:marques', (_e, sel) => jeu.marques(sel || {}));
 
 gerer('oeuvres:chercher', (_e, criteres) => db.chercher(criteres || {}));
 gerer('oeuvres:numero', (_e, n) => db.parNumero(n));

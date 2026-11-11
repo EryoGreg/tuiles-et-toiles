@@ -105,7 +105,9 @@ export function Revision({ onChanger, onEtat }) {
           {c.prochaine
             ? 'Prochaine tuile à revoir : ' + new Date(c.prochaine).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' }) + '.'
             : ''}
-          {' '}Jusqu’à {c.quotaNouvelles} nouvelle{c.quotaNouvelles > 1 ? 's' : ''} tuile{c.quotaNouvelles > 1 ? 's' : ''} par jour (Options → Révision espacée).
+          {c.illimite
+            ? ' Toutes les nouvelles tuiles ont été vues (Options → Révision espacée).'
+            : <>{' '}Jusqu’à {c.quotaNouvelles} nouvelle{c.quotaNouvelles > 1 ? 's' : ''} tuile{c.quotaNouvelles > 1 ? 's' : ''} par jour (Options → Révision espacée).</>}
         </p>
         <button className="bouton-neutre" onClick={onChanger}><I.Fleche t={16} retour /> Choisir un autre mode</button>
       </div>
@@ -114,7 +116,7 @@ export function Revision({ onChanger, onEtat }) {
 
   const r = tuile && tuile.revision;
   const compteur = r
-    ? (r.nouvelle ? 'Nouvelle tuile · ' : 'À revoir · ') + texteRevision(r.compte).replace(/^Aujourd’hui : /, 'reste ').replace(/\.$/, '')
+    ? (r.nouvelle ? 'Nouvelle tuile · ' : r.enAvance ? 'Tuile connue, en avance · ' : 'À revoir · ') + texteRevision(r.compte).replace(/^Aujourd’hui : /, 'reste ').replace(/\.$/, '')
     : '';
   const actions = !r ? null : !revele ? (
     <button className="bouton-valide" onClick={() => reveler(null)} title="Espace">

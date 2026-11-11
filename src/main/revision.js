@@ -17,7 +17,8 @@
  *              journee, dans la limite de `revision_nouvelles` par jour (tous
  *              appareils confondus : une tuile « introduite » aujourd'hui l'est
  *              par sa premiere note)
- * Reglages (propres a l'appareil) : revision_nouvelles (10), revision_retention (0,9).
+ * Reglages (propres a l'appareil) : revision_nouvelles (10, ou 'illimite' : toutes les
+ * tuiles jamais notees sont proposees), revision_retention (0,9).
  */
 
 const db = require('./db');
@@ -29,12 +30,20 @@ const journal = require('./journal');
 const JOUR = 86400000;
 const REVOIR_ENCORE_MS = 10 * 60000;     // « Encore » : de nouveau due 10 min plus tard
 const AVANCE_MS = 20 * 60000;            // plus rien de du : une « Encore » proche passe en avance
+const ECART_ENCORE = 3;                  // une « Encore » ne revient qu'apres 3 autres tuiles notees
+const STABILITE_SOLIDE = 3;              // jours : en dessous, tuile « fragile » (difficile pour le joueur)
+const FRAGILES_DE_SUITE = 2;             // au plus 2 fragiles d'affilee, puis une tuile de respiration
+
+/** Valeur du reglage revision_nouvelles qui leve la limite de nouvelles tuiles par jour. */
+const ILLIMITE = 'illimite';
 
 function reglages() {
-  const n = parseInt(db.reglage('revision_nouvelles', '10'), 10);
+  const brut = db.reglage('revision_nouvelles', '10');
+  const n = parseInt(brut, 10);
   const r = parseFloat(db.reglage('revision_retention', '0.9'));
   return {
-    nouvelles: Number.isFinite(n) ? Math.min(Math.max(n, 0), 200) : 10,
+    // Infinity = sans limite (jamais renvoye tel quel a l'interface : voir compte.quotaNouvelles).
+    nouvelles: brut === ILLIMITE ? Infinity : Number.isFinite(n) ? Math.min(Math.max(n, 0), 200) : 10,
     retention: Number.isFinite(r) ? Math.min(Math.max(r, 0.7), 0.97) : 0.9
   };
 }
@@ -132,11 +141,12 @@ function file(maintenant = Date.now()) {
   const restantes = Math.max(0, quota - introduites);
   const nouvelles = ordreDuJour(ids.filter((id) => !notes.has(id)), maintenant).slice(0, restantes);
   return {
-    dues, nouvelles, cartes,
+    dues, nouvelles, cartes, notes,
     compte: {
       dues: dues.length, nouvelles: nouvelles.length, faitesAujourdhui: faites, introduitesAujourdhui: introduites,
       apprises, total: presentes.size, prochaine: prochaine ? new Date(prochaine).toISOString() : null,
-      quotaNouvelles: quota, retention
+      // null = illimite (Infinity ne survit pas a JSON).
+      quotaNouvelles: quota === Infinity ? null : quota, illimite: quota === Infinity, retention
     }
   };
 }
@@ -149,27 +159,104 @@ function resume(maintenant = Date.now()) { return file(maintenant).compte; }
  * donnerait chaque note (intervalles). null + compte quand c'est fini.
  * @param {string[]} [exclure] tuiles a ne pas reproposer tout de suite (la derniere vue)
  */
+const estFragile = (c) => !!c && c.stabilite < STABILITE_SOLIDE;
+
+/**
+ * Notes d'aujourd'hui, de la plus recente a la plus ancienne, tous appareils :
+ * { id, t, fragile } ou `fragile` = la tuile l'etait AVANT cette note (une
+ * nouvelle tuile ne l'est pas).
+ */
+function notesDuJour(notes, retention, maintenant) {
+  const dj = debutJour(maintenant);
+  const out = [];
+  for (const [id, l] of notes) {
+    for (let k = 0; k < l.length; k++) {
+      if (l[k].t < dj || l[k].t > maintenant) continue;
+      out.push({ id, t: l[k].t, fragile: k > 0 && estFragile(etatCarte(l.slice(0, k), retention)) });
+    }
+  }
+  return out.sort((a, b) => b.t - a.t);
+}
+
+/** Tuiles fragiles notees d'affilee, en remontant depuis la derniere note. */
+function fragilesDeSuite(recentes) {
+  let n = 0;
+  for (const r of recentes) { if (!r.fragile) break; n++; }
+  return n;
+}
+
+/** Nombre de notes posees sur d'AUTRES tuiles depuis la derniere note de `id`. */
+function autresDepuis(id, carte, recentes) {
+  const t = Date.parse(carte.dernier_vu);
+  let n = 0;
+  for (const r of recentes) { if (r.t <= t) break; if (r.id !== id) n++; }
+  return n;
+}
+
+/**
+ * Choix de la prochaine tuile (fonction de la file, sans ecriture).
+ *  1. « Encore » echue (10 min passees) et deja 3 autres tuiles notees depuis :
+ *     passe avant tout (sinon, dans une file de 1 000 tuiles, elle se perdrait
+ *     derriere les plus en retard).
+ *  2. Ordre ordinaire : dues (les plus en retard d'abord), puis nouvelles.
+ *  3. Si cette tuile est fragile et que les 2 dernieres l'etaient aussi :
+ *     respiration — une due solide, sinon une nouvelle, sinon une tuile solide
+ *     pas encore due (revision en avance, FSRS en tient compte : un rappel sur
+ *     de l'acquis fait a peine bouger la stabilite).
+ *  4. Plus rien : « Encore » retenue par l'ecart de 3, puis « Encore » proche
+ *     en avance, puis la seule tuile restante.
+ * @returns {{ id: string, respiration?: boolean } | null}
+ */
+function choisir(f, exclure, maintenant, retention) {
+  const ex = new Set(exclure);
+  const recentes = notesDuJour(f.notes, retention, maintenant);
+  const encore = (id) => { const c = f.cartes.get(id); return c && c.intervalleJours === 0; };
+  const retenues = new Set(f.dues.filter((id) => encore(id) && autresDepuis(id, f.cartes.get(id), recentes) < ECART_ENCORE));
+
+  const prioritaire = f.dues.filter((id) => !ex.has(id) && encore(id) && !retenues.has(id))
+    .sort((a, b) => f.cartes.get(a).du - f.cartes.get(b).du)[0];
+  if (prioritaire) return { id: prioritaire };
+
+  const dues = f.dues.filter((id) => !ex.has(id) && !retenues.has(id));
+  const nouvelles = f.nouvelles.filter((id) => !ex.has(id));
+  const naturelle = dues[0] || nouvelles[0];
+  if (naturelle && estFragile(f.cartes.get(naturelle)) && fragilesDeSuite(recentes) >= FRAGILES_DE_SUITE) {
+    const solide = dues.find((id) => !estFragile(f.cartes.get(id)));
+    if (solide) return { id: solide };
+    if (nouvelles[0]) return { id: nouvelles[0] };
+    const vuesAujourdhui = new Set(recentes.map((r) => r.id));
+    const avance = [...f.cartes.entries()]
+      .filter(([id, c]) => !ex.has(id) && !vuesAujourdhui.has(id) && c.du > maintenant && !estFragile(c))
+      .sort((a, b) => a[1].du - b[1].du)[0];
+    if (avance) return { id: avance[0], respiration: true };
+  }
+  if (naturelle) return { id: naturelle };
+
+  const retenue = f.dues.find((id) => !ex.has(id) && retenues.has(id));
+  if (retenue) return { id: retenue };
+  // Plus rien de du : une « Encore » qui revient dans peu de temps passe en avance.
+  const proche = [...f.cartes.entries()]
+    .filter(([x, c]) => !ex.has(x) && c.du > maintenant && c.du - maintenant <= AVANCE_MS)
+    .sort((a, b) => a[1].du - b[1].du)[0];
+  if (proche) return { id: proche[0] };
+  if (f.dues.length) return { id: f.dues[0] };   // seule tuile restante : tant pis, la reproposer
+  return null;
+}
+
 function tirer(exclure = [], maintenant = Date.now()) {
   const f = file(maintenant);
-  const ex = new Set(exclure);
-  let id = f.dues.find((x) => !ex.has(x)) || f.nouvelles.find((x) => !ex.has(x));
-  if (!id) {
-    // Plus rien de du : une « Encore » qui revient dans peu de temps passe en avance.
-    const proche = [...f.cartes.entries()]
-      .filter(([x, c]) => !ex.has(x) && c.du > maintenant && c.du - maintenant <= AVANCE_MS)
-      .sort((a, b) => a[1].du - b[1].du)[0];
-    id = proche && proche[0];
-  }
-  if (!id && f.dues.length) id = f.dues[0];     // seule tuile restante : tant pis, la reproposer
-  if (!id) return { fini: true, compte: f.compte };
+  const { retention } = reglages();
+  const choix = choisir(f, exclure, maintenant, retention);
+  if (!choix) return { fini: true, compte: f.compte };
+  const id = choix.id;
   const t = jeu.tuile(id, null);
   if (!t) return { fini: true, compte: f.compte };
   const carte = f.cartes.get(id) || null;
-  const { retention } = reglages();
   return {
     ...t,
     revision: {
       nouvelle: !carte,
+      enAvance: !!choix.respiration,
       apercu: fsrs.apercu(carte, retention, new Date(maintenant)),
       derniere: carte ? { le: carte.dernier_vu, note: carte.derniereNote } : null,
       compte: f.compte
@@ -202,4 +289,7 @@ function noter(id, note, maintenant = Date.now()) {
   return { ok: true, du: c ? new Date(c.du).toISOString() : null, intervalleJours: c ? c.intervalleJours : 0 };
 }
 
-module.exports = { reglages, file, resume, tirer, noter, etatCarte, ordreDuJour, REVOIR_ENCORE_MS };
+module.exports = {
+  ILLIMITE, reglages, file, resume, tirer, noter, etatCarte, ordreDuJour,
+  REVOIR_ENCORE_MS, ECART_ENCORE, STABILITE_SOLIDE, FRAGILES_DE_SUITE
+};

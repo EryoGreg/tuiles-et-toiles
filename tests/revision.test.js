@@ -151,6 +151,124 @@ const T0 = new Date(2026, 9, 5, 12, 0, 0).getTime();
     assert.equal(revision.resume(T0 + JOUR).nouvelles, 2, 'nouveau quota le lendemain');
   });
 
+  await test('quota « illimite » : toutes les tuiles jamais notees, compte sans Infinity', () => {
+    neuf();
+    db.instance().prepare("INSERT OR REPLACE INTO reglages (cle, valeur) VALUES ('revision_nouvelles', ?)").run(revision.ILLIMITE);
+    assert.equal(revision.reglages().nouvelles, Infinity);
+    const c = revision.resume(T0);
+    assert.equal(c.illimite, true);
+    assert.equal(c.quotaNouvelles, null, 'Infinity ne passe pas par JSON');
+    assert.equal(c.nouvelles, c.total, 'toutes les tuiles proposees');
+    assert.ok(c.nouvelles > 200, 'au-dela de l\'ancien plafond de 200');
+    for (let i = 0; i < 40; i++) { const t = revision.tirer([], T0 + i); revision.noter(t.id, 4, T0 + i); }
+    const apres = revision.resume(T0 + MIN);
+    assert.equal(apres.nouvelles, c.total - 40, 'pas de quota atteint apres 40 nouvelles');
+    assert.equal(revision.tirer([], T0 + MIN).revision.nouvelle, true);
+    // Retour a un nombre : quota ordinaire, illimite retombe.
+    db.instance().prepare("INSERT OR REPLACE INTO reglages (cle, valeur) VALUES ('revision_nouvelles', '30')").run();
+    const borne = revision.resume(T0 + MIN);
+    assert.equal(borne.illimite, false);
+    assert.equal(borne.quotaNouvelles, 30);
+    assert.equal(borne.nouvelles, 0, '40 deja introduites aujourd\'hui > 30');
+  });
+
+  const quota = (v) => db.instance().prepare("INSERT OR REPLACE INTO reglages (cle, valeur) VALUES ('revision_nouvelles', ?)").run(String(v));
+  const ids = (n) => { quota(revision.ILLIMITE); const l = revision.file(T0).nouvelles.slice(0, n); return l; };
+
+  await test('« Encore » echue apres 3 autres tuiles : passe avant les dues plus en retard', () => {
+    neuf();
+    const l = ids(10);
+    for (const id of l.slice(1)) revision.noter(id, 3, T0 - 30 * JOUR);   // 9 dues tres en retard
+    quota(0);
+    const x = l[0];
+    revision.noter(x, 1, T0);
+    for (let i = 1; i <= 3; i++) {
+      const t = revision.tirer([], T0 + i * MIN);
+      assert.notEqual(t.id, x, 'pas avant 10 min');
+      revision.noter(t.id, 3, T0 + i * MIN);
+    }
+    const t = revision.tirer([], T0 + 11 * MIN);
+    assert.equal(t.id, x, 'l\'« Encore » passe devant les dues');
+  });
+
+  await test('garde-fou : une « Encore » echue ne revient pas avant 3 autres tuiles', () => {
+    neuf();
+    const l = ids(10);
+    for (const id of l.slice(1)) revision.noter(id, 3, T0 - 30 * JOUR);
+    quota(0);
+    const x = l[0];
+    revision.noter(x, 1, T0);
+    const vues = [];
+    for (let i = 0; i < 3; i++) {
+      const t = revision.tirer([], T0 + 20 * MIN + i);   // 10 min passees, mais 0, 1, 2 autres seulement
+      assert.notEqual(t.id, x, 'retenue apres ' + i + ' autre(s)');
+      vues.push(t.id); revision.noter(t.id, 3, T0 + 20 * MIN + i);
+    }
+    assert.equal(revision.tirer([], T0 + 20 * MIN + 5).id, x);
+  });
+
+  await test('garde-fou leve s\'il ne reste rien d\'autre', () => {
+    neuf();
+    const l = ids(1);
+    quota(0);
+    revision.noter(l[0], 1, T0);
+    assert.equal(revision.tirer([], T0 + 11 * MIN).id, l[0]);
+  });
+
+  await test('alternance : apres 2 fragiles, une due solide passe avant la fragile suivante', () => {
+    neuf();
+    const l = ids(6);
+    for (const id of l.slice(0, 5)) revision.noter(id, 2, T0 - 30 * JOUR);  // fragiles tres en retard (S ~ 1,2 j)
+    revision.noter(l[5], 4, T0 - 20 * JOUR);                                  // solide due, moins en retard (S ~ 15 j)
+    quota(0);
+    const suite = [];
+    for (let i = 0; i < 6; i++) {
+      const t = revision.tirer([], T0 + i * MIN);
+      assert.ok(!t.fini, 'tirage ' + i);
+      suite.push(t.id);
+      revision.noter(t.id, 3, T0 + i * MIN);
+    }
+    assert.equal(suite[2], l[5], 'la solide passe en 3e, avant les fragiles plus en retard');
+    assert.equal(new Set(suite).size, 6);
+  });
+
+  await test('respiration : que des fragiles dues → une tuile solide en avance toutes les 2', () => {
+    neuf();
+    const l = ids(8);
+    for (const id of l.slice(0, 5)) revision.noter(id, 2, T0 - 3 * JOUR);   // fragiles dues
+    for (const id of l.slice(5)) revision.noter(id, 4, T0 - 2 * JOUR);       // solides pas dues
+    quota(0);
+    const solides = new Set(l.slice(5));
+    const a = revision.tirer([], T0); assert.ok(!solides.has(a.id)); revision.noter(a.id, 3, T0);
+    const b = revision.tirer([], T0 + MIN); assert.ok(!solides.has(b.id)); revision.noter(b.id, 3, T0 + MIN);
+    const c = revision.tirer([], T0 + 2 * MIN);
+    assert.ok(solides.has(c.id), 'tuile solide pour souffler');
+    assert.equal(c.revision.enAvance, true);
+    assert.equal(c.revision.nouvelle, false);
+    revision.noter(c.id, 4, T0 + 2 * MIN);
+    const d = revision.tirer([], T0 + 3 * MIN);
+    assert.ok(!solides.has(d.id), 'retour aux fragiles');
+    assert.equal(d.revision.enAvance, false);
+    // Revision en avance d'une tuile acquise : echeance pas raccourcie.
+    const avant = revision.etatCarte([{ n: 4, t: T0 - 2 * JOUR }], 0.9);
+    const apres = revision.file(T0 + 3 * MIN).cartes.get(c.id);
+    assert.ok(apres.du >= avant.du, 'l\'avance ne rapproche pas l\'echeance');
+  });
+
+  await test('respiration : une nouvelle tuile sert aussi a souffler, pas de solide en avance si rien de solide', () => {
+    neuf();
+    const l = ids(3);
+    for (const id of l) revision.noter(id, 2, T0 - 3 * JOUR);
+    quota(1);
+    const vus = [];
+    for (let i = 0; i < 4; i++) {
+      const t = revision.tirer([], T0 + i * MIN);
+      vus.push(t); revision.noter(t.id, 3, T0 + i * MIN);
+    }
+    assert.equal(vus[2].revision.nouvelle, true, 'la nouvelle passe en 3e');
+    assert.ok(vus.every((t) => !t.revision.enAvance));
+  });
+
   await test('dues avant les nouvelles, les plus en retard d\'abord ; « exclure » saute la derniere vue', () => {
     neuf();
     const a = revision.tirer([], T0); revision.noter(a.id, 3, T0);

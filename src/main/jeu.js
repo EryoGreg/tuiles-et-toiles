@@ -36,32 +36,43 @@ function melanger(t) {
  *   { cats: string[], soustractif: bool }  -> categories
  *     additif      : l'oeuvre porte AU MOINS UNE des categories choisies
  *     soustractif  : l'oeuvre porte TOUTES les categories choisies
- * @returns {{cats:string[], soustractif:boolean}|null}
+ *   { marques: string[] }                  -> aleatoire restreint aux tuiles
+ *     portant AU MOINS UNE des marques (livre, etoile, bad_smiley, ou toute
+ *     marque utilisateur future). Le tag de jeu reste censure (mode aleatoire).
+ * @returns {{cats:string[], soustractif:boolean, marques:string[]}|null}
  */
 function normFiltre(f) {
   if (!f) return null;
   if (typeof f === 'string' || Array.isArray(f)) {
     const cats = (Array.isArray(f) ? f : [f]).filter(Boolean);
-    return cats.length ? { cats, soustractif: false } : null;
+    return cats.length ? { cats, soustractif: false, marques: [] } : null;
   }
-  const cats = (f.cats || []).filter(Boolean);
-  return cats.length ? { cats, soustractif: !!f.soustractif } : null;
+  const cats = (Array.isArray(f.cats) ? f.cats : []).filter(Boolean);
+  const marques = [...new Set(Array.isArray(f.marques) ? f.marques : [])]
+    .filter((m) => typeof m === 'string' && m);
+  return cats.length || marques.length ? { cats, soustractif: !!f.soustractif, marques } : null;
 }
 function cleFiltre(f) {
-  return f ? (f.soustractif ? '&' : '|') + f.cats.slice().sort().join('|') : null;
+  if (!f) return null;
+  return (f.soustractif ? '&' : '|') + f.cats.slice().sort().join('|')
+    + '#' + f.marques.slice().sort().join('|');
 }
 
 function remplirSac(filtre) {
   const f = normFiltre(filtre);
-  const lignes = f
+  let ids = (f && f.cats.length
     ? db.parCategorie(f.cats, f.soustractif)
-    : db.instance().prepare('SELECT id FROM oeuvres_effectives').all();
-  sac = melanger(lignes.map((l) => l.id));
+    : db.instance().prepare('SELECT id FROM oeuvres_effectives').all()).map((l) => l.id);
+  if (f && f.marques.length) {
+    const marquees = new Set(db.parMarques(f.marques).map((l) => l.id));
+    ids = ids.filter((id) => marquees.has(id));
+  }
+  sac = melanger(ids);
   filtreCourant = cleFiltre(f);
 }
 
 /**
- * @param {null|string|string[]|{cats:string[],soustractif:boolean}} filtre
+ * @param {null|string|string[]|{cats?:string[],soustractif?:boolean,marques?:string[]}} filtre
  * @returns {Object|null} la tuile a afficher, masque compris
  */
 function tirer(filtre = null) {
@@ -80,7 +91,7 @@ function tirer(filtre = null) {
  * compteur de vues de cet appareil. Commun au tirage et a la revision espacee
  * (revision.js). null si l'oeuvre n'existe pas ou n'a aucun masque valide.
  * @param {string} id
- * @param {{cats:string[]}|null} f  filtre de categories (tag de jeu visible ?)
+ * @param {{cats:string[]}|null} f  filtre de tirage (categories -> tag de jeu visible ?)
  */
 function tuile(id, f = null) {
   const o = db.oeuvre(id);
@@ -105,11 +116,11 @@ function tuile(id, f = null) {
   const visible = decrire(masque);
 
   // Champ `tags` (le « tag de jeu ») :
-  //  - mode aleatoire (filtre null)  -> toujours censure
+  //  - mode aleatoire (sans categorie, marques ou non) -> toujours censure
   //  - mode categorie                -> visible seulement si l'oeuvre ne
   //    porte qu'UNE valeur ; plusieurs valeurs separees par ',' -> censure
   const valeursTags = String(o.tags || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const tagsAffiche = f && valeursTags.length === 1 ? o.tags : null;
+  const tagsAffiche = f && f.cats && f.cats.length && valeursTags.length === 1 ? o.tags : null;
 
   // Compteur de CET appareil (hors journal : additionne a la synchro).
   db.instance().prepare(
@@ -203,6 +214,38 @@ function apercuCategories({ cats = [], soustractif = false } = {}) {
     }
   }
   return { total, possibles, comptes };
+}
+
+/**
+ * Marques (tags utilisateur) proposees pour restreindre le tirage aleatoire.
+ * Libelles des marques connues ; toute autre valeur trouvee dans user_tags
+ * (marques creees par l'utilisateur, plus tard) est proposee aussi, libellee
+ * par sa valeur. n = tuiles visibles portant la marque.
+ */
+const MARQUES = [
+  { valeur: 'livre', label: 'Livre' },
+  { valeur: 'etoile', label: 'Étoile' },
+  { valeur: 'bad_smiley', label: 'À revoir' }
+];
+
+/**
+ * @param {{marques?:string[]}} [sel] marques choisies
+ * @returns {{ liste: {valeur:string,label:string,n:number}[], total:number }}
+ *   total : tuiles que le tirage aleatoire donnerait (toutes si aucune marque)
+ */
+function marques({ marques: choisies = [] } = {}) {
+  const comptes = new Map(db.instance().prepare(
+    'SELECT t.tag, COUNT(DISTINCT t.oeuvre_id) n FROM user_tags t JOIN oeuvres_effectives o ON o.id = t.oeuvre_id GROUP BY t.tag'
+  ).all().map((r) => [r.tag, r.n]));
+  const liste = MARQUES.map((m) => ({ ...m, n: comptes.get(m.valeur) || 0 }));
+  for (const [tag, n] of comptes) {
+    if (!MARQUES.some((m) => m.valeur === tag)) liste.push({ valeur: tag, label: tag, n });
+  }
+  const sel = (Array.isArray(choisies) ? choisies : []).filter((m) => typeof m === 'string' && m);
+  const total = sel.length
+    ? db.parMarques(sel).length
+    : db.instance().prepare('SELECT COUNT(*) n FROM oeuvres_effectives').get().n;
+  return { liste, total };
 }
 
 /**
@@ -306,6 +349,6 @@ function reinitialiserSac() {
 }
 
 module.exports = {
-  tirer, tuile, reveler, apercu, categories, apercuCategories,
+  tirer, tuile, reveler, apercu, categories, apercuCategories, marques,
   listerParTag, listerToutes, reinitialiserSac
 };

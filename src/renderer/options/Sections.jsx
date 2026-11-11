@@ -71,11 +71,14 @@ export function SectionRevision() {
       <div className="etiquette">Révision espacée</div>
       <div className="options-note" style={{ marginBottom: 8 }}>Nouvelles tuiles par jour</div>
       <div className="choix-raccourcis">
-        {[5, 10, 20, 30].map((n) => (
-          <button key={n} className={'raccourci-bouton' + (c.quotaNouvelles === n ? ' pose' : '')} onClick={() => definir('revision_nouvelles', n)}>
-            {c.quotaNouvelles === n && <I.Coche t={14} />} {n}
-          </button>
-        ))}
+        {[[5, '5'], [10, '10'], [20, '20'], [30, '30'], ['illimite', 'Illimité']].map(([n, nom]) => {
+          const pose = n === 'illimite' ? !!c.illimite : (!c.illimite && c.quotaNouvelles === n);
+          return (
+            <button key={n} className={'raccourci-bouton' + (pose ? ' pose' : '')} onClick={() => definir('revision_nouvelles', n)}>
+              {pose && <I.Coche t={14} />} {nom}
+            </button>
+          );
+        })}
       </div>
       <div className="options-note" style={{ margin: '14px 0 8px' }}>Taux de souvenir visé</div>
       <div className="choix-raccourcis">

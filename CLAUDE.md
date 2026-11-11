@@ -6,6 +6,9 @@ Electron + React + SQLite. Windows, mono-utilisateur.
 ## Reprise de session — état au 04/10/2026
 
 **Versions** :
+- **0.3.27** (11/11/2026) — Jouer → Aléatoire → **Marques** (tirage parmi Livre / Étoile / À revoir) ;
+  révision espacée : quota **« Illimité »**, « Encore » prioritaire après 10 min et 3 autres tuiles, jamais plus
+  de 2 tuiles fragiles d'affilée (tuile connue revue en avance pour souffler). Voir « Révision espacée ».
 - **0.3.25** (09/11/2026) — **tags cumulables en soustractif** dans le sélecteur commun (frise, Bibliothèque :
   `SelecteurTags`) : un tag qui ferait tomber le résultat à 0 (« siège » + « Asie ») est grisé, les autres
   affichent le nombre de tuiles qu'il resterait (`jeu.apercuCategories` renvoie `comptes`) ; un tag mémorisé
@@ -376,7 +379,14 @@ et transforment `\r\n` en vrais sauts de ligne — arrivé plusieurs fois).
     `user_revisions`. **L'état FSRS n'est stocké nulle part** : rejoué depuis les notes dans l'ordre
     chronologique (`etatCarte`), identique sur tous les appareils. File du jour : dues (plus en retard
     d'abord ; « Encore » = due 10 min après, proposée en avance si plus rien d'autre) puis nouvelles
-    (ordre mélangé stable dans la journée, quota `revision_nouvelles` par jour tous appareils confondus).
+    (ordre mélangé stable dans la journée, quota `revision_nouvelles` par jour tous appareils confondus,
+    ou `illimite` : bouton « Illimité », `compte.quotaNouvelles` = null + `illimite`). Choix de la tuile
+    (`revision.choisir`, sans état : tout se déduit des notes du jour) : une **« Encore » échue passe avant
+    tout** dès que 3 autres tuiles ont été notées depuis (`ECART_ENCORE` ; sinon perdue derrière les plus en
+    retard d'une grosse file ; garde-fou levé s'il ne reste rien d'autre) ; **jamais plus de 2 tuiles fragiles
+    d'affilée** (stabilité < 3 j avant la note) : une due solide, sinon une nouvelle, sinon une tuile solide
+    **pas encore due, revue en avance** (`revision.enAvance`, « Tuile connue, en avance » ; FSRS : rappel sur
+    de l'acquis = stabilité quasi inchangée, échéance pas raccourcie).
     Réglages propres à l'appareil (Options → Révision espacée) : `revision_nouvelles` (10),
     `revision_retention` (0,9). Ctrl+Z efface la note. Test : `tests/revision.test.js`.
   - **Ops d'une entité inconnue** (appareil plus récent) : gardées dans `ops_attente` (bilan `attente`),
@@ -733,6 +743,12 @@ non latines, emoji, combinants, invisibles, contrôles, NUL, HTML / `<script>`, 
   Ctrl + molette), glisser à la souris, recherche + tags. Ouverte sur la médiane des dates.
 - **Jouer → Par catégorie** : écran compact (modes en onglets, difficulté en ligne, Lancer en pied de page),
   catégories sur toute la hauteur, tri « les plus fournies » / A → Z, catégories choisies rappelées en haut.
+- **Jouer → Aléatoire → Marques** (facultatif, sous la difficulté, 11/11/2026) : 0, 1 ou plusieurs marques
+  (Livre, Étoile, À revoir) ; tirage parmi les tuiles portant **au moins une** marque choisie (aucune = tout).
+  Filtre `{ marques: [...] }` (`jeu.normFiltre`, `db.parMarques`), tag de jeu toujours censuré ; `jeu.marques(sel)`
+  (canal `jeu:marques`) = `{ liste: [{ valeur, label, n }], total }` : toute valeur inconnue trouvée dans
+  `user_tags` (futures marques créées par l'utilisateur) est proposée d'office. Pref `partie:marques` ; marque
+  à 0 tuiles grisée, sélection à 0 → Lancer désactivé. Test : `tests/marques-tirage.test.js`.
 - **Données remplacées le 09/11/2026** par celles de Willy (`WILLY-tuiles-et-toiles.zip`) : import fusion de son
   journal puis réécriture de tout écart (état hors `stat` = le sien, 363 tuiles), anciennes tuiles en Corbeille. Copie :
   `%APPDATA%\tuiles-et-toiles\utilisateur.db.avant-willy-2026-11-09`. ~4 160 ops à envoyer à la prochaine synchro.

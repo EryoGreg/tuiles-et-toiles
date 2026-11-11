@@ -28,7 +28,7 @@ const iaCle = require('../main/ia-cle');
 const imagesQualite = require('../main/images-qualite');
 
 const ROUTINE = new Set(['etat', 'synchro:etat', 'images:etat', 'annuler:etat', 'oeuvres:toutes', 'oeuvres:parTag',
-  'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'edition:tuile', 'edition:apercuDate', 'edition:versions',
+  'jeu:tirer', 'jeu:apercu', 'jeu:categories', 'jeu:apercuCategories', 'jeu:marques', 'edition:tuile', 'edition:apercuDate', 'edition:versions',
   'edition:cartelEtat', 'edition:lireCartel', 'revision:etat']);
 
 function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauverTout }) {
@@ -76,6 +76,7 @@ function enregistrer({ version, dossierImagesLocales, surEcriture, emettre, sauv
   g('jeu:apercu', (id) => jeu.apercu(id));
   g('jeu:categories', () => jeu.categories());
   g('jeu:apercuCategories', (sel) => jeu.apercuCategories(sel || {}));
+  g('jeu:marques', (sel) => jeu.marques(sel || {}));
   g('oeuvres:chercher', (c) => db.chercher(c || {}));
   g('oeuvres:numero', (n) => db.parNumero(n));
   g('oeuvres:parTag', ({ tag, texte } = {}) => jeu.listerParTag(tag, texte));

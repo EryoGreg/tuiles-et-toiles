@@ -519,6 +519,20 @@ function parCategorie(valeurs, soustractif = false) {
   });
 }
 
+/**
+ * Oeuvres (visibles) portant AU MOINS UNE des marques donnees (livre, etoile,
+ * bad_smiley, ou toute marque ajoutee plus tard dans user_tags). Sert au
+ * tirage aleatoire restreint a une selection de marques.
+ */
+function parMarques(marques) {
+  const cibles = [...new Set(Array.isArray(marques) ? marques : [marques])].filter((m) => typeof m === 'string' && m);
+  if (!cibles.length) return [];
+  return instance().prepare(
+    `SELECT DISTINCT o.id FROM oeuvres_effectives o JOIN user_tags t ON t.oeuvre_id = o.id
+      WHERE t.tag IN (${cibles.map(() => '?').join(', ')})`
+  ).all(...cibles);
+}
+
 /** Recherche par numero, tolerante aux zeros superflus ou manquants. */
 function parNumero(saisie) {
   const n = parseInt(String(saisie).replace(/\D/g, ''), 10);
@@ -623,6 +637,6 @@ module.exports = {
   ouvrir, surOuverture, instance, fermer, exporterVers, migrer, reconstruireVue, oeuvresEnConflit, oeuvresAvecNote, SCHEMA_PACK, SCHEMA_USER,
   CHAMPS_TXT,
   compterOeuvres, oeuvre, packMeta, chercher, parCategorie, parNumero,
-  tagsDe, basculerTag, parTagUtilisateur, comptesTags, effacerTousLesTags,
+  tagsDe, basculerTag, parTagUtilisateur, parMarques, comptesTags, effacerTousLesTags,
   reglage, definirReglage, etatSync, definirEtatSync
 };
