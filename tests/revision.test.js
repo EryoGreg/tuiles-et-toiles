@@ -283,9 +283,16 @@ const T0 = new Date(2026, 9, 5, 12, 0, 0).getTime();
 
   await test('tuile sans masque valide ou supprimee : jamais proposee', () => {
     neuf();
-    const id = edition.creer({ titre: 'x' }).id;    // trop pauvre : 0 masque
+    // Deux tuiles identiques : rien ne les distingue -> 0 masque. (Une tuile
+    // « titre seul » est jouable depuis 0.3.16 : le test dependait du hasard,
+    // 10 nouvelles tirees sur ~430.)
+    const id = edition.creer({ titre: 'Doublon parfait' }).id;
+    const id2 = edition.creer({ titre: 'Doublon parfait' }).id;
+    assert.equal(JSON.parse(db.oeuvre(id).masques).length, 0);
+    quota(revision.ILLIMITE);   // toutes les nouvelles : l'absence ne doit rien au hasard
     const f = revision.file(T0);
-    assert.ok(!f.nouvelles.includes(id));
+    assert.ok(f.nouvelles.length > 400);
+    assert.ok(!f.nouvelles.includes(id) && !f.nouvelles.includes(id2));
     assert.equal(revision.noter('p:inexistant', 3).erreur, 'tuile introuvable');
     assert.equal(revision.noter(f.nouvelles[0], 7).erreur, 'note invalide');
   });
